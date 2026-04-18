@@ -11,6 +11,7 @@ const CreateMemoryBody = z.object({
   body: z.string().optional(),
   mediaId: z.string().uuid().optional(),
   dateOfEventText: z.string().max(100).optional(),
+  promptId: z.string().uuid().optional(),
 });
 
 export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
@@ -38,7 +39,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: "Invalid request body" });
       }
 
-      const { kind, title, body, mediaId, dateOfEventText } = parsed.data;
+      const { kind, title, body, mediaId, dateOfEventText, promptId } = parsed.data;
 
       if (kind === "story" && !body) {
         return reply.status(400).send({ error: "Story memories require a body" });
@@ -60,6 +61,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
           title,
           body: body ?? null,
           mediaId: mediaId ?? null,
+          promptId: promptId ?? null,
           dateOfEventText: dateOfEventText ?? null,
         })
         .returning();

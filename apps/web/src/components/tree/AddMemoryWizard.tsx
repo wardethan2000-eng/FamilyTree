@@ -13,10 +13,14 @@ interface Person {
 interface AddMemoryWizardProps {
   treeId: string;
   people: Person[];
-  apiBase: string;
+  apiBase?: string;
+  open?: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onMemoryAdded?: () => void;
   defaultPersonId?: string;
+  promptId?: string;
+  promptQuestion?: string;
 }
 
 interface Step1State {
@@ -48,9 +52,13 @@ export function AddMemoryWizard({
   treeId,
   people,
   apiBase,
+  open,
   onClose,
   onSuccess,
+  onMemoryAdded,
   defaultPersonId,
+  promptId,
+  promptQuestion,
 }: AddMemoryWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [step1, setStep1] = useState<Step1State>({ kind: "photo" });
@@ -80,6 +88,8 @@ export function AddMemoryWizard({
     }
   }, [step]);
 
+  const apiBase_ = apiBase ?? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
+
   const needsFile = step1.kind === "photo" || step1.kind === "voice" || step1.kind === "document";
 
   const canProceedStep2 = useCallback(() => {
@@ -98,7 +108,7 @@ export function AddMemoryWizard({
       let resolvedMediaId: string | undefined;
 
       if (step2.file && needsFile) {
-        const presignRes = await fetch(`${apiBase}/api/trees/${treeId}/media/presign`, {
+        const presignRes = await fetch(`${apiBase_}/api/trees/${treeId}/media/presign`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -124,9 +134,10 @@ export function AddMemoryWizard({
       };
       if (step2.body.trim()) body.body = step2.body.trim();
       if (resolvedMediaId) body.mediaId = resolvedMediaId;
+      if (promptId) body.promptId = promptId;
 
       const res = await fetch(
-        `${apiBase}/api/trees/${treeId}/people/${step3.personId}/memories`,
+        `${apiBase_}/api/trees/${treeId}/people/${step3.personId}/memories`,
         {
           method: "POST",
           credentials: "include",
@@ -141,6 +152,7 @@ export function AddMemoryWizard({
       }
 
       onSuccess?.();
+      onMemoryAdded?.();
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -202,18 +214,35 @@ export function AddMemoryWizard({
                 color: "var(--ink)",
               }}
             >
-              Add a memory
+              {promptQuestion ? "Reply to a question" : "Add a memory"}
             </div>
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "var(--ink-faded)",
-                marginTop: 2,
-              }}
-            >
-              Step {step} of 3 — {step === 1 ? "Choose kind" : step === 2 ? "Add content" : "Assign & publish"}
-            </div>
+            {promptQuestion && (
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 13,
+                  color: "var(--ink-soft)",
+                  marginTop: 4,
+                  fontStyle: "italic",
+                  maxWidth: 340,
+                  lineHeight: 1.4,
+                }}
+              >
+                "{promptQuestion}"
+              </div>
+            )}
+            {!promptQuestion && (
+              <div
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 12,
+                  color: "var(--ink-faded)",
+                  marginTop: 2,
+                }}
+              >
+                Step {step} of 3 — {step === 1 ? "Choose kind" : step === 2 ? "Add content" : "Assign & publish"}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}

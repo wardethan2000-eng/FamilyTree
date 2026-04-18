@@ -9,6 +9,7 @@ import { peoplePlugin } from "./routes/people.js";
 import { mediaPlugin } from "./routes/media.js";
 import { memoriesPlugin } from "./routes/memories.js";
 import { relationshipsPlugin } from "./routes/relationships.js";
+import { promptsPlugin } from "./routes/prompts.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -53,6 +54,7 @@ export function buildApp() {
   app.register(relationshipsPlugin);
   app.register(invitationsPlugin);
   app.register(exportPlugin);
+  app.register(promptsPlugin);
 
   return app;
 }

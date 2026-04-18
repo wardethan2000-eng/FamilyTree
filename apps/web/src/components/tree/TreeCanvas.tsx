@@ -315,6 +315,22 @@ function TreeCanvasInner({
         </a>
 
         <a
+          href={`/trees/${treeId}/inbox`}
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: 13,
+            color: "var(--ink-faded)",
+            textDecoration: "none",
+            padding: "4px 8px",
+            border: "1px solid var(--rule)",
+            borderRadius: 4,
+          }}
+          title="Inbox"
+        >
+          ✉
+        </a>
+
+        <a
           href={`/trees/${treeId}/settings`}
           style={{
             fontFamily: "var(--font-ui)",

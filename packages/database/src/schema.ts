@@ -51,6 +51,12 @@ export const exportStatusEnum = pgEnum("export_status", [
   "failed",
 ]);
 
+export const promptStatusEnum = pgEnum("prompt_status", [
+  "pending",
+  "answered",
+  "dismissed",
+]);
+
 // ── Better Auth core tables ────────────────────────────────────────────────────
 // These tables are managed by Better Auth. IDs are text (Better Auth generates
 // its own IDs). Domain tables that reference users also use text FKs.
@@ -245,6 +251,32 @@ export const relationships = pgTable(
   ],
 );
 
+export const prompts = pgTable(
+  "prompts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    fromUserId: text("from_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    toPersonId: uuid("to_person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    questionText: text("question_text").notNull(),
+    status: promptStatusEnum("status").default("pending").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("prompts_tree_idx").on(table.treeId),
+    index("prompts_from_user_idx").on(table.fromUserId),
+    index("prompts_to_person_idx").on(table.toPersonId),
+    index("prompts_status_idx").on(table.status),
+  ],
+);
+
 export const memories = pgTable(
   "memories",
   {
@@ -259,6 +291,7 @@ export const memories = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     mediaId: uuid("media_id").references(() => media.id, { onDelete: "set null" }),
+    promptId: uuid("prompt_id").references(() => prompts.id, { onDelete: "set null" }),
     kind: memoryKindEnum("kind").notNull(),
     title: varchar("title", { length: 200 }).notNull(),
     body: text("body"),
@@ -336,6 +369,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   memories: many(memories),
   invitationsSent: many(invitations),
   archiveExportsRequested: many(archiveExports),
+  promptsSent: many(prompts),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -358,6 +392,7 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
   memories: many(memories),
   invitations: many(invitations),
   archiveExports: many(archiveExports),
+  prompts: many(prompts),
 }));
 
 export const treeMembershipsRelations = relations(treeMemberships, ({ one }) => ({
@@ -397,6 +432,7 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
   }),
   memories: many(memories),
   invitations: many(invitations),
+  promptsReceived: many(prompts),
 }));
 
 export const relationshipsRelations = relations(relationships, ({ one }) => ({
@@ -424,6 +460,14 @@ export const memoriesRelations = relations(memories, ({ one }) => ({
     references: [users.id],
   }),
   media: one(media, { fields: [memories.mediaId], references: [media.id] }),
+  prompt: one(prompts, { fields: [memories.promptId], references: [prompts.id] }),
+}));
+
+export const promptsRelations = relations(prompts, ({ one, many }) => ({
+  tree: one(trees, { fields: [prompts.treeId], references: [trees.id] }),
+  fromUser: one(users, { fields: [prompts.fromUserId], references: [users.id] }),
+  toPerson: one(people, { fields: [prompts.toPersonId], references: [people.id] }),
+  replies: many(memories),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({

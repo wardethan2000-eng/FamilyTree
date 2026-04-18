@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { MemoryLightbox, type LightboxMemory } from "@/components/tree/MemoryLightbox";
+import { PromptComposer } from "@/components/tree/PromptComposer";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -66,7 +67,7 @@ function getDecade(year: number): string {
   return `${Math.floor(year / 10) * 10}s`;
 }
 
-type Tab = "memories" | "stories" | "connections" | "about";
+type Tab = "memories" | "stories" | "connections" | "about" | "prompts";
 
 export default function PersonPage({
   params,
@@ -126,6 +127,17 @@ export default function PersonPage({
   });
   const [savingRel, setSavingRel] = useState(false);
 
+  // Prompts for this person
+  const [personPrompts, setPersonPrompts] = useState<Array<{
+    id: string;
+    questionText: string;
+    status: "pending" | "answered" | "dismissed";
+    createdAt: string;
+    fromUserName: string | null;
+    replies?: Array<{ id: string; kind: string; title: string }>;
+  }>>([]);
+  const [promptComposerOpen, setPromptComposerOpen] = useState(false);
+
   useEffect(() => {
     if (!isPending && !session) router.replace("/auth/signin");
   }, [session, isPending, router]);
@@ -161,6 +173,14 @@ export default function PersonPage({
       credentials: "include",
     });
     if (res.ok) setAllPeople((await res.json()) as PersonSummary[]);
+  }
+
+  async function loadPersonPrompts() {
+    const res = await fetch(`${API}/api/trees/${treeId}/prompts`, { credentials: "include" });
+    if (res.ok) {
+      const all = (await res.json()) as Array<{ id: string; questionText: string; status: "pending" | "answered" | "dismissed"; createdAt: string; fromUserName: string | null; toPersonId: string; replies?: Array<{ id: string; kind: string; title: string }> }>;
+      setPersonPrompts(all.filter((p) => p.toPersonId === personId));
+    }
   }
 
   function startEditing(p: Person) {
@@ -377,6 +397,7 @@ export default function PersonPage({
     { id: "stories", label: `Stories${storyMemories.length > 0 ? ` ${storyMemories.length}` : ""}` },
     { id: "connections", label: `Connections${person.relationships.length > 0 ? ` ${person.relationships.length}` : ""}` },
     { id: "about", label: "About" },
+    { id: "prompts", label: `Questions${personPrompts.length > 0 ? ` ${personPrompts.length}` : ""}` },
   ];
 
   return (
@@ -403,6 +424,12 @@ export default function PersonPage({
             Edit this page
           </button>
         )}
+        <button
+          onClick={() => setPromptComposerOpen(true)}
+          style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 20, padding: "5px 12px", cursor: "pointer", marginLeft: 8 }}
+        >
+          Ask a question
+        </button>
       </header>
 
       {/* Portrait header */}
@@ -485,7 +512,7 @@ export default function PersonPage({
       <div style={{ borderBottom: "1px solid var(--rule)", background: "var(--paper)", position: "sticky", top: 53, zIndex: 19 }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 40px", display: "flex", gap: 0 }}>
           {TABS.map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id === "prompts") loadPersonPrompts(); }}
               style={{
                 fontFamily: "var(--font-ui)", fontSize: 13,
                 color: activeTab === tab.id ? "var(--ink)" : "var(--ink-faded)",
@@ -733,6 +760,57 @@ export default function PersonPage({
               </div>
             </div>
           )}
+
+          {/* ── Prompts / Questions tab ── */}
+          {activeTab === "prompts" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
+                  Questions for {person.displayName.split(" ")[0]}
+                </h2>
+                <button
+                  onClick={() => setPromptComposerOpen(true)}
+                  style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: "var(--moss)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 500, color: "#fff", cursor: "pointer" }}
+                >
+                  + Ask a question
+                </button>
+              </div>
+              {personPrompts.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "48px 0", color: "var(--ink-faded)", fontFamily: "var(--font-body)" }}>
+                  <p style={{ fontSize: 28, marginBottom: 10 }}>✦</p>
+                  <p style={{ fontSize: 15 }}>No questions yet.</p>
+                  <p style={{ fontSize: 13 }}>Ask {person.displayName.split(" ")[0]} something about their life.</p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {personPrompts.map((p) => (
+                    <div key={p.id} style={{ border: "1px solid var(--rule)", borderRadius: 10, padding: "14px 18px", background: "var(--paper)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)" }}>
+                          Asked by {p.fromUserName ?? "a family member"} · {new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                        <span style={{ marginLeft: "auto", fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 500, color: p.status === "answered" ? "var(--moss)" : p.status === "dismissed" ? "var(--ink-faded)" : "var(--gilt)", padding: "2px 8px", borderRadius: 20, border: `1px solid ${p.status === "answered" ? "var(--moss)" : p.status === "dismissed" ? "var(--rule)" : "var(--gilt)"}` }}>
+                          {p.status === "answered" ? "Replied" : p.status === "dismissed" ? "Dismissed" : "Awaiting reply"}
+                        </span>
+                      </div>
+                      <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--ink)", margin: "0 0 8px", lineHeight: 1.5 }}>
+                        {p.questionText}
+                      </p>
+                      {p.replies && p.replies.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {p.replies.map((r) => (
+                            <div key={r.id} style={{ background: "rgba(78,93,66,0.06)", borderRadius: 6, padding: "6px 10px", fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)" }}>
+                              ↳ {r.title}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </main>
 
         {/* "In this chapter" right sidebar — only on memories tab when a decade is active */}
@@ -784,6 +862,16 @@ export default function PersonPage({
           onClose={() => setLightboxIndex(null)}
         />
       )}
+
+      {/* Prompt composer */}
+      <PromptComposer
+        open={promptComposerOpen}
+        onClose={() => setPromptComposerOpen(false)}
+        treeId={treeId}
+        people={[{ id: person.id, displayName: person.displayName, essenceLine: person.essenceLine, portraitUrl: person.portraitUrl }]}
+        defaultPersonId={person.id}
+        onPromptSent={loadPersonPrompts}
+      />
     </div>
   );
 }

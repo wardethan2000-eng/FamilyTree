@@ -229,6 +229,7 @@ export default function AtriumPage() {
   const [driftOpen, setDriftOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [inboxCount, setInboxCount] = useState(0);
 
   // Global ⌘K handler
   useEffect(() => {
@@ -274,6 +275,12 @@ export default function AtriumPage() {
         if (memoriesRes.ok) {
           const data = await memoriesRes.json();
           setMemories(data as Memory[]);
+        }
+        // Fetch inbox count (pending prompts for current user)
+        const inboxRes = await fetch(`${API}/api/trees/${treeId}/prompts/inbox`, { credentials: "include" });
+        if (inboxRes.ok) {
+          const inboxData = await inboxRes.json() as Array<{ status: string }>;
+          setInboxCount(inboxData.filter((p) => p.status === "pending").length);
         }
       } finally {
         setLoading(false);
@@ -377,6 +384,33 @@ export default function AtriumPage() {
         </span>
 
         <div style={{ flex: 1 }} />
+
+        {/* Inbox bell */}
+        <a
+          href={`/trees/${treeId}/inbox`}
+          style={{
+            position: "relative",
+            fontFamily: "var(--font-ui)",
+            fontSize: 18,
+            color: "var(--ink-faded)",
+            background: "var(--paper-deep)",
+            border: "1px solid var(--rule)",
+            borderRadius: 6,
+            padding: "5px 10px",
+            cursor: "pointer",
+            textDecoration: "none",
+            display: "flex",
+            alignItems: "center",
+          }}
+          title="Inbox"
+        >
+          ✉
+          {inboxCount > 0 && (
+            <span style={{ position: "absolute", top: -4, right: -4, width: 16, height: 16, borderRadius: "50%", background: "var(--rose)", color: "#fff", fontFamily: "var(--font-ui)", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {inboxCount > 9 ? "9+" : inboxCount}
+            </span>
+          )}
+        </a>
 
         <button
           onClick={() => setSearchOpen(true)}
