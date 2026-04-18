@@ -13,6 +13,7 @@ type Person = {
   essenceLine: string | null;
   birthDateText: string | null;
   linkedUserId: string | null;
+  portraitUrl: string | null;
 };
 
 function DashboardContent() {
@@ -122,7 +123,17 @@ function DashboardContent() {
         )}
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-stone-900">People</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-stone-900">People</h2>
+            {activeTreeId && (
+              <a
+                href={`/trees/${activeTreeId}/people/new`}
+                className="rounded-lg bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 transition-colors"
+              >
+                + Add person
+              </a>
+            )}
+          </div>
 
           {people.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-stone-200 p-10 text-center">
@@ -134,28 +145,46 @@ function DashboardContent() {
             <ul className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
               {people.map((p) => (
                 <li key={p.id}>
-                  <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-stone-900">
-                        {p.displayName}
-                      </h3>
-                      {p.linkedUserId === session?.user.id && (
-                        <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
-                          you
-                        </span>
+                  <a
+                    href={`/trees/${activeTreeId}/people/${p.id}`}
+                    className="block rounded-2xl border border-stone-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start gap-3">
+                      {p.portraitUrl ? (
+                        <img
+                          src={p.portraitUrl}
+                          alt={p.displayName}
+                          className="h-12 w-12 rounded-full object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full bg-stone-100 shrink-0 flex items-center justify-center text-stone-400 text-lg font-medium">
+                          {p.displayName[0]}
+                        </div>
                       )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-stone-900 truncate">
+                            {p.displayName}
+                          </h3>
+                          {p.linkedUserId === session?.user.id && (
+                            <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                              you
+                            </span>
+                          )}
+                        </div>
+                        {p.birthDateText && (
+                          <p className="mt-1 text-xs text-stone-400">
+                            b. {p.birthDateText}
+                          </p>
+                        )}
+                        {p.essenceLine && (
+                          <p className="mt-1 text-sm leading-5 text-stone-600 line-clamp-2">
+                            {p.essenceLine}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    {p.birthDateText && (
-                      <p className="mt-1 text-xs text-stone-400">
-                        b. {p.birthDateText}
-                      </p>
-                    )}
-                    {p.essenceLine && (
-                      <p className="mt-2 text-sm leading-6 text-stone-600">
-                        {p.essenceLine}
-                      </p>
-                    )}
-                  </article>
+                  </a>
                 </li>
               ))}
             </ul>

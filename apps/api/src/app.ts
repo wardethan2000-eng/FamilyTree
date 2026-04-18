@@ -4,6 +4,9 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import { treesPlugin } from "./routes/trees.js";
 import { peoplePlugin } from "./routes/people.js";
+import { mediaPlugin } from "./routes/media.js";
+import { memoriesPlugin } from "./routes/memories.js";
+import { relationshipsPlugin } from "./routes/relationships.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -43,6 +46,9 @@ export function buildApp() {
 
   app.register(treesPlugin);
   app.register(peoplePlugin);
+  app.register(mediaPlugin);
+  app.register(memoriesPlugin);
+  app.register(relationshipsPlugin);
 
   return app;
 }
