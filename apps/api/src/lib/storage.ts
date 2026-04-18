@@ -6,7 +6,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const MEDIA_BUCKET = "familytree-media";
+export const MEDIA_BUCKET = process.env.MINIO_BUCKET ?? "familytree-media";
 
 export const s3 = new S3Client({
   endpoint: `http://${process.env.MINIO_ENDPOINT ?? "localhost"}:${process.env.MINIO_PORT ?? "9000"}`,
