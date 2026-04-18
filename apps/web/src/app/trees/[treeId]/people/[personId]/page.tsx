@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 
@@ -49,11 +49,22 @@ function relationshipLabel(r: Relationship, personId: string): string {
     spouse: ["Spouse of", "Spouse of"],
   };
   const [fromLabel, toLabel] = labels[r.type];
-  const other =
-    r.fromPerson.id === personId ? r.toPerson : r.fromPerson;
+  const other = r.fromPerson.id === personId ? r.toPerson : r.fromPerson;
   const label = r.fromPerson.id === personId ? fromLabel : toLabel;
   return `${label} ${other.displayName}`;
 }
+
+function extractYear(text?: string | null): number | null {
+  if (!text) return null;
+  const m = text.match(/\b(\d{4})\b/);
+  return m ? parseInt(m[1]!, 10) : null;
+}
+
+function getDecade(year: number): string {
+  return `${Math.floor(year / 10) * 10}s`;
+}
+
+type Tab = "memories" | "stories" | "about";
 
 export default function PersonPage({
   params,
@@ -64,10 +75,13 @@ export default function PersonPage({
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
 
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
   const [allPeople, setAllPeople] = useState<PersonSummary[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("memories");
+  const [activeDecade, setActiveDecade] = useState<string | null>(null);
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -119,15 +133,20 @@ export default function PersonPage({
 
   async function loadPerson() {
     setLoading(true);
-    const res = await fetch(
-      `${API}/api/trees/${treeId}/people/${personId}`,
-      { credentials: "include" },
-    );
+    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
+      credentials: "include",
+    });
     if (!res.ok) {
       router.replace(`/dashboard?treeId=${treeId}`);
       return;
     }
-    setPerson((await res.json()) as Person);
+    const data = (await res.json()) as Person;
+    setPerson(data);
+    // Set initial active decade from first memory
+    const firstYear = data.memories
+      .map((m) => extractYear(m.dateOfEventText))
+      .find((y) => y !== null);
+    if (firstYear) setActiveDecade(getDecade(firstYear));
     setLoading(false);
   }
 
@@ -154,23 +173,20 @@ export default function PersonPage({
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     setSavingEdit(true);
-    const res = await fetch(
-      `${API}/api/trees/${treeId}/people/${personId}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          displayName: editForm.displayName,
-          essenceLine: editForm.essenceLine || null,
-          birthDateText: editForm.birthDateText || null,
-          deathDateText: editForm.deathDateText || null,
-          birthPlace: editForm.birthPlace || null,
-          deathPlace: editForm.deathPlace || null,
-          isLiving: editForm.isLiving,
-        }),
-      },
-    );
+    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        displayName: editForm.displayName,
+        essenceLine: editForm.essenceLine || null,
+        birthDateText: editForm.birthDateText || null,
+        deathDateText: editForm.deathDateText || null,
+        birthPlace: editForm.birthPlace || null,
+        deathPlace: editForm.deathPlace || null,
+        isLiving: editForm.isLiving,
+      }),
+    });
     if (res.ok) {
       setEditing(false);
       await loadPerson();
@@ -180,44 +196,21 @@ export default function PersonPage({
 
   async function uploadPortrait(file: File) {
     setUploadingPortrait(true);
-    // 1. Presign
-    const presignRes = await fetch(
-      `${API}/api/trees/${treeId}/media/presign`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
-        }),
-      },
-    );
-    if (!presignRes.ok) {
-      setUploadingPortrait(false);
-      return;
-    }
-    const { mediaId, uploadUrl } = (await presignRes.json()) as {
-      mediaId: string;
-      uploadUrl: string;
-    };
-
-    // 2. PUT directly to MinIO
-    await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type },
-      body: file,
+    const presignRes = await fetch(`${API}/api/trees/${treeId}/media/presign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ filename: file.name, contentType: file.type, sizeBytes: file.size }),
     });
-
-    // 3. PATCH person with new portraitMediaId
+    if (!presignRes.ok) { setUploadingPortrait(false); return; }
+    const { mediaId, uploadUrl } = (await presignRes.json()) as { mediaId: string; uploadUrl: string };
+    await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
     await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ portraitMediaId: mediaId }),
     });
-
     await loadPerson();
     setUploadingPortrait(false);
   }
@@ -225,52 +218,32 @@ export default function PersonPage({
   async function saveMemory(e: React.FormEvent) {
     e.preventDefault();
     setSavingMemory(true);
-
     let resolvedMediaId = memoryForm.mediaId;
-
     if (memoryForm.kind === "photo" && memoryFile) {
-      const presignRes = await fetch(
-        `${API}/api/trees/${treeId}/media/presign`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            filename: memoryFile.name,
-            contentType: memoryFile.type,
-            sizeBytes: memoryFile.size,
-          }),
-        },
-      );
-      if (presignRes.ok) {
-        const { mediaId, uploadUrl } = (await presignRes.json()) as {
-          mediaId: string;
-          uploadUrl: string;
-        };
-        await fetch(uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": memoryFile.type },
-          body: memoryFile,
-        });
-        resolvedMediaId = mediaId;
-      }
-    }
-
-    const res = await fetch(
-      `${API}/api/trees/${treeId}/people/${personId}/memories`,
-      {
+      const presignRes = await fetch(`${API}/api/trees/${treeId}/media/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          kind: memoryForm.kind,
-          title: memoryForm.title,
-          body: memoryForm.kind === "story" ? memoryForm.body : undefined,
-          mediaId: memoryForm.kind === "photo" ? resolvedMediaId || undefined : undefined,
-          dateOfEventText: memoryForm.dateOfEventText || undefined,
-        }),
-      },
-    );
+        body: JSON.stringify({ filename: memoryFile.name, contentType: memoryFile.type, sizeBytes: memoryFile.size }),
+      });
+      if (presignRes.ok) {
+        const { mediaId, uploadUrl } = (await presignRes.json()) as { mediaId: string; uploadUrl: string };
+        await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": memoryFile.type }, body: memoryFile });
+        resolvedMediaId = mediaId;
+      }
+    }
+    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}/memories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        kind: memoryForm.kind,
+        title: memoryForm.title,
+        body: memoryForm.kind === "story" ? memoryForm.body : undefined,
+        mediaId: memoryForm.kind === "photo" ? resolvedMediaId || undefined : undefined,
+        dateOfEventText: memoryForm.dateOfEventText || undefined,
+      }),
+    });
     if (res.ok) {
       setShowMemoryForm(false);
       setMemoryForm({ kind: "story", title: "", body: "", dateOfEventText: "", mediaId: "" });
@@ -301,10 +274,40 @@ export default function PersonPage({
     setSavingRel(false);
   }
 
+  // IntersectionObserver to track active decade as user scrolls
+  const decadeSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const registerDecadeSection = useCallback((decade: string, el: HTMLElement | null) => {
+    if (el) decadeSectionRefs.current.set(decade, el);
+  }, []);
+
+  useEffect(() => {
+    const sections = Array.from(decadeSectionRefs.current.entries());
+    if (sections.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const decade = [...decadeSectionRefs.current.entries()].find(
+              ([, el]) => el === entry.target
+            )?.[0];
+            if (decade) setActiveDecade(decade);
+          }
+        }
+      },
+      { threshold: 0.4, root: mainRef.current }
+    );
+    sections.forEach(([, el]) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [person]);
+
   if (isPending || loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-50">
-        <p className="text-sm text-stone-400">Loading…</p>
+      <main style={{ minHeight: "100vh", background: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[160, 240, 200].map((w, i) => (
+            <div key={i} style={{ width: w, height: 12, borderRadius: 4, background: "var(--paper-deep)", backgroundImage: "linear-gradient(90deg, var(--paper-deep) 25%, var(--rule) 50%, var(--paper-deep) 75%)", backgroundSize: "400px 100%", animation: "shimmer 1.5s infinite" }} />
+          ))}
+        </div>
       </main>
     );
   }
@@ -313,416 +316,467 @@ export default function PersonPage({
 
   const otherPeople = allPeople.filter((p) => p.id !== personId);
 
+  // Compute decades from memories
+  const decadeMap = new Map<string, Memory[]>();
+  for (const m of person.memories) {
+    const year = extractYear(m.dateOfEventText);
+    if (year) {
+      const decade = getDecade(year);
+      if (!decadeMap.has(decade)) decadeMap.set(decade, []);
+      decadeMap.get(decade)!.push(m);
+    }
+  }
+  const decades = Array.from(decadeMap.keys()).sort();
+
+  // No-date memories
+  const undatedMemories = person.memories.filter(
+    (m) => !extractYear(m.dateOfEventText)
+  );
+
+  const storyMemories = person.memories.filter((m) => m.kind === "story");
+  const photoMemories = person.memories.filter((m) => m.kind === "photo");
+
+  const dateRange =
+    person.birthDateText && person.deathDateText
+      ? `${person.birthDateText} – ${person.deathDateText}`
+      : person.birthDateText
+      ? `${person.birthDateText} –`
+      : person.deathDateText
+      ? `– ${person.deathDateText}`
+      : null;
+
+  // ── RENDER ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white px-6 py-4 flex items-center gap-4">
+    <div style={{ minHeight: "100vh", background: "var(--paper)", display: "flex", flexDirection: "column" }}>
+
+      {/* Back nav */}
+      <header style={{ padding: "16px 24px", borderBottom: "1px solid var(--rule)", display: "flex", alignItems: "center", gap: 16, background: "rgba(246,241,231,0.88)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
         <a
-          href={`/dashboard?treeId=${treeId}`}
-          className="text-sm text-stone-400 hover:text-stone-700 transition-colors"
+          href={`/trees/${treeId}`}
+          style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}
         >
-          ← Back
+          ← The Constellation
         </a>
-        <p className="text-xs uppercase tracking-widest text-stone-400">
-          FamilyTree
-        </p>
+        <span style={{ color: "var(--rule)" }}>·</span>
+        <span style={{ fontFamily: "var(--font-display)", fontSize: 15, color: "var(--ink-soft)" }}>
+          {person.displayName}
+        </span>
       </header>
 
-      <main className="mx-auto max-w-2xl px-6 py-12 space-y-12">
-        {/* Portrait + Identity */}
-        <section className="flex items-start gap-6">
-          <div className="relative shrink-0">
-            {person.portraitUrl ? (
-              <img
-                src={person.portraitUrl}
-                alt={person.displayName}
-                className="h-28 w-28 rounded-2xl object-cover"
-              />
-            ) : (
-              <div className="h-28 w-28 rounded-2xl bg-stone-100 flex items-center justify-center text-4xl font-medium text-stone-300">
-                {person.displayName[0]}
-              </div>
-            )}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingPortrait}
-              className="absolute -bottom-2 -right-2 rounded-full bg-white border border-stone-200 px-2 py-1 text-xs text-stone-500 hover:bg-stone-50 shadow-sm"
-            >
-              {uploadingPortrait ? "…" : "📷"}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadPortrait(file);
-              }}
-            />
-          </div>
+      {/* Portrait header */}
+      <div style={{ position: "relative", height: 320, overflow: "hidden", flexShrink: 0 }}>
+        {person.portraitUrl ? (
+          <img
+            src={person.portraitUrl}
+            alt={person.displayName}
+            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.6) sepia(0.2)" }}
+          />
+        ) : (
+          <div style={{ width: "100%", height: "100%", background: "linear-gradient(160deg, var(--paper-deep) 0%, var(--rule) 100%)" }} />
+        )}
 
-          <div className="flex-1 min-w-0">
-            {editing ? (
-              <form onSubmit={saveEdit} className="space-y-3">
-                <input
-                  type="text"
-                  required
-                  value={editForm.displayName}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, displayName: e.target.value }))
-                  }
-                  className="w-full rounded-xl border border-stone-200 px-3 py-2 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-stone-400"
-                />
-                <input
-                  type="text"
-                  value={editForm.essenceLine}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, essenceLine: e.target.value }))
-                  }
-                  placeholder="Essence line"
-                  className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={editForm.birthDateText}
-                    onChange={(e) =>
-                      setEditForm((f) => ({
-                        ...f,
-                        birthDateText: e.target.value,
-                      }))
-                    }
-                    placeholder="Birth date"
-                    className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-                  />
-                  <input
-                    type="text"
-                    value={editForm.deathDateText}
-                    onChange={(e) =>
-                      setEditForm((f) => ({
-                        ...f,
-                        deathDateText: e.target.value,
-                      }))
-                    }
-                    placeholder="Death date"
-                    className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={editForm.birthPlace}
-                  onChange={(e) =>
-                    setEditForm((f) => ({ ...f, birthPlace: e.target.value }))
-                  }
-                  placeholder="Birthplace"
-                  className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-                />
-                <label className="flex items-center gap-2 text-sm text-stone-700">
-                  <input
-                    type="checkbox"
-                    checked={editForm.isLiving}
-                    onChange={(e) =>
-                      setEditForm((f) => ({
-                        ...f,
-                        isLiving: e.target.checked,
-                      }))
-                    }
-                  />
-                  Still living
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={savingEdit}
-                    className="rounded-lg bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50"
-                  >
-                    {savingEdit ? "Saving…" : "Save"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <h1 className="text-2xl font-semibold text-stone-950">
-                    {person.displayName}
-                  </h1>
-                  {person.linkedUserId === session?.user.id && (
-                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
-                      you
-                    </span>
-                  )}
-                </div>
-                {person.essenceLine && (
-                  <p className="mt-1 text-base text-stone-500 italic">
-                    {person.essenceLine}
-                  </p>
-                )}
-                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-stone-400">
-                  {person.birthDateText && (
-                    <span>b. {person.birthDateText}</span>
-                  )}
-                  {person.deathDateText && (
-                    <span>d. {person.deathDateText}</span>
-                  )}
-                  {person.birthPlace && <span>{person.birthPlace}</span>}
-                  {!person.isLiving && !person.deathDateText && (
-                    <span>Deceased</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => startEditing(person)}
-                  className="mt-3 text-xs text-stone-400 hover:text-stone-700 transition-colors"
-                >
-                  Edit
+        {/* Name overlay */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "48px 40px 32px", background: "linear-gradient(to top, rgba(28,25,21,0.7) 0%, transparent 100%)" }}>
+          <div style={{ maxWidth: 800, margin: "0 auto" }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 400, color: "#F6F1E7", lineHeight: 1.1, margin: 0 }}>
+              {person.displayName}
+            </h1>
+            {dateRange && (
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "rgba(246,241,231,0.7)", marginTop: 6 }}>
+                {dateRange}
+              </p>
+            )}
+            {person.essenceLine && (
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontStyle: "italic", color: "rgba(246,241,231,0.85)", marginTop: 8 }}>
+                {person.essenceLine}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Portrait upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingPortrait}
+          style={{ position: "absolute", top: 16, right: 16, background: "rgba(246,241,231,0.85)", border: "1px solid var(--rule)", borderRadius: 20, padding: "5px 12px", fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-soft)", cursor: "pointer" }}
+        >
+          {uploadingPortrait ? "Uploading…" : "Change portrait"}
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
+          onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadPortrait(file); }}
+        />
+      </div>
+
+      {/* Edit form (shown inline if editing) */}
+      {editing && (
+        <div style={{ background: "var(--paper-deep)", borderBottom: "1px solid var(--rule)", padding: "24px 40px" }}>
+          <form onSubmit={saveEdit} style={{ maxWidth: 600, display: "flex", flexDirection: "column", gap: 12 }}>
+            <input type="text" required value={editForm.displayName}
+              onChange={(e) => setEditForm((f) => ({ ...f, displayName: e.target.value }))}
+              placeholder="Full name"
+              style={inputStyle} />
+            <input type="text" value={editForm.essenceLine}
+              onChange={(e) => setEditForm((f) => ({ ...f, essenceLine: e.target.value }))}
+              placeholder="Essence line (one sentence)"
+              style={inputStyle} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <input type="text" value={editForm.birthDateText}
+                onChange={(e) => setEditForm((f) => ({ ...f, birthDateText: e.target.value }))}
+                placeholder="Birth date" style={inputStyle} />
+              <input type="text" value={editForm.deathDateText}
+                onChange={(e) => setEditForm((f) => ({ ...f, deathDateText: e.target.value }))}
+                placeholder="Death date" style={inputStyle} />
+            </div>
+            <input type="text" value={editForm.birthPlace}
+              onChange={(e) => setEditForm((f) => ({ ...f, birthPlace: e.target.value }))}
+              placeholder="Birthplace" style={inputStyle} />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)" }}>
+              <input type="checkbox" checked={editForm.isLiving}
+                onChange={(e) => setEditForm((f) => ({ ...f, isLiving: e.target.checked }))} />
+              Still living
+            </label>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="submit" disabled={savingEdit} style={primaryBtnStyle}>
+                {savingEdit ? "Saving…" : "Save"}
+              </button>
+              <button type="button" onClick={() => setEditing(false)} style={secondaryBtnStyle}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ borderBottom: "1px solid var(--rule)", background: "var(--paper)", position: "sticky", top: 53, zIndex: 19 }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 40px", display: "flex", gap: 0 }}>
+          {([
+            { id: "memories", label: `Memories ${person.memories.length > 0 ? person.memories.length : ""}` },
+            { id: "stories", label: `Stories ${storyMemories.length > 0 ? storyMemories.length : ""}` },
+            { id: "about", label: "About" },
+          ] as const).map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                color: activeTab === tab.id ? "var(--ink)" : "var(--ink-faded)",
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === tab.id ? "2px solid var(--moss)" : "2px solid transparent",
+                padding: "14px 20px 12px",
+                cursor: "pointer",
+                transition: "color 200ms",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Body: sidebar + content */}
+      <div style={{ flex: 1, display: "flex", maxWidth: 960, margin: "0 auto", width: "100%", padding: "0 40px", gap: 0 }}>
+
+        {/* Decade sidebar */}
+        <aside style={{ width: 120, flexShrink: 0, paddingTop: 40, position: "sticky", top: 100, alignSelf: "flex-start", display: decades.length > 0 && activeTab === "memories" ? "block" : "none" }}>
+          {decades.map((decade) => (
+            <button
+              key={decade}
+              onClick={() => {
+                const el = decadeSectionRefs.current.get(decade);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                setActiveDecade(decade);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                background: "none",
+                border: "none",
+                padding: "8px 0",
+                cursor: "pointer",
+                width: "100%",
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: activeDecade === decade ? "var(--moss)" : "var(--rule)", flexShrink: 0, transition: "background 200ms" }} />
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: activeDecade === decade ? "var(--ink)" : "var(--ink-faded)", transition: "color 200ms" }}>
+                {decade}
+              </span>
+            </button>
+          ))}
+        </aside>
+
+        {/* Main content */}
+        <main ref={mainRef} style={{ flex: 1, paddingTop: 40, paddingBottom: 80, paddingLeft: decades.length > 0 && activeTab === "memories" ? 32 : 0 }}>
+
+          {/* ── Memories tab ── */}
+          {activeTab === "memories" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
+                  Memories
+                </h2>
+                <button onClick={() => setShowMemoryForm((s) => !s)} style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
+                  {showMemoryForm ? "Cancel" : "+ Add memory"}
                 </button>
               </div>
-            )}
-          </div>
-        </section>
 
-        {/* Relationships */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-stone-900">
-              Relationships
-            </h2>
-            {otherPeople.length > 0 && (
-              <button
-                onClick={() => setShowRelForm((s) => !s)}
-                className="text-sm text-stone-400 hover:text-stone-700 transition-colors"
-              >
-                {showRelForm ? "Cancel" : "+ Add"}
-              </button>
-            )}
-          </div>
+              {showMemoryForm && <MemoryForm memoryForm={memoryForm} setMemoryForm={setMemoryForm} memoryFile={memoryFile} setMemoryFile={setMemoryFile} savingMemory={savingMemory} saveMemory={saveMemory} />}
 
-          {showRelForm && (
-            <form
-              onSubmit={saveRelationship}
-              className="rounded-xl border border-stone-200 bg-white p-4 space-y-3"
-            >
-              <div>
-                <label className="block text-xs text-stone-500 mb-1">
-                  Relationship type
-                </label>
-                <select
-                  value={relForm.type}
-                  onChange={(e) =>
-                    setRelForm((f) => ({
-                      ...f,
-                      type: e.target.value as RelationshipType,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
-                >
-                  <option value="parent_child">Parent / Child</option>
-                  <option value="sibling">Sibling</option>
-                  <option value="spouse">Spouse / Partner</option>
-                </select>
+              {/* Decades */}
+              {decades.map((decade) => (
+                <section key={decade} ref={(el) => registerDecadeSection(decade, el)} style={{ marginBottom: 48 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--ink-soft)", fontStyle: "italic" }}>{decade}</span>
+                    <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    {decadeMap.get(decade)!.map((m) => <MemoryCard key={m.id} memory={m} />)}
+                  </div>
+                </section>
+              ))}
+
+              {undatedMemories.length > 0 && (
+                <section style={{ marginBottom: 48 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--ink-soft)", fontStyle: "italic" }}>Undated</span>
+                    <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    {undatedMemories.map((m) => <MemoryCard key={m.id} memory={m} />)}
+                  </div>
+                </section>
+              )}
+
+              {person.memories.length === 0 && (
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)" }}>
+                  No memories recorded yet.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Stories tab ── */}
+          {activeTab === "stories" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", margin: 0, fontWeight: 400 }}>Stories</h2>
+                <button onClick={() => { setShowMemoryForm(true); setMemoryForm((f) => ({ ...f, kind: "story" })); setActiveTab("memories"); }}
+                  style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
+                  + Add story
+                </button>
               </div>
-              {relForm.type === "parent_child" && (
-                <div>
-                  <label className="block text-xs text-stone-500 mb-1">
-                    Direction
-                  </label>
-                  <select
-                    value={relForm.direction}
-                    onChange={(e) =>
-                      setRelForm((f) => ({
-                        ...f,
-                        direction: e.target.value as "from" | "to",
-                      }))
-                    }
-                    className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
-                  >
-                    <option value="from">
-                      {person.displayName} is the parent
-                    </option>
-                    <option value="to">
-                      {person.displayName} is the child
-                    </option>
-                  </select>
+              {storyMemories.length === 0 ? (
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)" }}>No stories yet.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
+                  {storyMemories.map((m) => (
+                    <article key={m.id} style={{ borderBottom: "1px solid var(--rule)", paddingBottom: 40 }}>
+                      <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", fontWeight: 400, margin: "0 0 8px" }}>{m.title}</h3>
+                      {m.dateOfEventText && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", marginBottom: 16 }}>{m.dateOfEventText}</p>}
+                      {m.body && <p style={{ fontFamily: "var(--font-body)", fontSize: 17, lineHeight: 1.85, color: "var(--ink-soft)", whiteSpace: "pre-wrap", margin: 0 }}>{m.body}</p>}
+                    </article>
+                  ))}
                 </div>
               )}
-              <div>
-                <label className="block text-xs text-stone-500 mb-1">
-                  Other person
-                </label>
-                <select
-                  required
-                  value={relForm.otherPersonId}
-                  onChange={(e) =>
-                    setRelForm((f) => ({
-                      ...f,
-                      otherPersonId: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
-                >
-                  <option value="">Select…</option>
-                  {otherPeople.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.displayName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                disabled={savingRel}
-                className="rounded-lg bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50"
-              >
-                {savingRel ? "Saving…" : "Add relationship"}
-              </button>
-            </form>
+            </div>
           )}
 
-          {person.relationships.length === 0 ? (
-            <p className="text-sm text-stone-400">No relationships recorded.</p>
-          ) : (
-            <ul className="space-y-2">
-              {person.relationships.map((r) => (
-                <li
-                  key={r.id}
-                  className="rounded-xl border border-stone-100 bg-white px-4 py-3 text-sm text-stone-700"
-                >
-                  {relationshipLabel(r, personId)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Memories */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-stone-900">Memories</h2>
-            <button
-              onClick={() => setShowMemoryForm((s) => !s)}
-              className="text-sm text-stone-400 hover:text-stone-700 transition-colors"
-            >
-              {showMemoryForm ? "Cancel" : "+ Add memory"}
-            </button>
-          </div>
-
-          {showMemoryForm && (
-            <form
-              onSubmit={saveMemory}
-              className="rounded-xl border border-stone-200 bg-white p-4 space-y-3"
-            >
-              <div className="flex gap-2">
-                {(["story", "photo"] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() =>
-                      setMemoryForm((f) => ({ ...f, kind: k }))
-                    }
-                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      memoryForm.kind === k
-                        ? "bg-stone-900 text-white"
-                        : "border border-stone-200 text-stone-600 hover:bg-stone-50"
-                    }`}
-                  >
-                    {k === "story" ? "Story" : "Photo"}
+          {/* ── About tab ── */}
+          {activeTab === "about" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", margin: 0, fontWeight: 400 }}>About</h2>
+                {!editing && (
+                  <button onClick={() => startEditing(person)} style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
+                    Edit
                   </button>
-                ))}
+                )}
               </div>
-              <input
-                type="text"
-                required
-                value={memoryForm.title}
-                onChange={(e) =>
-                  setMemoryForm((f) => ({ ...f, title: e.target.value }))
-                }
-                placeholder="Title"
-                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-              />
-              {memoryForm.kind === "story" && (
-                <textarea
-                  required
-                  rows={4}
-                  value={memoryForm.body}
-                  onChange={(e) =>
-                    setMemoryForm((f) => ({ ...f, body: e.target.value }))
-                  }
-                  placeholder="Write the memory…"
-                  className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
-                />
-              )}
-              {memoryForm.kind === "photo" && (
-                <input
-                  type="file"
-                  accept="image/*"
-                  required
-                  onChange={(e) =>
-                    setMemoryFile(e.target.files?.[0] ?? null)
-                  }
-                  className="w-full text-sm text-stone-500"
-                />
-              )}
-              <input
-                type="text"
-                value={memoryForm.dateOfEventText}
-                onChange={(e) =>
-                  setMemoryForm((f) => ({
-                    ...f,
-                    dateOfEventText: e.target.value,
-                  }))
-                }
-                placeholder="Date of event (optional)"
-                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
-              />
-              <button
-                type="submit"
-                disabled={savingMemory}
-                className="rounded-lg bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50"
-              >
-                {savingMemory ? "Saving…" : "Add memory"}
-              </button>
-            </form>
-          )}
 
-          {person.memories.length === 0 ? (
-            <p className="text-sm text-stone-400">No memories yet.</p>
-          ) : (
-            <ul className="space-y-4">
-              {person.memories.map((m) => (
-                <li
-                  key={m.id}
-                  className="rounded-2xl border border-stone-100 bg-white p-5"
-                >
-                  {m.mediaUrl && (
-                    <img
-                      src={m.mediaUrl}
-                      alt={m.title}
-                      className="w-full rounded-xl object-cover max-h-96 mb-4"
-                    />
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {[
+                  ["Birth", person.birthDateText],
+                  ["Birthplace", person.birthPlace],
+                  ["Death", person.deathDateText],
+                  ["Status", person.isLiving ? "Living" : "Deceased"],
+                ].filter(([, v]) => v).map(([label, value]) => (
+                  <div key={label} style={{ display: "flex", gap: 24 }}>
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", width: 80, flexShrink: 0 }}>{label}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--ink)" }}>{value}</span>
+                  </div>
+                ))}
+
+                {person.linkedUserId === session?.user.id && (
+                  <div style={{ display: "flex", gap: 24 }}>
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", width: 80 }}>Account</span>
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)" }}>This is you</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Relationships */}
+              <div style={{ marginTop: 40 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--ink)", margin: 0, fontWeight: 400 }}>Relationships</h3>
+                  {otherPeople.length > 0 && (
+                    <button onClick={() => setShowRelForm((s) => !s)}
+                      style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
+                      {showRelForm ? "Cancel" : "+ Add"}
+                    </button>
                   )}
-                  <h3 className="font-semibold text-stone-900">{m.title}</h3>
-                  {m.dateOfEventText && (
-                    <p className="mt-0.5 text-xs text-stone-400">
-                      {m.dateOfEventText}
-                    </p>
-                  )}
-                  {m.body && (
-                    <p className="mt-3 text-sm leading-7 text-stone-600 whitespace-pre-wrap">
-                      {m.body}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+                </div>
+
+                {showRelForm && (
+                  <form onSubmit={saveRelationship} style={{ background: "var(--paper-deep)", border: "1px solid var(--rule)", borderRadius: 8, padding: 16, marginBottom: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                    <select value={relForm.type} onChange={(e) => setRelForm((f) => ({ ...f, type: e.target.value as RelationshipType }))} style={inputStyle}>
+                      <option value="parent_child">Parent / Child</option>
+                      <option value="sibling">Sibling</option>
+                      <option value="spouse">Spouse / Partner</option>
+                    </select>
+                    {relForm.type === "parent_child" && (
+                      <select value={relForm.direction} onChange={(e) => setRelForm((f) => ({ ...f, direction: e.target.value as "from" | "to" }))} style={inputStyle}>
+                        <option value="from">{person.displayName} is the parent</option>
+                        <option value="to">{person.displayName} is the child</option>
+                      </select>
+                    )}
+                    <select required value={relForm.otherPersonId} onChange={(e) => setRelForm((f) => ({ ...f, otherPersonId: e.target.value }))} style={inputStyle}>
+                      <option value="">Select person…</option>
+                      {otherPeople.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
+                    </select>
+                    <button type="submit" disabled={savingRel} style={primaryBtnStyle}>
+                      {savingRel ? "Saving…" : "Add relationship"}
+                    </button>
+                  </form>
+                )}
+
+                {person.relationships.length === 0 ? (
+                  <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)" }}>No relationships recorded.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {person.relationships.map((r) => (
+                      <a key={r.id} href={`/trees/${treeId}/people/${r.fromPerson.id === personId ? r.toPerson.id : r.fromPerson.id}`}
+                        style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "var(--paper-deep)", border: "1px solid var(--rule)", borderRadius: 6, textDecoration: "none" }}>
+                        <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink)" }}>
+                          {relationshipLabel(r, personId)}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)" }}>→</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
-        </section>
-      </main>
+        </main>
+      </div>
     </div>
+  );
+}
+
+// ── Shared sub-components ──────────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  borderRadius: 6,
+  border: "1px solid var(--rule)",
+  padding: "9px 12px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 14,
+  color: "var(--ink)",
+  background: "var(--paper)",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  background: "var(--ink)",
+  color: "var(--paper)",
+  border: "none",
+  borderRadius: 6,
+  padding: "9px 20px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  background: "none",
+  color: "var(--ink-soft)",
+  border: "1px solid var(--rule)",
+  borderRadius: 6,
+  padding: "9px 20px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+function MemoryCard({ memory }: { memory: Memory }) {
+  return (
+    <article style={{ background: "var(--paper-deep)", border: "1px solid var(--rule)", borderRadius: 8, overflow: "hidden" }}>
+      {memory.mediaUrl && memory.kind === "photo" && (
+        <img src={memory.mediaUrl} alt={memory.title} style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
+      )}
+      <div style={{ padding: 20 }}>
+        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "var(--ink)", margin: "0 0 6px", fontWeight: 400 }}>{memory.title}</h3>
+        {memory.dateOfEventText && (
+          <p style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)", margin: "0 0 12px" }}>{memory.dateOfEventText}</p>
+        )}
+        {memory.body && (
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 15, lineHeight: 1.8, color: "var(--ink-soft)", margin: 0, whiteSpace: "pre-wrap" }}>{memory.body}</p>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function MemoryForm({
+  memoryForm,
+  setMemoryForm,
+  memoryFile,
+  setMemoryFile,
+  savingMemory,
+  saveMemory,
+}: {
+  memoryForm: { kind: "story" | "photo"; title: string; body: string; dateOfEventText: string; mediaId: string };
+  setMemoryForm: React.Dispatch<React.SetStateAction<typeof memoryForm>>;
+  memoryFile: File | null;
+  setMemoryFile: (f: File | null) => void;
+  savingMemory: boolean;
+  saveMemory: (e: React.FormEvent) => void;
+}) {
+  return (
+    <form onSubmit={saveMemory} style={{ background: "var(--paper-deep)", border: "1px solid var(--rule)", borderRadius: 8, padding: 20, marginBottom: 28, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        {(["story", "photo"] as const).map((k) => (
+          <button key={k} type="button" onClick={() => setMemoryForm((f) => ({ ...f, kind: k }))}
+            style={{ flex: 1, borderRadius: 6, padding: "8px", fontFamily: "var(--font-ui)", fontSize: 13, border: "1px solid", borderColor: memoryForm.kind === k ? "var(--moss)" : "var(--rule)", background: memoryForm.kind === k ? "var(--moss)" : "none", color: memoryForm.kind === k ? "var(--paper)" : "var(--ink-soft)", cursor: "pointer" }}>
+            {k === "story" ? "Story" : "Photo"}
+          </button>
+        ))}
+      </div>
+      <input type="text" required value={memoryForm.title}
+        onChange={(e) => setMemoryForm((f) => ({ ...f, title: e.target.value }))}
+        placeholder="Title" style={inputStyle} />
+      {memoryForm.kind === "story" && (
+        <textarea required rows={4} value={memoryForm.body}
+          onChange={(e) => setMemoryForm((f) => ({ ...f, body: e.target.value }))}
+          placeholder="Write the memory…"
+          style={{ ...inputStyle, resize: "none" }} />
+      )}
+      {memoryForm.kind === "photo" && (
+        <input type="file" accept="image/*" required
+          onChange={(e) => setMemoryFile(e.target.files?.[0] ?? null)}
+          style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)" }} />
+      )}
+      <input type="text" value={memoryForm.dateOfEventText}
+        onChange={(e) => setMemoryForm((f) => ({ ...f, dateOfEventText: e.target.value }))}
+        placeholder="Date of event (e.g. 1964, Summer 1972)"
+        style={inputStyle} />
+      <button type="submit" disabled={savingMemory} style={primaryBtnStyle}>
+        {savingMemory ? "Saving…" : "Add memory"}
+      </button>
+    </form>
   );
 }
