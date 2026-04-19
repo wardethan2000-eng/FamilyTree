@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BaseEdge,
   Background,
-  MiniMap,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -63,6 +62,7 @@ interface HoverState {
 interface TreeCanvasProps {
   treeId: string;
   treeName: string;
+  familyMapHref?: string;
   people: ApiPerson[];
   relationships: ApiRelationship[];
   currentUserPersonId: string | null;
@@ -98,6 +98,7 @@ type EditInteractionState =
 function TreeCanvasInner({
   treeId,
   treeName,
+  familyMapHref,
   people,
   relationships,
   currentUserPersonId,
@@ -733,14 +734,16 @@ function TreeCanvasInner({
           left: 0,
           right: 0,
           zIndex: 10,
-          height: 52,
+          minHeight: 52,
           background: CONTROL_SURFACE,
           backdropFilter: "blur(10px)",
           borderBottom: `1px solid ${CONTROL_BORDER}`,
           display: "flex",
           alignItems: "center",
-          padding: "0 20px",
-          gap: 12,
+          justifyContent: "space-between",
+          padding: "8px 20px",
+          gap: 16,
+          flexWrap: "wrap",
         }}
       >
         <span
@@ -749,147 +752,176 @@ function TreeCanvasInner({
             fontSize: 18,
             color: "var(--ink)",
             lineHeight: 1,
+            flexShrink: 0,
           }}
         >
           {treeName}
         </span>
 
-        <div style={{ flex: 1 }} />
-
-        {onSearchClick && (
-          <button
-            onClick={onSearchClick}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              color: "var(--ink-faded)",
-              background: "rgba(255,255,255,0.28)",
-              border: `1px solid ${CONTROL_BORDER}`,
-              borderRadius: 999,
-              cursor: "pointer",
-              padding: "6px 11px",
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-            }}
-          >
-            <span>⌕</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              Search
-              <kbd
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 10,
-                  background: "var(--paper)",
-                  border: "1px solid var(--rule)",
-                  borderRadius: 3,
-                  padding: "1px 4px",
-                  color: "var(--ink-faded)",
-                }}
-              >
-                ⌘K
-              </kbd>
-            </span>
-          </button>
-        )}
-
-        <button
-          onClick={handleToggleEditMode}
+        <div
           style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 12,
-            fontWeight: 500,
-            color: editMode ? "white" : "var(--ink-faded)",
-            background: editMode ? "var(--ink)" : "rgba(255,255,255,0.28)",
-            border: editMode ? "1px solid rgba(28,25,21,0.32)" : `1px solid ${CONTROL_BORDER}`,
-            cursor: "pointer",
-            padding: "6px 11px",
-            borderRadius: 999,
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flexWrap: "wrap",
+            gap: 8,
+            maxWidth: "min(100%, 980px)",
           }}
         >
-          {editMode ? "Exit edit mode" : "Edit constellation"}
-        </button>
+          {onSearchClick && (
+            <button
+              onClick={onSearchClick}
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                color: "var(--ink-faded)",
+                background: "rgba(255,255,255,0.28)",
+                border: `1px solid ${CONTROL_BORDER}`,
+                borderRadius: 999,
+                cursor: "pointer",
+                padding: "6px 11px",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <span>⌕</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                Search
+                <kbd
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 10,
+                    background: "var(--paper)",
+                    border: "1px solid var(--rule)",
+                    borderRadius: 3,
+                    padding: "1px 4px",
+                    color: "var(--ink-faded)",
+                  }}
+                >
+                  ⌘K
+                </kbd>
+              </span>
+            </button>
+          )}
 
-        <button
-          onClick={onDriftClick}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 13,
-            color: "var(--moss)",
-            background: "rgba(255,255,255,0.18)",
-            border: `1px solid ${CONTROL_BORDER}`,
-            cursor: "pointer",
-            padding: "6px 12px",
-            borderRadius: 999,
-          }}
-        >
-          Drift ›
-        </button>
-
-        {onAddMemoryClick && (
           <button
-            onClick={onAddMemoryClick}
+            onClick={handleToggleEditMode}
             style={{
               fontFamily: "var(--font-ui)",
               fontSize: 12,
               fontWeight: 500,
-              color: "white",
-              background: "var(--moss)",
-              border: "1px solid rgba(78,93,66,0.26)",
+              color: editMode ? "white" : "var(--ink-faded)",
+              background: editMode ? "var(--ink)" : "rgba(255,255,255,0.28)",
+              border: editMode ? "1px solid rgba(28,25,21,0.32)" : `1px solid ${CONTROL_BORDER}`,
               cursor: "pointer",
-              padding: "6px 14px",
+              padding: "6px 11px",
               borderRadius: 999,
             }}
           >
-            + Add
+            {editMode ? "Exit edit mode" : "Edit constellation"}
           </button>
-        )}
 
-        <a
-          href={`/trees/${treeId}/atrium`}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            color: "var(--ink-faded)",
-            textDecoration: "none",
-            padding: "5px 9px",
-            border: `1px solid ${CONTROL_BORDER}`,
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.2)",
-          }}
-        >
-          ⌂
-        </a>
+          <button
+            onClick={onDriftClick}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              color: "var(--moss)",
+              background: "rgba(255,255,255,0.18)",
+              border: `1px solid ${CONTROL_BORDER}`,
+              cursor: "pointer",
+              padding: "6px 12px",
+              borderRadius: 999,
+            }}
+          >
+            Drift ›
+          </button>
 
-        <a
-          href={`/trees/${treeId}/inbox`}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 13,
-            color: "var(--ink-faded)",
-            textDecoration: "none",
-            padding: "5px 9px",
-            border: `1px solid ${CONTROL_BORDER}`,
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.2)",
-          }}
-          title="Inbox"
-        >
-          ✉
-        </a>
+          {onAddMemoryClick && (
+            <button
+              onClick={onAddMemoryClick}
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                fontWeight: 500,
+                color: "white",
+                background: "var(--moss)",
+                border: "1px solid rgba(78,93,66,0.26)",
+                cursor: "pointer",
+                padding: "6px 14px",
+                borderRadius: 999,
+              }}
+            >
+              + Add
+            </button>
+          )}
 
-        <a
-          href={`/trees/${treeId}/settings`}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 12,
-            color: "var(--ink-faded)",
-            textDecoration: "none",
-            padding: "5px 6px",
-          }}
-        >
-          ⚙
-        </a>
+          {familyMapHref && (
+            <a
+              href={familyMapHref}
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                color: "var(--ink)",
+                textDecoration: "none",
+                padding: "6px 12px",
+                border: `1px solid ${CONTROL_BORDER}`,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.2)",
+              }}
+            >
+              Family map
+            </a>
+          )}
+
+          <a
+            href={`/trees/${treeId}/atrium`}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              color: "var(--ink-faded)",
+              textDecoration: "none",
+              padding: "5px 9px",
+              border: `1px solid ${CONTROL_BORDER}`,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.2)",
+            }}
+          >
+            ⌂
+          </a>
+
+          <a
+            href={`/trees/${treeId}/inbox`}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              color: "var(--ink-faded)",
+              textDecoration: "none",
+              padding: "5px 9px",
+              border: `1px solid ${CONTROL_BORDER}`,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.2)",
+            }}
+            title="Inbox"
+          >
+            ✉
+          </a>
+
+          <a
+            href={`/trees/${treeId}/settings`}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--ink-faded)",
+              textDecoration: "none",
+              padding: "5px 6px",
+            }}
+          >
+            ⚙
+          </a>
+        </div>
       </div>
 
       {/* Left zoom controls */}
@@ -1147,7 +1179,7 @@ function TreeCanvasInner({
         zoomOnScroll={true}
         minZoom={0.15}
         maxZoom={2.5}
-        style={{ background: "transparent", paddingTop: 52 }}
+        style={{ background: "transparent", paddingTop: 68 }}
         proOptions={{ hideAttribution: true }}
       >
         <Background
@@ -1155,17 +1187,6 @@ function TreeCanvasInner({
           gap={44}
           size={1}
           color="rgba(177,165,145,0.22)"
-        />
-        <MiniMap
-          style={{
-            background: "rgba(246,241,231,0.8)",
-            border: `1px solid ${CONTROL_BORDER}`,
-            borderRadius: 14,
-            boxShadow: "0 18px 28px rgba(28,25,21,0.08)",
-          }}
-          nodeColor="rgba(112,103,90,0.62)"
-          maskColor="rgba(237,230,214,0.66)"
-          position="bottom-right"
         />
       </ReactFlow>
 
@@ -1513,51 +1534,6 @@ function TreeCanvasInner({
           </div>
         </div>
       )}
-
-      {/* Tips & affordances bar */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 36,
-          background: CONTROL_SURFACE,
-          backdropFilter: "blur(10px)",
-          borderTop: `1px solid ${CONTROL_BORDER}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 20,
-          zIndex: 10,
-          pointerEvents: "none",
-        }}
-      >
-        {(editMode
-          ? ["Select a person, then add a valid relation ghost or click a line", "Click background to reset"]
-          : [
-              "Scroll to zoom",
-              "Double-click to open a person",
-              "Click to preview",
-              "Use minimap to navigate",
-            ]
-        ).map((tip, i) => (
-          <React.Fragment key={tip}>
-            {i > 0 && (
-              <span style={{ color: "var(--rule)", fontSize: 10 }}>·</span>
-            )}
-            <span
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                color: "var(--ink-faded)",
-              }}
-            >
-              {tip}
-            </span>
-          </React.Fragment>
-        ))}
-      </div>
 
       {/* Cinematic person overlay */}
       {!editMode && (

@@ -1,4 +1,3 @@
-import Dagre from "@dagrejs/dagre";
 import type {
   ApiPerson,
   ApiRelationship,
@@ -15,34 +14,25 @@ export function extractYearFromText(text?: string | null): number | null {
 
 const NODE_WIDTH = 96;
 const NODE_HEIGHT = 130;
-const SPOUSE_GAP = 60;       // pixel gap between adjacent spouse node circles
-const SIBLING_GAP = 160;     // center-to-center distance between siblings in same generation
 const GENERATION_GAP = 240;  // vertical distance between generation rows
 const EDIT_SLOT_GAP = 90;
-const UNIT_NODE_HEIGHT = 96;
-
-type FamilyUnit = {
-  id: string;
-  memberIds: string[];
-  lane: number;
-};
+const ROW_GAP = 84;
+const SPOUSE_ATTACH_GAP = 120;
 
 function sortedPair(leftId: string, rightId: string): [string, string] {
   return leftId <= rightId ? [leftId, rightId] : [rightId, leftId];
-}
-
-function getChildRailGap(unitCount: number): number {
-  if (unitCount <= 1) return SIBLING_GAP;
-  if (unitCount === 2) return 148;
-  if (unitCount === 3) return 140;
-  if (unitCount <= 5) return 130;
-  return 118;
 }
 
 function average(numbers: number[]): number {
   if (numbers.length === 0) return 0;
   return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
 }
+
+type RowToken = {
+  anchorId: string;
+  attachedSpouseIds: string[];
+  parentSignature: string;
+};
 
 /** Build layout from people + relationships */
 export function computeLayout(
@@ -62,155 +52,413 @@ export function computeLayout(
     }
     return a.id.localeCompare(b.id);
   });
+
   const parentChildRels = sortedRelationships.filter((r) => r.type === "parent_child");
-  const generationLaneByPersonId = buildGenerationLanes(sortedPeople, parentChildRels);
-  const familyUnits = buildFamilyUnits(sortedPeople, sortedRelationships, generationLaneByPersonId);
-  const unitIdByPersonId = new Map<string, string>();
-  for (const unit of familyUnits) {
-    for (const memberId of unit.memberIds) unitIdByPersonId.set(memberId, unit.id);
-  }
-
-  const g = new Dagre.graphlib.Graph();
-  g.setGraph({
-    rankdir: "TB",
-    ranksep: GENERATION_GAP,
-    nodesep: 132,
-    marginx: 120,
-    marginy: 80,
-  });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  for (const unit of familyUnits) {
-    g.setNode(unit.id, {
-      width: unit.memberIds.length === 2 ? NODE_WIDTH * 2 + SPOUSE_GAP : NODE_WIDTH,
-      height: UNIT_NODE_HEIGHT,
-    });
-  }
-
-  for (const relationship of parentChildRels) {
-    const fromUnitId = unitIdByPersonId.get(relationship.fromPersonId);
-    const toUnitId = unitIdByPersonId.get(relationship.toPersonId);
-    if (!fromUnitId || !toUnitId || fromUnitId === toUnitId) continue;
-    g.setEdge(fromUnitId, toUnitId);
-  }
-
-  Dagre.layout(g);
-
-  const unitCenters = new Map<string, { x: number; y: number }>();
-  const minGraphY = g.nodes().length > 0
-    ? Math.min(...g.nodes().map((nodeId) => g.node(nodeId)?.y ?? 0))
-    : 0;
-  for (const unit of familyUnits) {
-    const node = g.node(unit.id);
-    const centerX = node?.x ?? 0;
-    const centerY = minGraphY + unit.lane * GENERATION_GAP;
-    unitCenters.set(unit.id, { x: centerX, y: centerY });
-  }
-
-  const positions = new Map<string, { x: number; y: number }>();
-  for (const unit of familyUnits) {
-    placeUnitMembers(unit, unitCenters, positions);
-  }
-
-  alignChildRows(
-    familyUnits,
+  const generationLaneByPersonId = propagateSpouseLanes(
     sortedPeople,
     sortedRelationships,
-    unitIdByPersonId,
+    buildGenerationLanes(sortedPeople, parentChildRels),
+  );
+  const parentIdsByChild = buildParentIdsByChild(sortedRelationships);
+  const childIdsByParent = buildChildIdsByParent(sortedRelationships);
+  const activeSpousesByPersonId = buildActiveSpouseMap(sortedRelationships);
+  const attachedAnchorByPersonId = buildAttachedSpouseMap(
+    sortedPeople,
     generationLaneByPersonId,
-    unitCenters,
+    parentIdsByChild,
+    childIdsByParent,
+    activeSpousesByPersonId,
+  );
+  const peopleById = new Map(sortedPeople.map((person) => [person.id, person]));
+  const laneValues = [...generationLaneByPersonId.values()];
+  const maxLane = laneValues.length > 0 ? Math.max(...laneValues) : 0;
+  const positions = new Map<string, { x: number; y: number }>();
+
+  for (let lane = 0; lane <= maxLane; lane += 1) {
+    const rowPositions = computeLanePositions(
+      lane,
+      sortedPeople,
+      generationLaneByPersonId,
+      parentIdsByChild,
+      attachedAnchorByPersonId,
+      activeSpousesByPersonId,
+      peopleById,
+    );
+
+    for (const [personId, x] of rowPositions.entries()) {
+      positions.set(personId, {
+        x: x - NODE_WIDTH / 2,
+        y: lane * GENERATION_GAP - NODE_HEIGHT / 2,
+      });
+    }
+  }
+
+  alignParentsOverChildren(
+    sortedRelationships,
+    activeSpousesByPersonId,
+    attachedAnchorByPersonId,
     positions,
   );
 
   return positions;
 }
 
-function buildFamilyUnits(
+function buildParentIdsByChild(relationships: ApiRelationship[]) {
+  const parentIdsByChild = new Map<string, string[]>();
+  for (const relationship of relationships) {
+    if (relationship.type !== "parent_child") continue;
+    const existing = parentIdsByChild.get(relationship.toPersonId) ?? [];
+    existing.push(relationship.fromPersonId);
+    parentIdsByChild.set(relationship.toPersonId, existing);
+  }
+  for (const [childId, parentIds] of parentIdsByChild.entries()) {
+    parentIdsByChild.set(childId, [...new Set(parentIds)].sort());
+  }
+  return parentIdsByChild;
+}
+
+function buildChildIdsByParent(relationships: ApiRelationship[]) {
+  const childIdsByParent = new Map<string, string[]>();
+  for (const relationship of relationships) {
+    if (relationship.type !== "parent_child") continue;
+    const existing = childIdsByParent.get(relationship.fromPersonId) ?? [];
+    existing.push(relationship.toPersonId);
+    childIdsByParent.set(relationship.fromPersonId, existing);
+  }
+  for (const [parentId, childIds] of childIdsByParent.entries()) {
+    childIdsByParent.set(parentId, [...new Set(childIds)].sort());
+  }
+  return childIdsByParent;
+}
+
+function buildActiveSpouseMap(relationships: ApiRelationship[]) {
+  const activeSpousesByPersonId = new Map<string, string[]>();
+  for (const relationship of relationships) {
+    if (
+      relationship.type !== "spouse" ||
+      (relationship.spouseStatus ?? "active") !== "active"
+    ) {
+      continue;
+    }
+    const fromList = activeSpousesByPersonId.get(relationship.fromPersonId) ?? [];
+    fromList.push(relationship.toPersonId);
+    activeSpousesByPersonId.set(relationship.fromPersonId, fromList);
+
+    const toList = activeSpousesByPersonId.get(relationship.toPersonId) ?? [];
+    toList.push(relationship.fromPersonId);
+    activeSpousesByPersonId.set(relationship.toPersonId, toList);
+  }
+
+  for (const [personId, spouseIds] of activeSpousesByPersonId.entries()) {
+    activeSpousesByPersonId.set(personId, [...new Set(spouseIds)].sort());
+  }
+
+  return activeSpousesByPersonId;
+}
+
+function propagateSpouseLanes(
   people: ApiPerson[],
   relationships: ApiRelationship[],
   generationLaneByPersonId: Map<string, number>,
 ) {
-  const activeSpouseRelationships = relationships
-    .filter(
-      (rel) => rel.type === "spouse" && (rel.spouseStatus ?? "active") === "active",
-    )
-    .sort((a, b) => {
-      const [aLeft, aRight] = sortedPair(a.fromPersonId, a.toPersonId);
-      const [bLeft, bRight] = sortedPair(b.fromPersonId, b.toPersonId);
-      return `${aLeft}|${aRight}`.localeCompare(`${bLeft}|${bRight}`);
-    });
-  const activeSpouseCountByPersonId = new Map<string, number>();
-  for (const rel of activeSpouseRelationships) {
-    activeSpouseCountByPersonId.set(
-      rel.fromPersonId,
-      (activeSpouseCountByPersonId.get(rel.fromPersonId) ?? 0) + 1,
+  const laneByPersonId = new Map(generationLaneByPersonId);
+  const structuralDegreeByPersonId = new Map<string, number>(
+    people.map((person) => [person.id, 0]),
+  );
+
+  for (const relationship of relationships) {
+    if (relationship.type !== "parent_child") continue;
+    structuralDegreeByPersonId.set(
+      relationship.fromPersonId,
+      (structuralDegreeByPersonId.get(relationship.fromPersonId) ?? 0) + 1,
     );
-    activeSpouseCountByPersonId.set(
-      rel.toPersonId,
-      (activeSpouseCountByPersonId.get(rel.toPersonId) ?? 0) + 1,
+    structuralDegreeByPersonId.set(
+      relationship.toPersonId,
+      (structuralDegreeByPersonId.get(relationship.toPersonId) ?? 0) + 1,
     );
   }
-  const assigned = new Set<string>();
-  const units: FamilyUnit[] = [];
 
-  for (const rel of activeSpouseRelationships) {
-    if ((activeSpouseCountByPersonId.get(rel.fromPersonId) ?? 0) !== 1) continue;
-    if ((activeSpouseCountByPersonId.get(rel.toPersonId) ?? 0) !== 1) continue;
-    const [leftPersonId, rightPersonId] = sortedPair(rel.fromPersonId, rel.toPersonId);
-    if (assigned.has(leftPersonId) || assigned.has(rightPersonId)) continue;
-    assigned.add(leftPersonId);
-    assigned.add(rightPersonId);
-    units.push({
-      id: `unit:${leftPersonId}:${rightPersonId}`,
-      memberIds: [leftPersonId, rightPersonId],
-      lane: Math.min(
-        generationLaneByPersonId.get(leftPersonId) ?? 0,
-        generationLaneByPersonId.get(rightPersonId) ?? 0,
-      ),
-    });
+  const activeSpouseRelationships = relationships.filter(
+    (relationship) =>
+      relationship.type === "spouse" &&
+      (relationship.spouseStatus ?? "active") === "active",
+  );
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    let changed = false;
+    for (const relationship of activeSpouseRelationships) {
+      const fromDegree = structuralDegreeByPersonId.get(relationship.fromPersonId) ?? 0;
+      const toDegree = structuralDegreeByPersonId.get(relationship.toPersonId) ?? 0;
+      const fromLane = laneByPersonId.get(relationship.fromPersonId) ?? 0;
+      const toLane = laneByPersonId.get(relationship.toPersonId) ?? 0;
+
+      if (fromDegree === 0 && toDegree > 0 && fromLane !== toLane) {
+        laneByPersonId.set(relationship.fromPersonId, toLane);
+        changed = true;
+      } else if (toDegree === 0 && fromDegree > 0 && toLane !== fromLane) {
+        laneByPersonId.set(relationship.toPersonId, fromLane);
+        changed = true;
+      }
+    }
+    if (!changed) break;
   }
 
-  for (const person of people) {
-    if (assigned.has(person.id)) continue;
-    assigned.add(person.id);
-    units.push({
-      id: `unit:${person.id}`,
-      memberIds: [person.id],
-      lane: generationLaneByPersonId.get(person.id) ?? 0,
-    });
-  }
-
-  return units.sort((a, b) => {
-    if (a.lane !== b.lane) return a.lane - b.lane;
-    return a.id.localeCompare(b.id);
-  });
+  return laneByPersonId;
 }
 
-function placeUnitMembers(
-  unit: FamilyUnit,
-  unitCenters: Map<string, { x: number; y: number }>,
-  positions: Map<string, { x: number; y: number }>,
+function buildAttachedSpouseMap(
+  people: ApiPerson[],
+  generationLaneByPersonId: Map<string, number>,
+  parentIdsByChild: Map<string, string[]>,
+  childIdsByParent: Map<string, string[]>,
+  activeSpousesByPersonId: Map<string, string[]>,
 ) {
-  const center = unitCenters.get(unit.id);
-  if (!center) return;
-  if (unit.memberIds.length === 1) {
-    positions.set(unit.memberIds[0]!, {
-      x: center.x - NODE_WIDTH / 2,
-      y: center.y - NODE_HEIGHT / 2,
-    });
-    return;
+  const attachedAnchorByPersonId = new Map<string, string>();
+  const structuralDegreeByPersonId = new Map<string, number>(
+    people.map((person) => [
+      person.id,
+      (parentIdsByChild.get(person.id)?.length ?? 0) +
+        (childIdsByParent.get(person.id)?.length ?? 0),
+    ]),
+  );
+
+  for (const person of people) {
+    const spouseIds = activeSpousesByPersonId.get(person.id) ?? [];
+    if (spouseIds.length !== 1) continue;
+    if ((structuralDegreeByPersonId.get(person.id) ?? 0) > 0) continue;
+
+    const spouseId = spouseIds[0]!;
+    const spouseSpouses = activeSpousesByPersonId.get(spouseId) ?? [];
+    if (spouseSpouses.length !== 1) continue;
+    if ((generationLaneByPersonId.get(person.id) ?? 0) !== (generationLaneByPersonId.get(spouseId) ?? 0)) {
+      continue;
+    }
+
+    const spouseStructuralDegree = structuralDegreeByPersonId.get(spouseId) ?? 0;
+    if (spouseStructuralDegree === 0 && person.id < spouseId) continue;
+
+    attachedAnchorByPersonId.set(person.id, spouseId);
   }
 
-  const [leftPersonId, rightPersonId] = unit.memberIds;
-  const halfUnit = (NODE_WIDTH + SPOUSE_GAP) / 2;
-  positions.set(leftPersonId!, {
-    x: center.x - halfUnit - NODE_WIDTH / 2,
-    y: center.y - NODE_HEIGHT / 2,
+  return attachedAnchorByPersonId;
+}
+
+function computeLanePositions(
+  lane: number,
+  people: ApiPerson[],
+  generationLaneByPersonId: Map<string, number>,
+  parentIdsByChild: Map<string, string[]>,
+  attachedAnchorByPersonId: Map<string, string>,
+  activeSpousesByPersonId: Map<string, string[]>,
+  peopleById: Map<string, ApiPerson>,
+) {
+  const lanePeople = people.filter(
+    (person) =>
+      (generationLaneByPersonId.get(person.id) ?? 0) === lane &&
+      !attachedAnchorByPersonId.has(person.id),
+  );
+  const tokens = buildLaneTokens(
+    lanePeople,
+    parentIdsByChild,
+    attachedAnchorByPersonId,
+    activeSpousesByPersonId,
+    peopleById,
+  );
+
+  const positions = new Map<string, number>();
+  if (tokens.length === 0) return positions;
+
+  const tokenWidths = tokens.map(
+    (token) => NODE_WIDTH + token.attachedSpouseIds.length * SPOUSE_ATTACH_GAP,
+  );
+  const totalWidth =
+    tokenWidths.reduce((sum, width) => sum + width, 0) +
+    Math.max(0, tokens.length - 1) * ROW_GAP;
+  let cursorX = -totalWidth / 2;
+
+  tokens.forEach((token, index) => {
+    const tokenWidth = tokenWidths[index] ?? NODE_WIDTH;
+    const anchorCenterX = cursorX + NODE_WIDTH / 2;
+    positions.set(token.anchorId, anchorCenterX);
+
+    token.attachedSpouseIds.forEach((spouseId, spouseIndex) => {
+      positions.set(
+        spouseId,
+        anchorCenterX + (spouseIndex + 1) * SPOUSE_ATTACH_GAP,
+      );
+    });
+
+    cursorX += tokenWidth + ROW_GAP;
   });
-  positions.set(rightPersonId!, {
-    x: center.x + halfUnit - NODE_WIDTH / 2,
-    y: center.y - NODE_HEIGHT / 2,
+
+  return positions;
+}
+
+function buildLaneTokens(
+  lanePeople: ApiPerson[],
+  parentIdsByChild: Map<string, string[]>,
+  attachedAnchorByPersonId: Map<string, string>,
+  activeSpousesByPersonId: Map<string, string[]>,
+  peopleById: Map<string, ApiPerson>,
+) {
+  const attachedSpousesByAnchorId = new Map<string, string[]>();
+  for (const [personId, anchorId] of attachedAnchorByPersonId.entries()) {
+    const existing = attachedSpousesByAnchorId.get(anchorId) ?? [];
+    existing.push(personId);
+    attachedSpousesByAnchorId.set(anchorId, existing);
+  }
+
+  const bySignature = new Map<string, ApiPerson[]>();
+  for (const person of lanePeople) {
+    const parentSignature = (parentIdsByChild.get(person.id) ?? []).join("|");
+    const group = bySignature.get(parentSignature) ?? [];
+    group.push(person);
+    bySignature.set(parentSignature, group);
+  }
+
+  const signatureOrder = [...bySignature.entries()]
+    .sort(([leftSignature, leftPeople], [rightSignature, rightPeople]) => {
+      const leftHasParents = leftSignature.length > 0;
+      const rightHasParents = rightSignature.length > 0;
+      if (leftHasParents !== rightHasParents) return leftHasParents ? 1 : -1;
+
+      const leftBirthYear = Math.min(
+        ...leftPeople.map((person) => person.birthYear ?? Number.POSITIVE_INFINITY),
+      );
+      const rightBirthYear = Math.min(
+        ...rightPeople.map((person) => person.birthYear ?? Number.POSITIVE_INFINITY),
+      );
+      if (leftBirthYear !== rightBirthYear) return leftBirthYear - rightBirthYear;
+      return leftSignature.localeCompare(rightSignature);
+    })
+    .map(([signature]) => signature);
+
+  const tokens: RowToken[] = [];
+  for (const signature of signatureOrder) {
+    const group = [...(bySignature.get(signature) ?? [])].sort((left, right) => {
+      if ((left.birthYear ?? Number.POSITIVE_INFINITY) !== (right.birthYear ?? Number.POSITIVE_INFINITY)) {
+        return (left.birthYear ?? Number.POSITIVE_INFINITY) - (right.birthYear ?? Number.POSITIVE_INFINITY);
+      }
+      return left.id.localeCompare(right.id);
+    });
+
+    group.forEach((person, index) => {
+      const attachedSpouseIds = [...(attachedSpousesByAnchorId.get(person.id) ?? [])].sort(
+        (leftId, rightId) => {
+          const left = peopleById.get(leftId);
+          const right = peopleById.get(rightId);
+          if ((left?.birthYear ?? Number.POSITIVE_INFINITY) !== (right?.birthYear ?? Number.POSITIVE_INFINITY)) {
+            return (left?.birthYear ?? Number.POSITIVE_INFINITY) - (right?.birthYear ?? Number.POSITIVE_INFINITY);
+          }
+          return leftId.localeCompare(rightId);
+        },
+      );
+      tokens.push({
+        anchorId: person.id,
+        attachedSpouseIds,
+        parentSignature: signature || `root:${index}:${person.id}`,
+      });
+    });
+
+    if (tokens.length > 0 && signature !== signatureOrder[signatureOrder.length - 1]) {
+      const lastToken = tokens[tokens.length - 1];
+      if (lastToken) {
+        lastToken.attachedSpouseIds.push(...[]);
+      }
+    }
+  }
+
+  return addSiblingSpacing(tokens);
+}
+
+function addSiblingSpacing(tokens: RowToken[]) {
+  if (tokens.length <= 1) return tokens;
+  const spaced: RowToken[] = [];
+  tokens.forEach((token, index) => {
+    spaced.push(token);
+    const next = tokens[index + 1];
+    if (!next) return;
+    if (token.parentSignature === next.parentSignature) return;
+    spaced.push({
+      anchorId: `gap:${token.anchorId}:${next.anchorId}`,
+      attachedSpouseIds: [],
+      parentSignature: `gap:${index}`,
+    });
   });
+  return spaced.filter((token) => !token.anchorId.startsWith("gap:"));
+}
+
+function alignParentsOverChildren(
+  relationships: ApiRelationship[],
+  activeSpousesByPersonId: Map<string, string[]>,
+  attachedAnchorByPersonId: Map<string, string>,
+  positions: Map<string, { x: number; y: number }>,
+) {
+  const parentIdsByChild = buildParentIdsByChild(relationships);
+  const childGroups = new Map<string, string[]>();
+
+  for (const [childId, parentIds] of parentIdsByChild.entries()) {
+    const signature = parentIds.join("|");
+    const group = childGroups.get(signature) ?? [];
+    group.push(childId);
+    childGroups.set(signature, group);
+  }
+
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (const [signature, childIds] of childGroups.entries()) {
+      const parentIds = signature.split("|").filter(Boolean);
+      const childCenters = childIds
+        .map((childId) => getNodeCenter(childId, positions))
+        .filter((value): value is { x: number; y: number } => Boolean(value));
+      const parentCenters = parentIds
+        .map((parentId) => getNodeCenter(parentId, positions))
+        .filter((value): value is { x: number; y: number } => Boolean(value));
+      if (childCenters.length === 0 || parentCenters.length === 0) continue;
+
+      const targetCenterX = average(childCenters.map((entry) => entry.x));
+
+      if (parentIds.length === 1) {
+        shiftCluster(parentIds[0]!, targetCenterX - parentCenters[0]!.x, activeSpousesByPersonId, attachedAnchorByPersonId, positions);
+        continue;
+      }
+
+      const currentParentCenterX = average(parentCenters.map((entry) => entry.x));
+      const delta = targetCenterX - currentParentCenterX;
+      for (const parentId of parentIds) {
+        shiftCluster(parentId, delta, activeSpousesByPersonId, attachedAnchorByPersonId, positions);
+      }
+    }
+  }
+}
+
+function shiftCluster(
+  personId: string,
+  deltaX: number,
+  activeSpousesByPersonId: Map<string, string[]>,
+  attachedAnchorByPersonId: Map<string, string>,
+  positions: Map<string, { x: number; y: number }>,
+) {
+  if (Math.abs(deltaX) < 1) return;
+  const person = positions.get(personId);
+  if (person) {
+    positions.set(personId, { ...person, x: person.x + deltaX });
+  }
+
+  for (const [attachedId, anchorId] of attachedAnchorByPersonId.entries()) {
+    if (anchorId !== personId) continue;
+    const attached = positions.get(attachedId);
+    if (!attached) continue;
+    positions.set(attachedId, { ...attached, x: attached.x + deltaX });
+  }
+
+  const spouseIds = activeSpousesByPersonId.get(personId) ?? [];
+  for (const spouseId of spouseIds) {
+    if (attachedAnchorByPersonId.get(spouseId) === personId) continue;
+    if (attachedAnchorByPersonId.has(personId)) continue;
+    const spouse = positions.get(spouseId);
+    if (!spouse) continue;
+    positions.set(spouseId, { ...spouse, x: spouse.x + deltaX });
+  }
 }
 
 function buildGenerationLanes(
@@ -304,96 +552,6 @@ function buildGenerationLanes(
   }
 
   return laneByPersonId;
-}
-
-function alignChildRows(
-  familyUnits: FamilyUnit[],
-  people: ApiPerson[],
-  relationships: ApiRelationship[],
-  unitIdByPersonId: Map<string, string>,
-  generationLaneByPersonId: Map<string, number>,
-  unitCenters: Map<string, { x: number; y: number }>,
-  positions: Map<string, { x: number; y: number }>,
-) {
-  const peopleById = new Map(people.map((person) => [person.id, person]));
-  const unitsById = new Map(familyUnits.map((unit) => [unit.id, unit]));
-  const parentIdsByChild = new Map<string, Set<string>>();
-
-  for (const relationship of relationships) {
-    if (relationship.type !== "parent_child") continue;
-    const current = parentIdsByChild.get(relationship.toPersonId) ?? new Set<string>();
-    current.add(relationship.fromPersonId);
-    parentIdsByChild.set(relationship.toPersonId, current);
-  }
-
-  const childUnitsByParentSignature = new Map<string, { parentIds: string[]; childUnitIds: string[] }>();
-  for (const [childId, parentIdsRaw] of parentIdsByChild.entries()) {
-    const parentIds = [...parentIdsRaw].sort();
-    const childUnitId = unitIdByPersonId.get(childId);
-    if (!childUnitId) continue;
-    const signature = parentIds.join("|");
-    const existing = childUnitsByParentSignature.get(signature);
-    if (existing) {
-      if (!existing.childUnitIds.includes(childUnitId)) existing.childUnitIds.push(childUnitId);
-      continue;
-    }
-    childUnitsByParentSignature.set(signature, { parentIds, childUnitIds: [childUnitId] });
-  }
-
-  for (const group of childUnitsByParentSignature.values()) {
-    if (group.childUnitIds.length === 0) continue;
-    const parentCenters = group.parentIds
-      .map((parentId) => unitCenters.get(unitIdByPersonId.get(parentId) ?? ""))
-      .filter((value): value is { x: number; y: number } => Boolean(value));
-
-    const currentChildCenters = group.childUnitIds
-      .map((unitId) => unitCenters.get(unitId))
-      .filter((value): value is { x: number; y: number } => Boolean(value));
-
-    const parentCenterX =
-      parentCenters.length > 0
-        ? average(parentCenters.map((entry) => entry.x))
-        : average(currentChildCenters.map((entry) => entry.x));
-
-    const sortedChildUnits = [...group.childUnitIds].sort((leftUnitId, rightUnitId) => {
-      const leftUnit = unitsById.get(leftUnitId);
-      const rightUnit = unitsById.get(rightUnitId);
-      const leftBirthYear = Math.min(
-        ...(leftUnit?.memberIds.map((memberId) => peopleById.get(memberId)?.birthYear ?? Number.POSITIVE_INFINITY) ?? [Number.POSITIVE_INFINITY]),
-      );
-      const rightBirthYear = Math.min(
-        ...(rightUnit?.memberIds.map((memberId) => peopleById.get(memberId)?.birthYear ?? Number.POSITIVE_INFINITY) ?? [Number.POSITIVE_INFINITY]),
-      );
-      if (leftBirthYear !== rightBirthYear) return leftBirthYear - rightBirthYear;
-      return leftUnitId.localeCompare(rightUnitId);
-    });
-
-    const childGap = getChildRailGap(sortedChildUnits.length);
-    const totalWidth = (sortedChildUnits.length - 1) * childGap;
-    const currentRailCenterX = average(
-      sortedChildUnits
-        .map((unitId) => unitCenters.get(unitId))
-        .filter((value): value is { x: number; y: number } => Boolean(value))
-        .map((entry) => entry.x),
-    );
-    const targetRailCenterX =
-      currentRailCenterX === 0
-        ? parentCenterX
-        : parentCenterX * 0.78 + currentRailCenterX * 0.22;
-    const startCenterX = targetRailCenterX - totalWidth / 2;
-    sortedChildUnits.forEach((unitId, index) => {
-      const unit = unitsById.get(unitId);
-      if (!unit) return;
-      const lane = Math.max(
-        ...unit.memberIds.map((memberId) => generationLaneByPersonId.get(memberId) ?? 0),
-      );
-      unitCenters.set(unit.id, {
-        x: startCenterX + index * childGap,
-        y: lane * GENERATION_GAP,
-      });
-      placeUnitMembers(unit, unitCenters, positions);
-    });
-  }
 }
 
 /** Build ReactFlow person nodes */
