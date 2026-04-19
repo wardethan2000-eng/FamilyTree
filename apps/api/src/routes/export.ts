@@ -2,7 +2,6 @@ import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import archiver from "archiver";
-import * as schema from "@familytree/database";
 import { db } from "../lib/db.js";
 import { s3, MEDIA_BUCKET } from "../lib/storage.js";
 import { getSession } from "../lib/session.js";

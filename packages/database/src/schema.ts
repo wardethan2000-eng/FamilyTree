@@ -29,6 +29,12 @@ export const relationshipTypeEnum = pgEnum("relationship_type", [
   "spouse",
 ]);
 
+export const spouseStatusEnum = pgEnum("spouse_status", [
+  "active",
+  "former",
+  "deceased_partner",
+]);
+
 export const memoryKindEnum = pgEnum("memory_kind", [
   "story",
   "photo",
@@ -55,6 +61,28 @@ export const promptStatusEnum = pgEnum("prompt_status", [
   "pending",
   "answered",
   "dismissed",
+]);
+
+export const transcriptionStatusEnum = pgEnum("transcription_status", [
+  "none",
+  "queued",
+  "processing",
+  "completed",
+  "failed",
+]);
+
+export const transcriptionJobStatusEnum = pgEnum("transcription_job_status", [
+  "queued",
+  "processing",
+  "completed",
+  "failed",
+]);
+
+export const promptReplyLinkStatusEnum = pgEnum("prompt_reply_link_status", [
+  "pending",
+  "used",
+  "revoked",
+  "expired",
 ]);
 
 // ── Better Auth core tables ────────────────────────────────────────────────────
@@ -233,6 +261,13 @@ export const relationships = pgTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     type: relationshipTypeEnum("type").notNull(),
+    normalizedPersonAId: uuid("normalized_person_a_id").references(() => people.id, {
+      onDelete: "cascade",
+    }),
+    normalizedPersonBId: uuid("normalized_person_b_id").references(() => people.id, {
+      onDelete: "cascade",
+    }),
+    spouseStatus: spouseStatusEnum("spouse_status"),
     startDateText: varchar("start_date_text", { length: 100 }),
     endDateText: varchar("end_date_text", { length: 100 }),
     sortOrder: integer("sort_order").default(0).notNull(),
@@ -245,9 +280,18 @@ export const relationships = pgTable(
       table.fromPersonId,
       table.toPersonId,
     ),
+    uniqueIndex("relationships_unique_normalized_pair_idx").on(
+      table.treeId,
+      table.type,
+      table.normalizedPersonAId,
+      table.normalizedPersonBId,
+    ),
     index("relationships_tree_idx").on(table.treeId),
     index("relationships_from_person_idx").on(table.fromPersonId),
     index("relationships_to_person_idx").on(table.toPersonId),
+    index("relationships_normalized_person_a_idx").on(table.normalizedPersonAId),
+    index("relationships_normalized_person_b_idx").on(table.normalizedPersonBId),
+    index("relationships_spouse_status_idx").on(table.spouseStatus),
   ],
 );
 
@@ -277,6 +321,36 @@ export const prompts = pgTable(
   ],
 );
 
+export const promptReplyLinks = pgTable(
+  "prompt_reply_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    promptId: uuid("prompt_id")
+      .notNull()
+      .references(() => prompts.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 320 }).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    status: promptReplyLinkStatusEnum("status").default("pending").notNull(),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("prompt_reply_links_tree_idx").on(table.treeId),
+    index("prompt_reply_links_prompt_idx").on(table.promptId),
+    index("prompt_reply_links_email_idx").on(table.email),
+    index("prompt_reply_links_status_idx").on(table.status),
+    uniqueIndex("prompt_reply_links_token_hash_unique_idx").on(table.tokenHash),
+  ],
+);
+
 export const memories = pgTable(
   "memories",
   {
@@ -296,6 +370,13 @@ export const memories = pgTable(
     title: varchar("title", { length: 200 }).notNull(),
     body: text("body"),
     dateOfEventText: varchar("date_of_event_text", { length: 100 }),
+    transcriptText: text("transcript_text"),
+    transcriptLanguage: varchar("transcript_language", { length: 32 }),
+    transcriptStatus: transcriptionStatusEnum("transcript_status")
+      .default("none")
+      .notNull(),
+    transcriptError: text("transcript_error"),
+    transcriptUpdatedAt: timestamp("transcript_updated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -304,6 +385,33 @@ export const memories = pgTable(
     index("memories_primary_person_idx").on(table.primaryPersonId),
     index("memories_contributor_idx").on(table.contributorUserId),
     index("memories_media_idx").on(table.mediaId),
+    index("memories_transcript_status_idx").on(table.transcriptStatus),
+  ],
+);
+
+export const transcriptionJobs = pgTable(
+  "transcription_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    status: transcriptionJobStatusEnum("status").default("queued").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    runAfter: timestamp("run_after", { withTimezone: true }).defaultNow().notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("transcription_jobs_memory_unique_idx").on(table.memoryId),
+    index("transcription_jobs_tree_idx").on(table.treeId),
+    index("transcription_jobs_status_run_after_idx").on(table.status, table.runAfter),
   ],
 );
 
@@ -370,6 +478,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   invitationsSent: many(invitations),
   archiveExportsRequested: many(archiveExports),
   promptsSent: many(prompts),
+  promptReplyLinksCreated: many(promptReplyLinks),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -393,6 +502,8 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
   invitations: many(invitations),
   archiveExports: many(archiveExports),
   prompts: many(prompts),
+  promptReplyLinks: many(promptReplyLinks),
+  transcriptionJobs: many(transcriptionJobs),
 }));
 
 export const treeMembershipsRelations = relations(treeMemberships, ({ one }) => ({
@@ -468,6 +579,19 @@ export const promptsRelations = relations(prompts, ({ one, many }) => ({
   fromUser: one(users, { fields: [prompts.fromUserId], references: [users.id] }),
   toPerson: one(people, { fields: [prompts.toPersonId], references: [people.id] }),
   replies: many(memories),
+  replyLinks: many(promptReplyLinks),
+}));
+
+export const promptReplyLinksRelations = relations(promptReplyLinks, ({ one }) => ({
+  tree: one(trees, { fields: [promptReplyLinks.treeId], references: [trees.id] }),
+  prompt: one(prompts, {
+    fields: [promptReplyLinks.promptId],
+    references: [prompts.id],
+  }),
+  createdBy: one(users, {
+    fields: [promptReplyLinks.createdByUserId],
+    references: [users.id],
+  }),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
@@ -489,3 +613,14 @@ export const archiveExportsRelations = relations(archiveExports, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const transcriptionJobsRelations = relations(
+  transcriptionJobs,
+  ({ one }) => ({
+    tree: one(trees, { fields: [transcriptionJobs.treeId], references: [trees.id] }),
+    memory: one(memories, {
+      fields: [transcriptionJobs.memoryId],
+      references: [memories.id],
+    }),
+  }),
+);

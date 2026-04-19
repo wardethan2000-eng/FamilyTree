@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import * as schema from "@familytree/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { mediaUrl } from "../lib/storage.js";
+import { enqueueMemoryTranscription } from "../lib/transcription.js";
 
 const CreateMemoryBody = z.object({
   kind: z.enum(["story", "photo", "voice", "document", "other"]),
@@ -27,8 +29,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       };
 
       const membership = await db.query.treeMemberships.findFirst({
-        where: (t, { and, eq }) =>
-          and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
+        where: (t) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
       });
       if (!membership) {
         return reply.status(403).send({ error: "Not a member of this tree" });
@@ -50,6 +51,39 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       if (kind === "voice" && !mediaId) {
         return reply.status(400).send({ error: "Voice memories require a mediaId" });
       }
+      if (kind === "document" && !mediaId) {
+        return reply.status(400).send({ error: "Document memories require a mediaId" });
+      }
+
+      const person = await db.query.people.findFirst({
+        where: (p) => and(eq(p.id, personId), eq(p.treeId, treeId)),
+      });
+      if (!person) {
+        return reply.status(404).send({ error: "Person not found in this tree" });
+      }
+
+      if (mediaId) {
+        const mediaRecord = await db.query.media.findFirst({
+          where: (m) => and(eq(m.id, mediaId), eq(m.treeId, treeId)),
+        });
+        if (!mediaRecord) {
+          return reply.status(400).send({ error: "Media not found in this tree" });
+        }
+      }
+
+      if (promptId) {
+        const prompt = await db.query.prompts.findFirst({
+          where: (p) => and(eq(p.id, promptId), eq(p.treeId, treeId)),
+        });
+        if (!prompt) {
+          return reply.status(400).send({ error: "Prompt not found in this tree" });
+        }
+        if (prompt.toPersonId !== personId) {
+          return reply.status(400).send({
+            error: "Prompt does not target this person",
+          });
+        }
+      }
 
       const [memory] = await db
         .insert(schema.memories)
@@ -68,6 +102,10 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
 
       if (!memory) {
         return reply.status(500).send({ error: "Failed to create memory" });
+      }
+
+      if (kind === "voice") {
+        await enqueueMemoryTranscription(memory.id, treeId);
       }
 
       // Fetch with media for the response
@@ -97,15 +135,22 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       };
 
       const membership = await db.query.treeMemberships.findFirst({
-        where: (t, { and, eq }) =>
-          and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
+        where: (t) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
       });
       if (!membership) {
         return reply.status(403).send({ error: "Not a member of this tree" });
       }
 
+      const person = await db.query.people.findFirst({
+        where: (p) => and(eq(p.id, personId), eq(p.treeId, treeId)),
+      });
+      if (!person) {
+        return reply.status(404).send({ error: "Person not found in this tree" });
+      }
+
       const memories = await db.query.memories.findMany({
-        where: (m, { eq }) => eq(m.primaryPersonId, personId),
+        where: (m) =>
+          and(eq(m.primaryPersonId, personId), eq(m.treeId, treeId)),
         with: { media: true },
         orderBy: (m, { desc }) => [desc(m.createdAt)],
       });
@@ -127,15 +172,14 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
     const { treeId } = request.params as { treeId: string };
 
     const membership = await db.query.treeMemberships.findFirst({
-      where: (t, { and, eq }) =>
-        and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
+      where: (t) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) {
       return reply.status(403).send({ error: "Not a member of this tree" });
     }
 
     const memories = await db.query.memories.findMany({
-      where: (m, { eq }) => eq(m.treeId, treeId),
+      where: (m) => eq(m.treeId, treeId),
       with: {
         media: true,
         primaryPerson: { with: { portraitMedia: true } },

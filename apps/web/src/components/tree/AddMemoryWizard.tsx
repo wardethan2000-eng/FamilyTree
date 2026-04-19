@@ -100,7 +100,7 @@ export function AddMemoryWizard({
   }, [step1.kind, step2.title, step2.body, step2.file, needsFile]);
 
   const handleSubmit = async () => {
-    if (!step3.personId) return;
+    if (!promptId && !step3.personId) return;
     setSubmitting(true);
     setError(null);
 
@@ -134,10 +134,11 @@ export function AddMemoryWizard({
       };
       if (step2.body.trim()) body.body = step2.body.trim();
       if (resolvedMediaId) body.mediaId = resolvedMediaId;
-      if (promptId) body.promptId = promptId;
 
       const res = await fetch(
-        `${apiBase_}/api/trees/${treeId}/people/${step3.personId}/memories`,
+        promptId
+          ? `${apiBase_}/api/trees/${treeId}/prompts/${promptId}/reply`
+          : `${apiBase_}/api/trees/${treeId}/people/${step3.personId}/memories`,
         {
           method: "POST",
           credentials: "include",
@@ -646,103 +647,120 @@ export function AddMemoryWizard({
                 marginBottom: 16,
               }}
             >
-              Assign to a person
+              {promptId ? "Finalize reply" : "Assign to a person"}
             </div>
 
             {/* Person picker */}
-            <div style={{ marginBottom: 14 }}>
-              <label
+            {!promptId ? (
+              <div style={{ marginBottom: 14 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    color: "var(--ink-faded)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Person *
+                </label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                    gap: 8,
+                    maxHeight: 180,
+                    overflowY: "auto",
+                    padding: "2px 0",
+                  }}
+                >
+                  {people.map((p) => {
+                    const selected = step3.personId === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setStep3((s) => ({ ...s, personId: p.id }))}
+                        style={{
+                          background: selected ? "var(--paper-deep)" : "none",
+                          border: `1.5px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
+                          borderRadius: 8,
+                          padding: "10px 8px",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: 6,
+                          transition: "border-color 150ms, background 150ms",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            border: `1.5px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
+                            background: "var(--paper-deep)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {p.portraitUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.portraitUrl}
+                              alt={p.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontFamily: "var(--font-display)",
+                                fontSize: 14,
+                                color: "var(--ink-faded)",
+                              }}
+                            >
+                              {p.name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 11,
+                            color: selected ? "var(--ink)" : "var(--ink-soft)",
+                            textAlign: "center",
+                            lineHeight: 1.3,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {p.name.split(" ")[0]}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div
                 style={{
-                  display: "block",
+                  marginBottom: 14,
                   fontFamily: "var(--font-ui)",
                   fontSize: 12,
                   color: "var(--ink-faded)",
-                  marginBottom: 6,
                 }}
               >
-                Person *
-              </label>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
-                  gap: 8,
-                  maxHeight: 180,
-                  overflowY: "auto",
-                  padding: "2px 0",
-                }}
-              >
-                {people.map((p) => {
-                  const selected = step3.personId === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => setStep3((s) => ({ ...s, personId: p.id }))}
-                      style={{
-                        background: selected ? "var(--paper-deep)" : "none",
-                        border: `1.5px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
-                        borderRadius: 8,
-                        padding: "10px 8px",
-                        cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: 6,
-                        transition: "border-color 150ms, background 150ms",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: "50%",
-                          overflow: "hidden",
-                          border: `1.5px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
-                          background: "var(--paper-deep)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {p.portraitUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={p.portraitUrl}
-                            alt={p.name}
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontFamily: "var(--font-display)",
-                              fontSize: 14,
-                              color: "var(--ink-faded)",
-                            }}
-                          >
-                            {p.name.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: "var(--font-ui)",
-                          fontSize: 11,
-                          color: selected ? "var(--ink)" : "var(--ink-soft)",
-                          textAlign: "center",
-                          lineHeight: 1.3,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {p.name.split(" ")[0]}
-                      </div>
-                    </button>
-                  );
-                })}
+                This reply will be attached to{" "}
+                <strong style={{ color: "var(--ink)" }}>
+                  {people.find((p) => p.id === step3.personId)?.name ?? "the prompted person"}
+                </strong>
+                .
               </div>
-            </div>
+            )}
 
             {/* Date */}
             <div style={{ marginBottom: 14 }}>
@@ -857,17 +875,23 @@ export function AddMemoryWizard({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!step3.personId || submitting}
+                disabled={(!promptId && !step3.personId) || submitting}
                 style={{
                   fontFamily: "var(--font-ui)",
                   fontSize: 13,
                   fontWeight: 500,
                   color: "white",
-                  background: (!step3.personId || submitting) ? "var(--ink-faded)" : "var(--moss)",
+                  background:
+                    ((!promptId && !step3.personId) || submitting)
+                      ? "var(--ink-faded)"
+                      : "var(--moss)",
                   border: "none",
                   borderRadius: 6,
                   padding: "9px 20px",
-                  cursor: (!step3.personId || submitting) ? "default" : "pointer",
+                  cursor:
+                    ((!promptId && !step3.personId) || submitting)
+                      ? "default"
+                      : "pointer",
                   minWidth: 120,
                   transition: "background 150ms",
                 }}

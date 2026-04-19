@@ -72,6 +72,10 @@ export default function InboxPage() {
   const [replyingToPrompt, setReplyingToPrompt] = useState<Prompt | null>(null);
   const [askingOpen, setAskingOpen] = useState(false);
   const [membership, setMembership] = useState<{ role: string } | null>(null);
+  const [emailPrompt, setEmailPrompt] = useState<Prompt | null>(null);
+  const [emailInput, setEmailInput] = useState("");
+  const [sendingEmailLink, setSendingEmailLink] = useState(false);
+  const [emailNotice, setEmailNotice] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -114,7 +118,11 @@ export default function InboxPage() {
   }, [fetchData]);
 
   useEffect(() => {
-    if (activeTab === "all" && membership && ["founder", "steward"].includes(membership.role)) {
+    if (
+      activeTab === "all" &&
+      membership &&
+      ["founder", "steward", "contributor"].includes(membership.role)
+    ) {
       fetchAllPrompts();
     }
   }, [activeTab, membership, fetchAllPrompts]);
@@ -134,6 +142,34 @@ export default function InboxPage() {
   const canSeeAll =
     membership && ["founder", "steward", "contributor"].includes(membership.role);
   const displayedPrompts = activeTab === "inbox" ? inbox : allPrompts;
+
+  const handleSendEmailLink = async () => {
+    if (!emailPrompt || !emailInput.trim()) return;
+    setSendingEmailLink(true);
+    setEmailNotice(null);
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/prompts/${emailPrompt.id}/email-link`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim() }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? "Could not send email link");
+      }
+
+      const data = (await res.json()) as { email: string };
+      setEmailNotice(`Reply link sent to ${data.email}`);
+      setEmailPrompt(null);
+      setEmailInput("");
+    } catch (err) {
+      setEmailNotice(err instanceof Error ? err.message : "Could not send email link");
+    } finally {
+      setSendingEmailLink(false);
+    }
+  };
 
   return (
     <div
@@ -238,6 +274,23 @@ export default function InboxPage() {
           ))}
         </div>
 
+        {emailNotice && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: "1px solid var(--rule)",
+              background: "var(--paper-deep)",
+              color: "var(--ink-soft)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+            }}
+          >
+            {emailNotice}
+          </div>
+        )}
+
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {[1, 2, 3].map((i) => (
@@ -275,6 +328,12 @@ export default function InboxPage() {
                 currentUserId={session?.user?.id}
                 onReply={() => setReplyingToPrompt(prompt)}
                 onDismiss={() => handleDismiss(prompt.id)}
+                onSendEmailLink={() => {
+                  setEmailPrompt(prompt);
+                  setEmailInput("");
+                  setEmailNotice(null);
+                }}
+                canModeratePrompts={!!membership && ["founder", "steward"].includes(membership.role)}
               />
             ))}
           </div>
@@ -306,6 +365,108 @@ export default function InboxPage() {
         people={people}
         onPromptSent={fetchData}
       />
+
+      {emailPrompt && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 70,
+            background: "rgba(28,25,21,0.45)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEmailPrompt(null);
+          }}
+        >
+          <div
+            style={{
+              width: "min(480px, 94vw)",
+              borderRadius: 12,
+              border: "1px solid var(--rule)",
+              background: "var(--paper)",
+              padding: "20px 20px 18px",
+              boxShadow: "0 20px 48px rgba(28,25,21,0.22)",
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-display)",
+                fontWeight: 400,
+                fontSize: 24,
+                color: "var(--ink)",
+              }}
+            >
+              Send reply link by email
+            </h3>
+            <p
+              style={{
+                margin: "8px 0 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                color: "var(--ink-soft)",
+                lineHeight: 1.5,
+              }}
+            >
+              {emailPrompt.questionText}
+            </p>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="elder@example.com"
+              style={{
+                width: "100%",
+                border: "1px solid var(--rule)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                fontFamily: "var(--font-ui)",
+                fontSize: 14,
+                marginBottom: 14,
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setEmailPrompt(null)}
+                style={{
+                  border: "1px solid var(--rule)",
+                  borderRadius: 7,
+                  background: "none",
+                  padding: "8px 14px",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  color: "var(--ink-faded)",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendEmailLink}
+                disabled={sendingEmailLink || !emailInput.trim()}
+                style={{
+                  border: "none",
+                  borderRadius: 7,
+                  background: "var(--moss)",
+                  padding: "8px 14px",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  color: "#fff",
+                  cursor: sendingEmailLink ? "default" : "pointer",
+                  opacity: sendingEmailLink || !emailInput.trim() ? 0.65 : 1,
+                }}
+              >
+                {sendingEmailLink ? "Sending…" : "Send link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -316,16 +477,25 @@ function PromptCard({
   currentUserId,
   onReply,
   onDismiss,
+  onSendEmailLink,
+  canModeratePrompts,
 }: {
   prompt: Prompt;
   isOwn: boolean;
   currentUserId?: string;
   onReply: () => void;
   onDismiss: () => void;
+  onSendEmailLink: () => void;
+  canModeratePrompts: boolean;
 }) {
   const isRecipient = !isOwn;
   const canReply = isRecipient && prompt.status === "pending";
   const canDismiss = isRecipient && prompt.status === "pending";
+  const canSendEmailLink =
+    isOwn &&
+    prompt.status === "pending" &&
+    !!currentUserId &&
+    (prompt.fromUserId === currentUserId || canModeratePrompts);
 
   return (
     <div
@@ -457,7 +627,7 @@ function PromptCard({
           )}
 
           {/* Actions */}
-          {(canReply || canDismiss) && (
+          {(canReply || canDismiss || canSendEmailLink) && (
             <div style={{ display: "flex", gap: 8 }}>
               {canReply && (
                 <button
@@ -492,6 +662,23 @@ function PromptCard({
                   }}
                 >
                   Dismiss
+                </button>
+              )}
+              {canSendEmailLink && (
+                <button
+                  onClick={onSendEmailLink}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 7,
+                    border: "1.5px solid var(--moss)",
+                    background: "none",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 13,
+                    color: "var(--moss)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Send email link
                 </button>
               )}
             </div>

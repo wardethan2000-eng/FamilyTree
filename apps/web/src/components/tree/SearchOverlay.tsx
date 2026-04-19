@@ -19,6 +19,7 @@ interface SearchMemory {
   kind: MemoryKind;
   title: string;
   body?: string | null;
+  transcriptText?: string | null;
   dateOfEventText?: string | null;
   mediaUrl?: string | null;
   personName?: string | null;
@@ -87,6 +88,7 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
         (m) =>
           normalize(m.title).includes(q) ||
           (m.body && normalize(m.body).includes(q)) ||
+          (m.transcriptText && normalize(m.transcriptText).includes(q)) ||
           (m.personName && normalize(m.personName).includes(q)) ||
           (m.dateOfEventText && normalize(m.dateOfEventText).includes(q))
       )

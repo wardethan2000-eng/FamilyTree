@@ -39,7 +39,7 @@ export const auth = betterAuth({
   ],
   trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000").split(","),
   secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-in-production",
-  baseURL: process.env.API_BASE_URL ?? "http://localhost:3001",
+  baseURL: process.env.API_BASE_URL ?? "http://localhost:4000",
 });
 
 export type Auth = typeof auth;

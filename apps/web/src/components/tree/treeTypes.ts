@@ -39,15 +39,21 @@ export interface ApiRelationship {
   fromPersonId: string;
   toPersonId: string;
   type: "parent_child" | "sibling" | "spouse";
+  spouseStatus?: "active" | "former" | "deceased_partner" | null;
+  startDateText?: string | null;
+  endDateText?: string | null;
 }
 
 export interface ApiMemory {
   id: string;
   primaryPersonId: string;
   contributorUserId?: string | null;
-  kind: "photo" | "story";
+  kind: "story" | "photo" | "voice" | "document" | "other";
   title: string;
   body?: string | null;
+  transcriptText?: string | null;
+  transcriptLanguage?: string | null;
+  transcriptStatus?: "none" | "queued" | "processing" | "completed" | "failed";
   dateOfEventText?: string | null;
   mediaUrl?: string | null;
   /** Convenience: set by the fetching component to the owning person's id */

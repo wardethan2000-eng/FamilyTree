@@ -33,6 +33,7 @@ interface Memory {
   kind: "story" | "photo" | "voice" | "document" | "other";
   title: string;
   body?: string | null;
+  transcriptText?: string | null;
   dateOfEventText?: string | null;
   mediaUrl?: string | null;
   personName?: string | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 
@@ -13,12 +13,7 @@ export default function NewPersonPage({
 }) {
   const router = useRouter();
   const { data: session, isPending } = useSession();
-  const [treeId, setTreeId] = useState<string | null>(null);
-
-  // Resolve params
-  if (!treeId) {
-    params.then((p) => setTreeId(p.treeId));
-  }
+  const { treeId } = use(params);
 
   const [form, setForm] = useState({
     displayName: "",
@@ -31,7 +26,7 @@ export default function NewPersonPage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (isPending || !treeId) {
+  if (isPending) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-stone-50">
         <p className="text-sm text-stone-400">Loading…</p>

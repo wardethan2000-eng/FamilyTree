@@ -49,11 +49,15 @@ cp .env.example .env
 | `MINIO_ACCESS_KEY`  | —                               | MinIO access key                                 |
 | `MINIO_SECRET_KEY`  | —                               | MinIO secret key                                 |
 | `BETTER_AUTH_SECRET`| —                               | Random secret for signing tokens (≥ 32 chars)   |
-| `API_BASE_URL`      | `http://localhost:3001`         | Public URL of this API (used by Better Auth)     |
+| `API_BASE_URL`      | `http://localhost:4000`         | Public URL of this API (used by Better Auth)     |
 | `TRUSTED_ORIGINS`   | `http://localhost:3000`         | Comma-separated list of allowed CORS origins     |
+| `WEB_URL`           | `http://localhost:3000`         | Public URL of the web app (invites/reply links)  |
 | `SMTP_HOST`         | `localhost`                     | SMTP server hostname                             |
 | `SMTP_PORT`         | `1025`                          | SMTP server port (1025 = Mailpit)                |
-| `SMTP_FROM`         | `noreply@familytree.local`      | From address for auth emails                     |
+| `SMTP_FROM`         | `noreply@familytree.local`      | From address for invitation/reply emails         |
+| `WHISPER_API_URL`   | —                               | Whisper-compatible transcription endpoint         |
+| `WHISPER_API_KEY`   | —                               | Optional bearer token for transcription API      |
+| `WHISPER_MODEL`     | `whisper-1`                     | Model name sent with transcription requests      |
 
 Generate a strong `BETTER_AUTH_SECRET`:
 

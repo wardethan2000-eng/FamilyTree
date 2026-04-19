@@ -1,6 +1,5 @@
 import {
   CreateBucketCommand,
-  PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -21,20 +20,6 @@ export const s3 = new S3Client({
 export async function ensureBucket(): Promise<void> {
   try {
     await s3.send(new CreateBucketCommand({ Bucket: MEDIA_BUCKET }));
-    const policy = JSON.stringify({
-      Version: "2012-10-17",
-      Statement: [
-        {
-          Effect: "Allow",
-          Principal: "*",
-          Action: ["s3:GetObject"],
-          Resource: [`arn:aws:s3:::${MEDIA_BUCKET}/*`],
-        },
-      ],
-    });
-    await s3.send(
-      new PutBucketPolicyCommand({ Bucket: MEDIA_BUCKET, Policy: policy }),
-    );
   } catch (err) {
     const code = (err as { Code?: string; name?: string }).Code ?? (err as { name?: string }).name;
     if (code !== "BucketAlreadyOwnedByYou" && code !== "BucketAlreadyExists") {
@@ -56,7 +41,9 @@ export async function getPresignedUploadUrl(
 }
 
 export function mediaUrl(objectKey: string): string {
-  const endpoint = process.env.MINIO_ENDPOINT ?? "localhost";
-  const port = process.env.MINIO_PORT ?? "9000";
-  return `http://${endpoint}:${port}/${MEDIA_BUCKET}/${objectKey}`;
+  const apiBase = (process.env.API_BASE_URL ?? "http://localhost:4000").replace(
+    /\/$/,
+    "",
+  );
+  return `${apiBase}/api/media?key=${encodeURIComponent(objectKey)}`;
 }

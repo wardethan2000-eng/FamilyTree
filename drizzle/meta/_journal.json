@@ -15,6 +15,27 @@
       "when": 1745003345000,
       "tag": "0001_prompts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776537259000,
+      "tag": "0002_memory_kind_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776541501000,
+      "tag": "0003_voice_and_email_reply_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776547800000,
+      "tag": "0004_relationship_invariants",
+      "breakpoints": true
     }
   ]
 }

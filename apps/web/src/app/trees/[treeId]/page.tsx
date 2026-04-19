@@ -29,6 +29,7 @@ interface TreeMemory {
   kind: "story" | "photo" | "voice" | "document" | "other";
   title: string;
   body?: string | null;
+  transcriptText?: string | null;
   dateOfEventText?: string | null;
   mediaUrl?: string | null;
   personName?: string | null;
@@ -50,6 +51,18 @@ export default function TreePage() {
   const [driftOpen, setDriftOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const mapPeoplePayload = useCallback((data: Array<Record<string, unknown>>) => {
+    return data.map((p) => ({
+      id: p.id as string,
+      name: (p.displayName ?? p.name ?? "") as string,
+      birthYear: extractYear(p.birthDateText as string | null),
+      deathYear: extractYear(p.deathDateText as string | null),
+      essenceLine: (p.essenceLine ?? null) as string | null,
+      portraitUrl: (p.portraitUrl ?? null) as string | null,
+      linkedUserId: (p.linkedUserId ?? null) as string | null,
+    }));
+  }, []);
 
   const currentUserPersonId =
     session?.user?.id && people.length > 0
@@ -77,36 +90,33 @@ export default function TreePage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [treeRes, peopleRes, relsRes, memoriesRes] = await Promise.all([
-          fetch(`${API}/api/trees/${treeId}`, { credentials: "include" }),
-          fetch(`${API}/api/trees/${treeId}/people`, { credentials: "include" }),
-          fetch(`${API}/api/trees/${treeId}/relationships`, { credentials: "include" }),
-          fetch(`${API}/api/trees/${treeId}/memories`, { credentials: "include" }),
-        ]);
+        const [treeResResult, peopleResResult, relsResResult, memoriesResResult] =
+          await Promise.allSettled([
+            fetch(`${API}/api/trees/${treeId}`, { credentials: "include" }),
+            fetch(`${API}/api/trees/${treeId}/people`, { credentials: "include" }),
+            fetch(`${API}/api/trees/${treeId}/relationships`, { credentials: "include" }),
+            fetch(`${API}/api/trees/${treeId}/memories`, { credentials: "include" }),
+          ]);
 
-        if (treeRes.ok) setTree(await treeRes.json());
-        if (peopleRes.ok) {
-          const data = await peopleRes.json();
-          setPeople(
-            (data as Array<Record<string, unknown>>).map((p) => ({
-              id: p.id as string,
-              name: (p.displayName ?? p.name ?? "") as string,
-              birthYear: extractYear(p.birthDateText as string | null),
-              deathYear: extractYear(p.deathDateText as string | null),
-              essenceLine: (p.essenceLine ?? null) as string | null,
-              portraitUrl: (p.portraitUrl ?? null) as string | null,
-              linkedUserId: (p.linkedUserId ?? null) as string | null,
-            }))
-          );
+        if (treeResResult.status === "fulfilled" && treeResResult.value.ok) {
+          setTree(await treeResResult.value.json());
         }
-        if (relsRes.ok) setRelationships(await relsRes.json());
-        if (memoriesRes.ok) setMemories(await memoriesRes.json());
+        if (peopleResResult.status === "fulfilled" && peopleResResult.value.ok) {
+          const data = await peopleResResult.value.json();
+          setPeople(mapPeoplePayload(data as Array<Record<string, unknown>>));
+        }
+        if (relsResResult.status === "fulfilled" && relsResResult.value.ok) {
+          setRelationships(await relsResResult.value.json());
+        }
+        if (memoriesResResult.status === "fulfilled" && memoriesResResult.value.ok) {
+          setMemories(await memoriesResResult.value.json());
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [session, treeId]);
+  }, [mapPeoplePayload, session, treeId]);
 
   const handlePersonDetail = useCallback(
     (personId: string) => {
@@ -121,6 +131,23 @@ export default function TreePage() {
     });
     if (res.ok) setMemories(await res.json());
   }, [treeId]);
+
+  const refreshConstellation = useCallback(async () => {
+    const [peopleResResult, relsResResult] = await Promise.allSettled([
+      fetch(`${API}/api/trees/${treeId}/people`, { credentials: "include" }),
+      fetch(`${API}/api/trees/${treeId}/relationships`, {
+        credentials: "include",
+      }),
+    ]);
+
+    if (peopleResResult.status === "fulfilled" && peopleResResult.value.ok) {
+      const data = await peopleResResult.value.json();
+      setPeople(mapPeoplePayload(data as Array<Record<string, unknown>>));
+    }
+    if (relsResResult.status === "fulfilled" && relsResResult.value.ok) {
+      setRelationships(await relsResResult.value.json());
+    }
+  }, [mapPeoplePayload, treeId]);
 
   const apiPeople = people.map((p) => ({
     id: p.id,
@@ -180,6 +207,7 @@ export default function TreePage() {
         onPersonDetailClick={handlePersonDetail}
         onAddMemoryClick={() => setWizardOpen(true)}
         onSearchClick={() => setSearchOpen(true)}
+        onConstellationChanged={refreshConstellation}
       />
 
       <AnimatePresence>

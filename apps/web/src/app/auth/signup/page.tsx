@@ -24,18 +24,23 @@ function SignUpContent() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error: err } = await signUp.email({
-      name,
-      email,
-      password,
-      callbackURL: afterAuth,
-    });
-    setLoading(false);
-    if (err) {
-      setError(err.message ?? "Failed to create account.");
-      return;
+    try {
+      const { error: err } = await signUp.email({
+        name,
+        email,
+        password,
+        callbackURL: afterAuth,
+      });
+      if (err) {
+        setError(err.message ?? "Failed to create account.");
+        return;
+      }
+      router.push(afterAuth);
+    } catch {
+      setError("Could not reach the server. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    router.push(afterAuth);
   }
 
   return (

@@ -48,6 +48,9 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
     if (!membership) {
       return reply.status(403).send({ error: "Not a member of this tree" });
     }
+    if (membership.role === "viewer") {
+      return reply.status(403).send({ error: "Viewers cannot add people" });
+    }
 
     const parsed = CreatePersonBody.safeParse(request.body);
     if (!parsed.success) {
@@ -120,7 +123,8 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
         with: { portraitMedia: true },
       }),
       db.query.memories.findMany({
-        where: (m, { eq }) => eq(m.primaryPersonId, personId),
+        where: (m, { and, eq }) =>
+          and(eq(m.primaryPersonId, personId), eq(m.treeId, treeId)),
         with: { media: true },
         orderBy: (m, { desc }) => [desc(m.createdAt)],
       }),
@@ -173,6 +177,17 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: "No fields to update" });
     }
 
+    if (updates.portraitMediaId) {
+      const portraitMediaId = updates.portraitMediaId;
+      const portraitMedia = await db.query.media.findFirst({
+        where: (m, { and, eq }) =>
+          and(eq(m.id, portraitMediaId), eq(m.treeId, treeId)),
+      });
+      if (!portraitMedia) {
+        return reply.status(400).send({ error: "Portrait media not found in this tree" });
+      }
+    }
+
     const [updated] = await db
       .update(schema.people)
       .set({ ...updates, updatedAt: new Date() })
@@ -184,4 +199,3 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
     return reply.send(updated);
   });
 }
-

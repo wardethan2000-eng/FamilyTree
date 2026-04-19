@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { randomBytes, createHash } from "node:crypto";
 import { createTransport } from "nodemailer";
 import * as schema from "@familytree/database";
@@ -210,6 +210,12 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(410).send({ error: "Invitation has expired" });
     }
 
+    if (session.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      return reply.status(403).send({
+        error: "This invitation is for a different email address",
+      });
+    }
+
     // Check if user already has membership
     const existing = await db.query.treeMemberships.findFirst({
       where: (m, { and, eq }) =>
@@ -256,11 +262,21 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "Only editors and owners can revoke invitations" });
     }
 
-    const { eq } = await import("drizzle-orm");
-    await db
+    const [revoked] = await db
       .update(schema.invitations)
       .set({ status: "revoked" })
-      .where(eq(schema.invitations.id, inviteId));
+      .where(
+        and(
+          eq(schema.invitations.id, inviteId),
+          eq(schema.invitations.treeId, treeId),
+          eq(schema.invitations.status, "pending"),
+        ),
+      )
+      .returning({ id: schema.invitations.id });
+
+    if (!revoked) {
+      return reply.status(404).send({ error: "Pending invitation not found" });
+    }
 
     return reply.status(204).send();
   });

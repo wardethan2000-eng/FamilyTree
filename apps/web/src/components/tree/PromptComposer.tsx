@@ -14,6 +14,7 @@ interface PromptComposerProps {
   onClose: () => void;
   treeId: string;
   people: Person[];
+  apiBase?: string;
   defaultPersonId?: string;
   onPromptSent?: () => void;
 }
@@ -36,6 +37,7 @@ export function PromptComposer({
   onClose,
   treeId,
   people,
+  apiBase,
   defaultPersonId,
   onPromptSent,
 }: PromptComposerProps) {
@@ -44,6 +46,7 @@ export function PromptComposer({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const apiBase_ = apiBase ?? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
 
   useEffect(() => {
     if (open) {
@@ -78,7 +81,7 @@ export function PromptComposer({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/trees/${treeId}/prompts`, {
+      const res = await fetch(`${apiBase_}/api/trees/${treeId}/prompts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ toPersonId: selectedPersonId, questionText: questionText.trim() }),

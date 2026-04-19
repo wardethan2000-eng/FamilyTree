@@ -13,12 +13,16 @@ import { promptsPlugin } from "./routes/prompts.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
+  const trustedOrigins = (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 
   // CORS for all non-auth routes. Runs at preHandler so it doesn't conflict
   // with the onRequest hook that intercepts /api/auth/* before body parsing.
   app.register(cors, {
     hook: "preHandler",
-    origin: (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000").split(","),
+    origin: trustedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   });
@@ -28,6 +32,36 @@ export function buildApp() {
   // CORS for these routes via the trustedOrigins config.
   app.addHook("onRequest", async (request, reply) => {
     if (!request.url.startsWith("/api/auth/")) return;
+    const originHeader = request.headers.origin;
+
+    if (originHeader && !trustedOrigins.includes(originHeader)) {
+      return reply.status(403).send({ error: "Origin not allowed" });
+    }
+
+    if (request.method === "OPTIONS") {
+      if (!originHeader) {
+        return reply.status(403).send({ error: "Origin not allowed" });
+      }
+      reply
+        .header("Access-Control-Allow-Origin", originHeader)
+        .header("Vary", "Origin")
+        .header("Access-Control-Allow-Credentials", "true")
+        .header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+        .header(
+          "Access-Control-Allow-Headers",
+          request.headers["access-control-request-headers"] ?? "Content-Type, Authorization",
+        )
+        .status(204)
+        .send();
+      return;
+    }
+
+    if (originHeader) {
+      reply.raw.setHeader("Access-Control-Allow-Origin", originHeader);
+      reply.raw.setHeader("Vary", "Origin");
+      reply.raw.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+
     reply.hijack();
     await new Promise<void>((resolve) => {
       const res = reply.raw;
