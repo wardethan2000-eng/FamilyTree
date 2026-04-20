@@ -22,7 +22,11 @@ export type PersonNode = PersonFlowNode;
 export type TreeNode = PersonFlowNode;
 
 export type ConstellationEdgeData = {
-  kind: "parent_child" | "spouse";
+  kind: "parent_child" | "sibling" | "spouse";
+  renderSourceX?: number;
+  renderSourceY?: number;
+  renderTargetX?: number;
+  renderTargetY?: number;
   unionX?: number;
   unionY?: number;
   opacity?: number;

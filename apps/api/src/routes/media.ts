@@ -14,6 +14,7 @@ import {
   MEDIA_BUCKET,
   s3,
 } from "../lib/storage.js";
+import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 
 const PresignBody = z.object({
   filename: z.string().min(1).max(255),
@@ -144,6 +145,11 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(415).send({ error: "Unsupported media type" });
     }
 
+    const capacity = await checkTreeCanAdd(treeId, "media", sizeBytes);
+    if (!capacity.allowed) {
+      return reply.status(capacity.status).send({ error: capacity.reason });
+    }
+
     const ext = filename.includes(".") ? filename.split(".").pop()! : "bin";
     const objectKey = `trees/${treeId}/${randomUUID()}.${ext}`;
     const uploadUrl = await getPresignedUploadUrl(objectKey, contentType);
@@ -152,6 +158,7 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
       .insert(schema.media)
       .values({
         treeId,
+        contributingTreeId: treeId,
         uploadedByUserId: session.user.id,
         objectKey,
         originalFilename: filename,
@@ -189,50 +196,67 @@ async function checkCrossTreeAccess(
   mediaRecord: MediaRecord,
   userId: string,
 ): Promise<boolean> {
-  // Find active connections involving T1 (the media's tree)
-  const activeConnections = await db.query.treeConnections.findMany({
-    where: (c) =>
-      and(
-        or(
-          eq(c.treeAId, mediaRecord.treeId),
-          eq(c.treeBId, mediaRecord.treeId),
-        ),
-        eq(c.status, "active"),
-      ),
+  return checkScopedTreeAccess(mediaRecord, userId);
+}
+
+async function checkScopedTreeAccess(
+  mediaRecord: MediaRecord,
+  userId: string,
+): Promise<boolean> {
+  const memberships = await db.query.treeMemberships.findMany({
+    where: (membership) => eq(membership.userId, userId),
+    columns: {
+      treeId: true,
+    },
   });
-  if (activeConnections.length === 0) return false;
-
-  // For each active connection, check if userId is a member of the other tree
-  for (const conn of activeConnections) {
-    const otherTreeId =
-      conn.treeAId === mediaRecord.treeId ? conn.treeBId : conn.treeAId;
-
-    const otherMembership = await db.query.treeMemberships.findFirst({
-      where: (m) => and(eq(m.treeId, otherTreeId), eq(m.userId, userId)),
-    });
-    if (!otherMembership) continue;
-
-    // User is a member of the other tree — now check person links.
-    // Find any memory in T1 whose media is this record.
-    const memory = await db.query.memories.findFirst({
-      where: (m) => and(eq(m.mediaId, mediaRecord.id), eq(m.treeId, mediaRecord.treeId)),
-    });
-    if (!memory) continue;
-
-    // Check for a crossTreePersonLink for the memory's primaryPerson within this connection.
-    // The person in T1 could be personA or personB depending on which side T1 is.
-    const personId = memory.primaryPersonId;
-    const isT1TreeA = conn.treeAId === mediaRecord.treeId;
-
-    const link = await db.query.crossTreePersonLinks.findFirst({
-      where: (l) =>
-        and(
-          eq(l.connectionId, conn.id),
-          isT1TreeA ? eq(l.personAId, personId) : eq(l.personBId, personId),
-        ),
-    });
-    if (link) return true;
+  const userTreeIds = memberships.map((membership) => membership.treeId);
+  if (userTreeIds.length === 0) {
+    return false;
   }
 
-  return false;
+  const memory = await db.query.memories.findFirst({
+    where: (candidate) => eq(candidate.mediaId, mediaRecord.id),
+    columns: {
+      id: true,
+      primaryPersonId: true,
+    },
+  });
+  if (!memory) {
+    return false;
+  }
+
+  const tagRows = await db
+    .select({ personId: schema.memoryPersonTags.personId })
+    .from(schema.memoryPersonTags)
+    .where(eq(schema.memoryPersonTags.memoryId, memory.id));
+
+  const candidatePersonIds =
+    tagRows.length > 0
+      ? [...new Set(tagRows.map((row) => row.personId))]
+      : [memory.primaryPersonId];
+
+  const [scopeMatch, legacyMatch] = await Promise.all([
+    db.query.treePersonScope.findFirst({
+      where: (scope, { and, inArray }) =>
+        and(
+          inArray(scope.treeId, userTreeIds),
+          inArray(scope.personId, candidatePersonIds),
+        ),
+      columns: {
+        personId: true,
+      },
+    }),
+    db.query.people.findFirst({
+      where: (person, { and, inArray }) =>
+        and(
+          inArray(person.treeId, userTreeIds),
+          inArray(person.id, candidatePersonIds),
+        ),
+      columns: {
+        id: true,
+      },
+    }),
+  ]);
+
+  return Boolean(scopeMatch || legacyMatch);
 }

@@ -24,6 +24,8 @@ type ResolvedPlace = {
 type Person = {
   id: string;
   displayName: string;
+  canonicalDisplayName?: string | null;
+  displayNameOverride?: string | null;
   essenceLine: string | null;
   birthDateText: string | null;
   deathDateText: string | null;
@@ -35,6 +37,7 @@ type Person = {
   deathPlaceResolved?: ResolvedPlace | null;
   isLiving: boolean;
   linkedUserId: string | null;
+  homeTreeId?: string | null;
   portraitUrl: string | null;
   memories: Memory[];
   relationships: Relationship[];
@@ -65,6 +68,40 @@ type Relationship = {
 };
 
 type PersonSummary = { id: string; displayName: string };
+type PersonTreeMembership = {
+  id: string;
+  name: string;
+  role: string;
+  tier?: string | null;
+  subscriptionStatus?: string | null;
+};
+type DuplicateCandidate = {
+  id: string;
+  displayName: string;
+  essenceLine: string | null;
+  birthDateText: string | null;
+  deathDateText: string | null;
+  linkedUserId: string | null;
+  homeTreeId: string | null;
+  portraitUrl: string | null;
+  score: number;
+  reasons: string[];
+  visibleTrees: PersonTreeMembership[];
+  alreadyInTree: boolean;
+};
+type CrossTreeLink = {
+  connectionId: string | null;
+  treeId: string;
+  treeName: string | null;
+  linkedPerson: {
+    id: string;
+    displayName: string;
+    treeId?: string;
+    portraitUrl: string | null;
+    essenceLine?: string | null;
+  };
+  memories: Memory[];
+};
 
 function relationshipLabel(r: Relationship, personId: string): string {
   const labels: Record<RelationshipType, [string, string]> = {
@@ -121,6 +158,8 @@ export default function PersonPage({
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
   const [allPeople, setAllPeople] = useState<PersonSummary[]>([]);
+  const [visibleTrees, setVisibleTrees] = useState<PersonTreeMembership[]>([]);
+  const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("memories");
   const [activeDecade, setActiveDecade] = useState<string | null>(null);
 
@@ -142,6 +181,8 @@ export default function PersonPage({
     isLiving: true,
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingPerson, setDeletingPerson] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Portrait upload
   const [uploadingPortrait, setUploadingPortrait] = useState(false);
@@ -180,17 +221,10 @@ export default function PersonPage({
   const [promptComposerOpen, setPromptComposerOpen] = useState(false);
 
   // Cross-tree linked people
-  const [crossTreeLinks, setCrossTreeLinks] = useState<Array<{
-    connectionId: string;
-    linkedPerson: {
-      id: string;
-      displayName: string;
-      treeId: string;
-      portraitUrl: string | null;
-      essenceLine?: string | null;
-    };
-    memories: Memory[];
-  }>>([]);
+  const [crossTreeLinks, setCrossTreeLinks] = useState<CrossTreeLink[]>([]);
+  const [loadingDuplicates, setLoadingDuplicates] = useState(false);
+  const [mergingDuplicateId, setMergingDuplicateId] = useState<string | null>(null);
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isPending && !session) router.replace("/auth/signin");
@@ -200,7 +234,9 @@ export default function PersonPage({
     if (session) {
       loadPerson();
       loadAllPeople();
+      loadVisibleTrees();
       loadCrossTreeLinks();
+      loadDuplicateCandidates();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, treeId, personId]);
@@ -230,12 +266,35 @@ export default function PersonPage({
     if (res.ok) setAllPeople((await res.json()) as PersonSummary[]);
   }
 
+  async function loadVisibleTrees() {
+    const res = await fetch(`${API}/api/people/${personId}/trees`, {
+      credentials: "include",
+    });
+    if (res.ok) {
+      setVisibleTrees((await res.json()) as PersonTreeMembership[]);
+    }
+  }
+
   async function loadCrossTreeLinks() {
     const res = await fetch(
       `${API}/api/trees/${treeId}/people/${personId}/cross-tree`,
       { credentials: "include" },
     );
-    if (res.ok) setCrossTreeLinks(await res.json());
+    if (res.ok) setCrossTreeLinks((await res.json()) as CrossTreeLink[]);
+  }
+
+  async function loadDuplicateCandidates() {
+    setLoadingDuplicates(true);
+    const res = await fetch(
+      `${API}/api/trees/${treeId}/people/${personId}/duplicates`,
+      { credentials: "include" },
+    );
+    if (res.ok) {
+      setDuplicateCandidates((await res.json()) as DuplicateCandidate[]);
+    } else {
+      setDuplicateCandidates([]);
+    }
+    setLoadingDuplicates(false);
   }
 
   async function loadPersonPrompts() {
@@ -247,6 +306,7 @@ export default function PersonPage({
   }
 
   function startEditing(p: Person) {
+    setDeleteError(null);
     setEditForm({
       displayName: p.displayName,
       essenceLine: p.essenceLine ?? "",
@@ -264,6 +324,7 @@ export default function PersonPage({
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     setSavingEdit(true);
+    setDeleteError(null);
     const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -285,6 +346,32 @@ export default function PersonPage({
       await loadPerson();
     }
     setSavingEdit(false);
+  }
+
+  async function deletePerson() {
+    if (!person) return;
+
+    const confirmed = window.confirm(
+      `Delete ${person.displayName}? This also removes their relationships, memories, prompts, and cross-tree links from this tree.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingPerson(true);
+    setDeleteError(null);
+
+    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      setDeleteError(err?.error ?? "Failed to delete person");
+      setDeletingPerson(false);
+      return;
+    }
+
+    router.replace(`/trees/${treeId}`);
   }
 
   async function uploadPortrait(file: File) {
@@ -366,6 +453,41 @@ export default function PersonPage({
       await loadPerson();
     }
     setSavingRel(false);
+  }
+
+  async function mergeDuplicate(candidate: DuplicateCandidate) {
+    const confirmed = window.confirm(
+      `Merge ${candidate.displayName} into ${person?.displayName}? This keeps the current person record and moves the duplicate's shared data onto it.`,
+    );
+    if (!confirmed) return;
+
+    setMergingDuplicateId(candidate.id);
+    setMergeError(null);
+
+    const res = await fetch(`${API}/api/trees/${treeId}/people/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        survivorPersonId: personId,
+        mergedAwayPersonId: candidate.id,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setMergeError(body?.error ?? "Failed to merge duplicate");
+      setMergingDuplicateId(null);
+      return;
+    }
+
+    await Promise.all([
+      loadPerson(),
+      loadVisibleTrees(),
+      loadCrossTreeLinks(),
+      loadDuplicateCandidates(),
+    ]);
+    setMergingDuplicateId(null);
   }
 
   // Open lightbox for a list of memories at a given index
@@ -451,6 +573,18 @@ export default function PersonPage({
       ? `– ${person.deathDateText}`
       : null;
 
+  const sortedVisibleTrees = [...visibleTrees].sort((left, right) => {
+    if (left.id === treeId) return -1;
+    if (right.id === treeId) return 1;
+    if (left.id === person.homeTreeId) return -1;
+    if (right.id === person.homeTreeId) return 1;
+    return left.name.localeCompare(right.name);
+  });
+  const currentTreeRole =
+    sortedVisibleTrees.find((tree) => tree.id === treeId)?.role ?? null;
+  const canManageDuplicates =
+    currentTreeRole === "founder" || currentTreeRole === "steward";
+
   // Per-decade stats for the "In this chapter" sidebar
   const decadeStats = activeDecade
     ? (() => {
@@ -490,12 +624,22 @@ export default function PersonPage({
         </span>
         <div style={{ flex: 1 }} />
         {!editing && (
-          <button
-            onClick={() => startEditing(person)}
-            style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 20, padding: "5px 12px", cursor: "pointer" }}
-          >
-            Edit this page
-          </button>
+          <>
+            <button
+              onClick={() => startEditing(person)}
+              style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 20, padding: "5px 12px", cursor: "pointer" }}
+            >
+              Edit this page
+            </button>
+            <button
+              type="button"
+              onClick={deletePerson}
+              disabled={deletingPerson}
+              style={{ ...dangerBtnStyle, borderRadius: 20, padding: "5px 12px" }}
+            >
+              {deletingPerson ? "Deleting…" : "Delete person"}
+            </button>
+          </>
         )}
         <a
           href={`/trees/${treeId}/map?personId=${personId}`}
@@ -510,6 +654,21 @@ export default function PersonPage({
           Ask a question
         </button>
       </header>
+
+      {deleteError && !editing && (
+        <div
+          style={{
+            padding: "12px 24px",
+            background: "rgba(154,79,70,0.08)",
+            borderBottom: "1px solid rgba(154,79,70,0.18)",
+            fontFamily: "var(--font-ui)",
+            fontSize: 12,
+            color: "#9a4f46",
+          }}
+        >
+          {deleteError}
+        </div>
+      )}
 
       {/* Portrait header */}
       <div style={{ position: "relative", height: 320, overflow: "hidden", flexShrink: 0 }}>
@@ -534,6 +693,67 @@ export default function PersonPage({
               <p style={{ fontFamily: "var(--font-body)", fontSize: 16, fontStyle: "italic", color: "rgba(246,241,231,0.85)", marginTop: 8 }}>
                 {person.essenceLine}
               </p>
+            )}
+            {sortedVisibleTrees.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
+                {sortedVisibleTrees.map((tree) => {
+                  const isCurrentTree = tree.id === treeId;
+                  return (
+                    <button
+                      key={tree.id}
+                      type="button"
+                      onClick={() => {
+                        if (!isCurrentTree) {
+                          router.push(`/trees/${tree.id}/people/${person.id}`);
+                        }
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        borderRadius: 999,
+                        border: isCurrentTree
+                          ? "1px solid rgba(246,241,231,0.55)"
+                          : "1px solid rgba(246,241,231,0.22)",
+                        background: isCurrentTree
+                          ? "rgba(246,241,231,0.18)"
+                          : "rgba(28,25,21,0.18)",
+                        color: "#F6F1E7",
+                        padding: "8px 12px",
+                        cursor: isCurrentTree ? "default" : "pointer",
+                      }}
+                    >
+                      <span style={{ fontFamily: "var(--font-ui)", fontSize: 12 }}>
+                        {tree.name}
+                      </span>
+                      {tree.id === person.homeTreeId && (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 10,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            opacity: 0.8,
+                          }}
+                        >
+                          home
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 10,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          opacity: 0.68,
+                        }}
+                      >
+                        {isCurrentTree ? "current" : tree.role}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -594,6 +814,11 @@ export default function PersonPage({
                 onChange={(e) => setEditForm((f) => ({ ...f, isLiving: e.target.checked }))} />
               Still living
             </label>
+            {deleteError && (
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "#9a4f46" }}>
+                {deleteError}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button type="submit" disabled={savingEdit} style={primaryBtnStyle}>
                 {savingEdit ? "Saving…" : "Save"}
@@ -601,6 +826,17 @@ export default function PersonPage({
               <button type="button" onClick={() => setEditing(false)} style={secondaryBtnStyle}>
                 Cancel
               </button>
+              <button
+                type="button"
+                onClick={deletePerson}
+                disabled={savingEdit || deletingPerson}
+                style={dangerBtnStyle}
+              >
+                {deletingPerson ? "Deleting…" : "Delete person"}
+              </button>
+            </div>
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)" }}>
+              Deleting a person also removes their relationships, memories, prompts, and cross-tree links.
             </div>
           </form>
         </div>
@@ -859,17 +1095,191 @@ export default function PersonPage({
                     <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)" }}>This is you</span>
                   </div>
                 )}
+                {sortedVisibleTrees.length > 0 && (
+                  <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", width: 80 }}>Trees</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {sortedVisibleTrees.map((tree) => (
+                        <button
+                          key={tree.id}
+                          type="button"
+                          onClick={() => router.push(`/trees/${tree.id}/people/${person.id}`)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            border: "none",
+                            background: "none",
+                            padding: 0,
+                            textAlign: "left",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <span style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--ink)" }}>
+                            {tree.name}
+                          </span>
+                          {tree.id === person.homeTreeId && (
+                            <span style={pillStyle}>home</span>
+                          )}
+                          {tree.id === treeId && (
+                            <span style={pillStyle}>current</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {canManageDuplicates && (
+                  <div style={{ marginTop: 28 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 12 }}>
+                      <h3 style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, fontWeight: 500 }}>
+                        Possible duplicates
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={loadDuplicateCandidates}
+                        disabled={loadingDuplicates}
+                        style={{
+                          border: "1px solid var(--rule)",
+                          background: "var(--paper)",
+                          borderRadius: 999,
+                          padding: "5px 10px",
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 12,
+                          color: "var(--ink-faded)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {loadingDuplicates ? "Checking…" : "Refresh"}
+                      </button>
+                    </div>
+                    {mergeError && (
+                      <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "#9a4f46", margin: "0 0 12px" }}>
+                        {mergeError}
+                      </p>
+                    )}
+                    {duplicateCandidates.length === 0 ? (
+                      <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", margin: 0 }}>
+                        No likely duplicates found for this person right now.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {duplicateCandidates.map((candidate) => (
+                          <div
+                            key={candidate.id}
+                            style={{
+                              border: "1px solid var(--rule)",
+                              borderRadius: 10,
+                              padding: "14px 16px",
+                              background: "var(--paper-deep)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                              <div style={{ display: "flex", gap: 12 }}>
+                                {candidate.portraitUrl ? (
+                                  <img
+                                    src={candidate.portraitUrl}
+                                    alt={candidate.displayName}
+                                    style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--rule)" }}
+                                  />
+                                ) : (
+                                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--paper)", border: "1px solid var(--rule)" }} />
+                                )}
+                                <div>
+                                  <p style={{ fontFamily: "var(--font-body)", fontSize: 16, color: "var(--ink)", margin: 0 }}>
+                                    {candidate.displayName}
+                                  </p>
+                                  <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", margin: "4px 0 0" }}>
+                                    Match score {candidate.score}
+                                    {candidate.birthDateText ? ` · b. ${candidate.birthDateText}` : ""}
+                                    {candidate.deathDateText ? ` · d. ${candidate.deathDateText}` : ""}
+                                  </p>
+                                  {candidate.essenceLine && (
+                                    <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--ink-soft)", margin: "6px 0 0" }}>
+                                      {candidate.essenceLine}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => mergeDuplicate(candidate)}
+                                disabled={mergingDuplicateId === candidate.id}
+                                style={{
+                                  border: "1px solid var(--moss)",
+                                  background: "var(--paper)",
+                                  borderRadius: 999,
+                                  padding: "7px 12px",
+                                  fontFamily: "var(--font-ui)",
+                                  fontSize: 12,
+                                  color: "var(--moss)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {mergingDuplicateId === candidate.id ? "Merging…" : "Merge into this person"}
+                              </button>
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                              {candidate.reasons.map((reason) => (
+                                <span key={reason} style={pillStyle}>
+                                  {reason}
+                                </span>
+                              ))}
+                              {candidate.alreadyInTree && (
+                                <span style={pillStyle}>already in this tree</span>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                              {candidate.visibleTrees.map((tree) => (
+                                <button
+                                  key={tree.id}
+                                  type="button"
+                                  onClick={() => router.push(`/trees/${tree.id}/people/${candidate.id}`)}
+                                  style={{
+                                    ...pillStyle,
+                                    background: "var(--paper)",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {tree.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* ── Also appears in (cross-tree) ── */}
+              {/* ── Shared context from other trees ── */}
               {crossTreeLinks.length > 0 && (
                 <div style={{ marginTop: 32 }}>
                   <h3 style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 12px", fontWeight: 500 }}>
-                    Also appears in
+                    Shared context from other trees
                   </h3>
                   <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                    {crossTreeLinks.map((link) => (
-                      <div key={link.connectionId} style={{ border: "1px solid var(--rule)", borderRadius: 10, padding: "16px 20px", background: "var(--paper-deep)" }}>
+                    {crossTreeLinks.map((link, index) => (
+                      <div key={link.connectionId ?? `${link.treeId}-${index}`} style={{ border: "1px solid var(--rule)", borderRadius: 10, padding: "16px 20px", background: "var(--paper-deep)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                          <div>
+                            <p style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)", textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
+                              {link.treeName ?? "Other tree"}
+                            </p>
+                          </div>
+                          <a
+                            href={`/trees/${link.treeId}/people/${link.linkedPerson.id}`}
+                            style={{
+                              fontFamily: "var(--font-ui)",
+                              fontSize: 12,
+                              color: "var(--moss)",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Open in this tree →
+                          </a>
+                        </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: link.memories.length > 0 ? 14 : 0 }}>
                           {link.linkedPerson.portraitUrl && (
                             <img
@@ -1068,6 +1478,30 @@ const secondaryBtnStyle: React.CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: 13,
   cursor: "pointer",
+};
+
+const dangerBtnStyle: React.CSSProperties = {
+  background: "rgba(154,79,70,0.08)",
+  color: "#9a4f46",
+  border: "1px solid rgba(154,79,70,0.28)",
+  borderRadius: 6,
+  padding: "9px 20px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const pillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 999,
+  border: "1px solid var(--rule)",
+  padding: "2px 7px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 10,
+  color: "var(--ink-faded)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────

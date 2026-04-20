@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { PersonFlowNode } from "./treeTypes";
+import { NODE_HEIGHT, NODE_WIDTH, PORTRAIT_SIZE } from "./treeLayout";
 
 function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
   const {
@@ -39,12 +40,14 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
   return (
     <div
       style={{
+        position: "relative",
         transition: "opacity 500ms cubic-bezier(0.22, 0.61, 0.36, 1)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: "6px",
-        width: 96,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
         userSelect: "none",
         opacity: isDimmed ? 0.24 : 1,
         filter: isDimmed ? "saturate(0.75)" : "none",
@@ -53,8 +56,8 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
       {/* Portrait circle */}
       <div
         style={{
-          width: 64,
-          height: 64,
+          width: PORTRAIT_SIZE,
+          height: PORTRAIT_SIZE,
           borderRadius: "50%",
           overflow: "hidden",
           flexShrink: 0,
@@ -96,8 +99,13 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
           color: "var(--ink)",
           textAlign: "center",
           lineHeight: 1.3,
-          maxWidth: 96,
+          maxWidth: NODE_WIDTH,
+          minHeight: 34,
           wordBreak: "break-word",
+          display: "-webkit-box",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: 2,
+          overflow: "hidden",
         }}
       >
         {name}
@@ -111,6 +119,7 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
             fontSize: 11,
             color: "var(--ink-faded)",
             textAlign: "center",
+            minHeight: 14,
           }}
         >
           {dateLabel}
@@ -131,14 +140,23 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
+            minHeight: 12,
           }}
         >
           {essenceLine.slice(0, 40)}
         </div>
       )}
 
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ opacity: 0, top: 0, bottom: "auto" }}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ opacity: 0, top: PORTRAIT_SIZE, bottom: "auto" }}
+      />
     </div>
   );
 }

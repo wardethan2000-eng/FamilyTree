@@ -10,7 +10,6 @@ import { mediaPlugin } from "./routes/media.js";
 import { memoriesPlugin } from "./routes/memories.js";
 import { relationshipsPlugin } from "./routes/relationships.js";
 import { promptsPlugin } from "./routes/prompts.js";
-import { connectionsPlugin } from "./routes/connections.js";
 import { placesPlugin } from "./routes/places.js";
 
 export function buildApp() {
@@ -91,7 +90,6 @@ export function buildApp() {
   app.register(invitationsPlugin);
   app.register(exportPlugin);
   app.register(promptsPlugin);
-  app.register(connectionsPlugin);
   app.register(placesPlugin);
 
   return app;

@@ -2,6 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import * as schema from "@familytree/database";
+import { canManageTreeScope } from "../lib/cross-tree-permission-service.js";
+import {
+  getTreeMemories,
+  isMemoryInTreeScope,
+  isPersonInTreeScope,
+} from "../lib/cross-tree-read-service.js";
+import { createMemoryWithPrimaryTag } from "../lib/cross-tree-write-service.js";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { mediaUrl } from "../lib/storage.js";
@@ -16,6 +23,13 @@ const CreateMemoryBody = z.object({
   placeId: z.string().uuid().optional(),
   placeLabelOverride: z.string().max(200).optional(),
   promptId: z.string().uuid().optional(),
+});
+
+const UpdateMemoryVisibilityBody = z.object({
+  visibilityOverride: z
+    .enum(["all_members", "family_circle", "named_circle", "hidden"])
+    .nullable(),
+  unlockDate: z.string().datetime().nullable().optional(),
 });
 
 function serializePlace(place: {
@@ -88,10 +102,8 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: "Document memories require a mediaId" });
       }
 
-      const person = await db.query.people.findFirst({
-        where: (p) => and(eq(p.id, personId), eq(p.treeId, treeId)),
-      });
-      if (!person) {
+      const personInScope = await isPersonInTreeScope(treeId, personId);
+      if (!personInScope) {
         return reply.status(404).send({ error: "Person not found in this tree" });
       }
 
@@ -127,22 +139,21 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         }
       }
 
-      const [memory] = await db
-        .insert(schema.memories)
-        .values({
+      const memory = await db.transaction((tx) =>
+        createMemoryWithPrimaryTag(tx, {
           treeId,
           primaryPersonId: personId,
           contributorUserId: session.user.id,
           kind,
           title,
-          body: body ?? null,
-          mediaId: mediaId ?? null,
-          promptId: promptId ?? null,
-          dateOfEventText: dateOfEventText ?? null,
-          placeId: placeId ?? null,
-          placeLabelOverride: placeLabelOverride ?? null,
-        })
-        .returning();
+          body,
+          mediaId,
+          promptId,
+          dateOfEventText,
+          placeId,
+          placeLabelOverride,
+        }),
+      );
 
       if (!memory) {
         return reply.status(500).send({ error: "Failed to create memory" });
@@ -192,18 +203,14 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         return reply.status(403).send({ error: "Not a member of this tree" });
       }
 
-      const person = await db.query.people.findFirst({
-        where: (p) => and(eq(p.id, personId), eq(p.treeId, treeId)),
-      });
-      if (!person) {
+      const personInScope = await isPersonInTreeScope(treeId, personId);
+      if (!personInScope) {
         return reply.status(404).send({ error: "Person not found in this tree" });
       }
 
-      const memories = await db.query.memories.findMany({
-        where: (m) =>
-          and(eq(m.primaryPersonId, personId), eq(m.treeId, treeId)),
-        with: { media: true, place: true },
-        orderBy: (m, { desc }) => [desc(m.createdAt)],
+      const memories = await getTreeMemories(treeId, {
+        personId,
+        viewerUserId: session.user.id,
       });
 
       return reply.send(
@@ -231,15 +238,9 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "Not a member of this tree" });
     }
 
-    const memories = await db.query.memories.findMany({
-      where: (m) => eq(m.treeId, treeId),
-      with: {
-        media: true,
-        place: true,
-        primaryPerson: { with: { portraitMedia: true } },
-      },
-      orderBy: (m, { desc }) => [desc(m.createdAt)],
+    const memories = await getTreeMemories(treeId, {
       limit: 200,
+      viewerUserId: session.user.id,
     });
 
     return reply.send(
@@ -255,4 +256,76 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       })),
     );
   });
+
+  app.patch(
+    "/api/trees/:treeId/memories/:memoryId/visibility",
+    async (request, reply) => {
+      const session = await getSession(request.headers);
+      if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+      const { treeId, memoryId } = request.params as {
+        treeId: string;
+        memoryId: string;
+      };
+
+      const membership = await db.query.treeMemberships.findFirst({
+        where: (t) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
+      });
+      if (!membership) {
+        return reply.status(403).send({ error: "Not a member of this tree" });
+      }
+      if (!canManageTreeScope(membership.role)) {
+        return reply.status(403).send({ error: "Only founders and stewards can manage visibility" });
+      }
+
+      const parsed = UpdateMemoryVisibilityBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: "Invalid request body" });
+      }
+
+      const inScope = await isMemoryInTreeScope(treeId, memoryId);
+      if (!inScope) {
+        return reply.status(404).send({ error: "Memory not found in this tree" });
+      }
+
+      if (parsed.data.visibilityOverride === null) {
+        await db
+          .delete(schema.memoryTreeVisibility)
+          .where(
+            and(
+              eq(schema.memoryTreeVisibility.treeId, treeId),
+              eq(schema.memoryTreeVisibility.memoryId, memoryId),
+            ),
+          );
+
+        return reply.send({ cleared: true, treeId, memoryId });
+      }
+
+      const unlockDate = parsed.data.unlockDate
+        ? new Date(parsed.data.unlockDate)
+        : null;
+
+      const [updated] = await db
+        .insert(schema.memoryTreeVisibility)
+        .values({
+          treeId,
+          memoryId,
+          visibilityOverride: parsed.data.visibilityOverride,
+          unlockDate,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.memoryTreeVisibility.memoryId,
+            schema.memoryTreeVisibility.treeId,
+          ],
+          set: {
+            visibilityOverride: parsed.data.visibilityOverride,
+            unlockDate,
+          },
+        })
+        .returning();
+
+      return reply.send(updated);
+    },
+  );
 }

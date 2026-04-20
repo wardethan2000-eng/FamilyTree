@@ -1,6 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import * as schema from "@familytree/database";
 import { db } from "../lib/db.js";
+import {
+  canEditRelationship,
+  canManageTreeScope,
+} from "../lib/cross-tree-permission-service.js";
+import {
+  getTreeRelationships,
+  isRelationshipInTreeScope,
+} from "../lib/cross-tree-read-service.js";
 import { getSession } from "../lib/session.js";
 import {
   RelationshipRuleError,
@@ -25,6 +34,11 @@ const UpdateRelationshipBody = z.object({
   startDateText: z.string().max(100).nullable().optional(),
   endDateText: z.string().max(100).nullable().optional(),
   spouseStatus: spouseStatusSchema.nullable().optional(),
+});
+
+const UpdateRelationshipVisibilityBody = z.object({
+  isVisible: z.boolean(),
+  notes: z.string().max(500).nullable().optional(),
 });
 
 async function verifyMembership(treeId: string, userId: string) {
@@ -84,13 +98,63 @@ export async function relationshipsPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "Not a member of this tree" });
     }
 
-    const rels = await db.query.relationships.findMany({
-      where: (r, { eq }) => eq(r.treeId, treeId),
-      with: { fromPerson: true, toPerson: true },
-    });
+    const rels = await getTreeRelationships(treeId);
 
     return reply.send(rels);
   });
+
+  app.patch(
+    "/api/trees/:treeId/relationships/:relationshipId/visibility",
+    async (request, reply) => {
+      const session = await getSession(request.headers);
+      if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+      const { treeId, relationshipId } = request.params as {
+        treeId: string;
+        relationshipId: string;
+      };
+
+      const membership = await verifyMembership(treeId, session.user.id);
+      if (!membership) {
+        return reply.status(403).send({ error: "Not a member of this tree" });
+      }
+      if (!canManageTreeScope(membership.role)) {
+        return reply.status(403).send({ error: "Only founders and stewards can manage visibility" });
+      }
+
+      const parsed = UpdateRelationshipVisibilityBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: "Invalid request body" });
+      }
+
+      const inScope = await isRelationshipInTreeScope(treeId, relationshipId);
+      if (!inScope) {
+        return reply.status(404).send({ error: "Relationship not found in this tree" });
+      }
+
+      const [updated] = await db
+        .insert(schema.treeRelationshipVisibility)
+        .values({
+          treeId,
+          relationshipId,
+          isVisible: parsed.data.isVisible,
+          notes: parsed.data.notes ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.treeRelationshipVisibility.treeId,
+            schema.treeRelationshipVisibility.relationshipId,
+          ],
+          set: {
+            isVisible: parsed.data.isVisible,
+            notes: parsed.data.notes ?? null,
+          },
+        })
+        .returning();
+
+      return reply.send(updated);
+    },
+  );
 
   app.patch(
     "/api/trees/:treeId/relationships/:relationshipId",
@@ -107,10 +171,6 @@ export async function relationshipsPlugin(app: FastifyInstance): Promise<void> {
       if (!membership) {
         return reply.status(403).send({ error: "Not a member of this tree" });
       }
-      if (membership.role === "viewer") {
-        return reply.status(403).send({ error: "Viewers cannot edit relationships" });
-      }
-
       const parsed = UpdateRelationshipBody.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ error: "Invalid request body" });
@@ -120,6 +180,11 @@ export async function relationshipsPlugin(app: FastifyInstance): Promise<void> {
       }
 
       try {
+        const permission = await canEditRelationship(session.user.id, relationshipId);
+        if (!permission.allowed) {
+          return reply.status(403).send({ error: permission.reason });
+        }
+
         const updated = await updateRelationship({
           treeId,
           relationshipId,
@@ -154,11 +219,12 @@ export async function relationshipsPlugin(app: FastifyInstance): Promise<void> {
       if (!membership) {
         return reply.status(403).send({ error: "Not a member of this tree" });
       }
-      if (membership.role === "viewer") {
-        return reply.status(403).send({ error: "Viewers cannot edit relationships" });
-      }
-
       try {
+        const permission = await canEditRelationship(session.user.id, relationshipId);
+        if (!permission.allowed) {
+          return reply.status(403).send({ error: permission.reason });
+        }
+
         await deleteRelationship(treeId, relationshipId);
         return reply.status(204).send();
       } catch (error) {

@@ -6,6 +6,8 @@ import { createTransport } from "nodemailer";
 import * as schema from "@familytree/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
+import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
+import { addPersonToTreeScope } from "../lib/cross-tree-write-service.js";
 
 const mailer = createTransport({
   host: process.env.SMTP_HOST ?? "localhost",
@@ -230,6 +232,17 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
       return reply.send({ treeId: invitation.treeId, message: "Already a member" });
     }
 
+    if (
+      invitation.proposedRole === "founder" ||
+      invitation.proposedRole === "steward" ||
+      invitation.proposedRole === "contributor"
+    ) {
+      const capacity = await checkTreeCanAdd(invitation.treeId, "contributor");
+      if (!capacity.allowed) {
+        return reply.status(capacity.status).send({ error: capacity.reason });
+      }
+    }
+
     // Create membership and mark invitation accepted
     await Promise.all([
       db.insert(schema.treeMemberships).values({
@@ -244,7 +257,76 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
         .where(eq(schema.invitations.id, invitation.id)),
     ]);
 
-    return reply.send({ treeId: invitation.treeId, message: "Invitation accepted" });
+    // If the invitation was linked to a person record, bind this user to that
+    // person and ensure the person is in the tree's scope. This is the primary
+    // mechanism for cross-tree identity: a steward invites a real person, linking
+    // them to the person record in their tree. When the invitee accepts, the
+    // system now knows that person record represents this user.
+    let crossTreeIdentityMatch: {
+      existingPersonId: string;
+      existingTreeId: string;
+      linkedPersonId: string;
+    } | null = null;
+
+    if (invitation.linkedPersonId) {
+      // Set linkedUserId so the system knows this person record = this user
+      await db
+        .update(schema.people)
+        .set({ linkedUserId: session.user.id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.people.id, invitation.linkedPersonId),
+            eq(schema.people.treeId, invitation.treeId),
+          ),
+        );
+
+      // Ensure the person is in the tree's scope table
+      await addPersonToTreeScope({
+        treeId: invitation.treeId,
+        personId: invitation.linkedPersonId,
+        addedByUserId: invitation.invitedByUserId,
+      });
+
+      // Check if this user is already linked to a different person record in
+      // another tree. If so, we have a confirmed cross-tree identity: two
+      // person records representing the same human. Surface this so stewards
+      // can merge them via the existing merge flow.
+      const otherLinkedPeople = await db.query.people.findMany({
+        where: (person, { and: a, eq: e, ne }) =>
+          a(
+            e(person.linkedUserId, session.user.id),
+            ne(person.id, invitation.linkedPersonId!),
+          ),
+        columns: { id: true, treeId: true, displayName: true },
+      });
+
+      if (otherLinkedPeople.length > 0) {
+        const first = otherLinkedPeople[0]!;
+        crossTreeIdentityMatch = {
+          existingPersonId: first.id,
+          existingTreeId: first.treeId,
+          linkedPersonId: invitation.linkedPersonId,
+        };
+      }
+    }
+
+    return reply.send({
+      treeId: invitation.treeId,
+      message: "Invitation accepted",
+      ...(crossTreeIdentityMatch
+        ? {
+            crossTreeIdentity: {
+              message:
+                "You are already linked to a person record in another tree. " +
+                "A steward can merge these records to unify your profile across trees.",
+              existingPersonId: crossTreeIdentityMatch.existingPersonId,
+              existingTreeId: crossTreeIdentityMatch.existingTreeId,
+              newPersonId: crossTreeIdentityMatch.linkedPersonId,
+              newTreeId: invitation.treeId,
+            },
+          }
+        : {}),
+    });
   });
 
   /** DELETE /api/trees/:treeId/invitations/:inviteId — revoke pending invitation */

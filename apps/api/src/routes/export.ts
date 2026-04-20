@@ -4,6 +4,11 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import archiver from "archiver";
 import { db } from "../lib/db.js";
 import { s3, MEDIA_BUCKET } from "../lib/storage.js";
+import {
+  getTreeMemories,
+  getTreeRelationships,
+  getTreeScopedPeople,
+} from "../lib/cross-tree-read-service.js";
 import { getSession } from "../lib/session.js";
 
 export async function exportPlugin(app: FastifyInstance): Promise<void> {
@@ -27,22 +32,11 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
     if (!membership) return reply.status(403).send({ error: "Not a member of this tree" });
 
     // Fetch all tree data in parallel
-    const [tree, people, memories, relationships, allMedia] = await Promise.all([
+    const [tree, people, memories, relationships] = await Promise.all([
       db.query.trees.findFirst({ where: (t, { eq }) => eq(t.id, treeId) }),
-      db.query.people.findMany({
-        where: (p, { eq }) => eq(p.treeId, treeId),
-        with: { portraitMedia: true },
-      }),
-      db.query.memories.findMany({
-        where: (m, { eq }) => eq(m.treeId, treeId),
-        with: { media: true },
-      }),
-      db.query.relationships.findMany({
-        where: (r, { eq }) => eq(r.treeId, treeId),
-      }),
-      db.query.media.findMany({
-        where: (m, { eq }) => eq(m.treeId, treeId),
-      }),
+      getTreeScopedPeople(treeId),
+      getTreeMemories(treeId, { viewerUserId: session.user.id }),
+      getTreeRelationships(treeId),
     ]);
 
     if (!tree) return reply.status(404).send({ error: "Tree not found" });
@@ -78,8 +72,15 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
 
     // Collect unique media keys
     const mediaKeys = new Set<string>();
-    for (const m of allMedia) {
-      if (m.objectKey) mediaKeys.add(m.objectKey);
+    for (const person of people) {
+      if (person.portraitMedia?.objectKey) {
+        mediaKeys.add(person.portraitMedia.objectKey);
+      }
+    }
+    for (const memory of memories) {
+      if (memory.media?.objectKey) {
+        mediaKeys.add(memory.media.objectKey);
+      }
     }
 
     // Stream ZIP
