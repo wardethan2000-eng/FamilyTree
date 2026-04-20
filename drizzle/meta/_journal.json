@@ -50,6 +50,13 @@
       "when": 1776560400000,
       "tag": "0006_family_map_places",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776653689975,
+      "tag": "0007_broken_catseye",
+      "breakpoints": true
     }
   ]
 }

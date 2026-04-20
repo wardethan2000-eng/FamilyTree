@@ -41,17 +41,19 @@ async function ensurePeopleInTree(
   treeId: string,
   personIds: readonly [string, string],
 ) {
-  const [fromPerson, toPerson] = await Promise.all([
-    tx.query.people.findFirst({
-      where: (p, { and, eq }) => and(eq(p.id, personIds[0]), eq(p.treeId, treeId)),
+  const [fromScope, toScope] = await Promise.all([
+    tx.query.treePersonScope.findFirst({
+      where: (scope, { and, eq }) =>
+        and(eq(scope.personId, personIds[0]), eq(scope.treeId, treeId)),
     }),
-    tx.query.people.findFirst({
-      where: (p, { and, eq }) => and(eq(p.id, personIds[1]), eq(p.treeId, treeId)),
+    tx.query.treePersonScope.findFirst({
+      where: (scope, { and, eq }) =>
+        and(eq(scope.personId, personIds[1]), eq(scope.treeId, treeId)),
     }),
   ]);
 
-  if (!fromPerson || !toPerson) {
-    throw new RelationshipRuleError("Both people must belong to this tree");
+  if (!fromScope || !toScope) {
+    throw new RelationshipRuleError("Both people must be in this tree's scope");
   }
 }
 
@@ -519,6 +521,7 @@ async function tryCreateInferredParentChildRelationship(
     .insert(schema.relationships)
     .values({
       treeId,
+      createdInTreeId: treeId,
       fromPersonId,
       toPersonId,
       type: "parent_child",
@@ -705,6 +708,7 @@ export async function createRelationship(input: CreateRelationshipInput) {
       .insert(schema.relationships)
       .values({
         treeId: input.treeId,
+        createdInTreeId: input.treeId,
         fromPersonId: input.fromPersonId,
         toPersonId: input.toPersonId,
         type: input.type,

@@ -4,6 +4,7 @@ import {
   doublePrecision,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -84,6 +85,32 @@ export const promptReplyLinkStatusEnum = pgEnum("prompt_reply_link_status", [
   "used",
   "revoked",
   "expired",
+]);
+
+export const treeScopeVisibilityEnum = pgEnum("tree_scope_visibility", [
+  "all_members",
+  "family_circle",
+  "named_circle",
+]);
+
+export const memoryVisibilityOverrideEnum = pgEnum("memory_visibility_override", [
+  "all_members",
+  "family_circle",
+  "named_circle",
+  "hidden",
+]);
+
+export const treeSubscriptionTierEnum = pgEnum("tree_subscription_tier", [
+  "seedling",
+  "hearth",
+  "archive",
+]);
+
+export const treeSubscriptionStatusEnum = pgEnum("tree_subscription_status", [
+  "active",
+  "grace_period",
+  "dormant",
+  "cancelled",
 ]);
 
 export const treeConnectionStatusEnum = pgEnum("tree_connection_status", [
@@ -169,10 +196,21 @@ export const trees = pgTable(
     founderUserId: text("founder_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
+    tier: treeSubscriptionTierEnum("tier").default("seedling").notNull(),
+    subscriptionStatus: treeSubscriptionStatusEnum("subscription_status")
+      .default("active")
+      .notNull(),
+    subscriptionExpiresAt: timestamp("subscription_expires_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("trees_founder_user_idx").on(table.founderUserId)],
+  (table) => [
+    index("trees_founder_user_idx").on(table.founderUserId),
+    index("trees_tier_idx").on(table.tier),
+    index("trees_subscription_status_idx").on(table.subscriptionStatus),
+  ],
 );
 
 export const treeMemberships = pgTable(
@@ -205,6 +243,11 @@ export const media = pgTable(
     treeId: uuid("tree_id")
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
+    // Transitional column for cross-tree billing attribution. Keep nullable until
+    // the API writes it and legacy tree_id usage is retired.
+    contributingTreeId: uuid("contributing_tree_id").references(() => trees.id, {
+      onDelete: "set null",
+    }),
     uploadedByUserId: text("uploaded_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -219,6 +262,7 @@ export const media = pgTable(
   (table) => [
     uniqueIndex("media_object_key_unique_idx").on(table.objectKey),
     index("media_tree_idx").on(table.treeId),
+    index("media_contributing_tree_idx").on(table.contributingTreeId),
     index("media_uploaded_by_idx").on(table.uploadedByUserId),
   ],
 );
@@ -262,6 +306,9 @@ export const people = pgTable(
     treeId: uuid("tree_id")
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
+    homeTreeId: uuid("home_tree_id").references(() => trees.id, {
+      onDelete: "set null",
+    }),
     displayName: varchar("display_name", { length: 200 }).notNull(),
     alsoKnownAs: text("also_known_as").array().default([]).notNull(),
     essenceLine: varchar("essence_line", { length: 255 }),
@@ -287,6 +334,7 @@ export const people = pgTable(
   },
   (table) => [
     index("people_tree_idx").on(table.treeId),
+    index("people_home_tree_idx").on(table.homeTreeId),
     index("people_linked_user_idx").on(table.linkedUserId),
     index("people_portrait_media_idx").on(table.portraitMediaId),
     index("people_birth_place_idx").on(table.birthPlaceId),
@@ -301,6 +349,9 @@ export const relationships = pgTable(
     treeId: uuid("tree_id")
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
+    createdInTreeId: uuid("created_in_tree_id").references(() => trees.id, {
+      onDelete: "set null",
+    }),
     fromPersonId: uuid("from_person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
@@ -334,6 +385,7 @@ export const relationships = pgTable(
       table.normalizedPersonBId,
     ),
     index("relationships_tree_idx").on(table.treeId),
+    index("relationships_created_in_tree_idx").on(table.createdInTreeId),
     index("relationships_from_person_idx").on(table.fromPersonId),
     index("relationships_to_person_idx").on(table.toPersonId),
     index("relationships_normalized_person_a_idx").on(table.normalizedPersonAId),
@@ -405,6 +457,11 @@ export const memories = pgTable(
     treeId: uuid("tree_id")
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
+    // Transitional column for cross-tree attribution. Keep nullable until write
+    // paths are migrated away from tree_id.
+    contributingTreeId: uuid("contributing_tree_id").references(() => trees.id, {
+      onDelete: "set null",
+    }),
     primaryPersonId: uuid("primary_person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
@@ -431,11 +488,110 @@ export const memories = pgTable(
   },
   (table) => [
     index("memories_tree_idx").on(table.treeId),
+    index("memories_contributing_tree_idx").on(table.contributingTreeId),
     index("memories_primary_person_idx").on(table.primaryPersonId),
     index("memories_contributor_idx").on(table.contributorUserId),
     index("memories_media_idx").on(table.mediaId),
     index("memories_place_idx").on(table.placeId),
     index("memories_transcript_status_idx").on(table.transcriptStatus),
+  ],
+);
+
+export const treePersonScope = pgTable(
+  "tree_person_scope",
+  {
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    displayNameOverride: varchar("display_name_override", { length: 200 }),
+    visibilityDefault: treeScopeVisibilityEnum("visibility_default")
+      .default("all_members")
+      .notNull(),
+    addedByUserId: text("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    addedAt: timestamp("added_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.treeId, table.personId] }),
+    index("tree_person_scope_person_idx").on(table.personId),
+    index("tree_person_scope_tree_idx").on(table.treeId),
+    index("tree_person_scope_added_by_idx").on(table.addedByUserId),
+  ],
+);
+
+export const treeRelationshipVisibility = pgTable(
+  "tree_relationship_visibility",
+  {
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    relationshipId: uuid("relationship_id")
+      .notNull()
+      .references(() => relationships.id, { onDelete: "cascade" }),
+    isVisible: boolean("is_visible").default(true).notNull(),
+    notes: text("notes"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.treeId, table.relationshipId] }),
+    index("tree_rel_vis_tree_idx").on(table.treeId),
+    index("tree_rel_vis_relationship_idx").on(table.relationshipId),
+  ],
+);
+
+export const memoryPersonTags = pgTable(
+  "memory_person_tags",
+  {
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.memoryId, table.personId] }),
+    index("memory_person_tags_person_idx").on(table.personId),
+  ],
+);
+
+export const memoryTreeVisibility = pgTable(
+  "memory_tree_visibility",
+  {
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    visibilityOverride: memoryVisibilityOverrideEnum("visibility_override").notNull(),
+    unlockDate: timestamp("unlock_date", { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.memoryId, table.treeId] }),
+    index("memory_tree_vis_tree_idx").on(table.treeId),
+  ],
+);
+
+export const personMergeAudit = pgTable(
+  "person_merge_audit",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    survivorPersonId: uuid("survivor_person_id").notNull(),
+    mergedAwayPersonId: uuid("merged_away_person_id").notNull(),
+    fieldResolutions: jsonb("field_resolutions"),
+    performedByUserId: text("performed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("person_merge_audit_survivor_idx").on(table.survivorPersonId),
+    index("person_merge_audit_merged_away_idx").on(table.mergedAwayPersonId),
+    index("person_merge_audit_performed_by_idx").on(table.performedByUserId),
   ],
 );
 
@@ -604,6 +760,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   archiveExportsRequested: many(archiveExports),
   promptsSent: many(prompts),
   promptReplyLinksCreated: many(promptReplyLinks),
+  personScopesAdded: many(treePersonScope),
+  personMergeAudits: many(personMergeAudit),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -620,11 +778,18 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
     references: [users.id],
   }),
   memberships: many(treeMemberships),
-  mediaItems: many(media),
+  mediaItems: many(media, { relationName: "tree_media" }),
+  contributingMediaItems: many(media, { relationName: "contributing_tree_media" }),
   places: many(places),
-  people: many(people),
-  relationships: many(relationships),
-  memories: many(memories),
+  people: many(people, { relationName: "tree_people" }),
+  homePeople: many(people, { relationName: "person_home_tree" }),
+  personScopes: many(treePersonScope),
+  relationships: many(relationships, { relationName: "tree_relationships" }),
+  createdRelationships: many(relationships, { relationName: "relationship_created_in_tree" }),
+  relationshipVisibility: many(treeRelationshipVisibility),
+  memories: many(memories, { relationName: "tree_memories" }),
+  contributingMemories: many(memories, { relationName: "contributing_tree_memories" }),
+  memoryVisibility: many(memoryTreeVisibility),
   invitations: many(invitations),
   archiveExports: many(archiveExports),
   prompts: many(prompts),
@@ -645,7 +810,16 @@ export const treeMembershipsRelations = relations(treeMemberships, ({ one }) => 
 }));
 
 export const mediaRelations = relations(media, ({ one, many }) => ({
-  tree: one(trees, { fields: [media.treeId], references: [trees.id] }),
+  tree: one(trees, {
+    fields: [media.treeId],
+    references: [trees.id],
+    relationName: "tree_media",
+  }),
+  contributingTree: one(trees, {
+    fields: [media.contributingTreeId],
+    references: [trees.id],
+    relationName: "contributing_tree_media",
+  }),
   uploadedBy: one(users, {
     fields: [media.uploadedByUserId],
     references: [users.id],
@@ -666,7 +840,16 @@ export const placesRelations = relations(places, ({ one, many }) => ({
 }));
 
 export const peopleRelations = relations(people, ({ one, many }) => ({
-  tree: one(trees, { fields: [people.treeId], references: [trees.id] }),
+  tree: one(trees, {
+    fields: [people.treeId],
+    references: [trees.id],
+    relationName: "tree_people",
+  }),
+  homeTree: one(trees, {
+    fields: [people.homeTreeId],
+    references: [trees.id],
+    relationName: "person_home_tree",
+  }),
   birthPlaceRef: one(places, {
     fields: [people.birthPlaceId],
     references: [places.id],
@@ -692,14 +875,25 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
     relationName: "relationship_to_person",
   }),
   memories: many(memories),
+  treeScopes: many(treePersonScope),
+  memoryTags: many(memoryPersonTags),
   invitations: many(invitations),
   promptsReceived: many(prompts),
   crossTreeLinksAsA: many(crossTreePersonLinks, { relationName: "cross_tree_link_person_a" }),
   crossTreeLinksAsB: many(crossTreePersonLinks, { relationName: "cross_tree_link_person_b" }),
 }));
 
-export const relationshipsRelations = relations(relationships, ({ one }) => ({
-  tree: one(trees, { fields: [relationships.treeId], references: [trees.id] }),
+export const relationshipsRelations = relations(relationships, ({ one, many }) => ({
+  tree: one(trees, {
+    fields: [relationships.treeId],
+    references: [trees.id],
+    relationName: "tree_relationships",
+  }),
+  createdInTree: one(trees, {
+    fields: [relationships.createdInTreeId],
+    references: [trees.id],
+    relationName: "relationship_created_in_tree",
+  }),
   fromPerson: one(people, {
     fields: [relationships.fromPersonId],
     references: [people.id],
@@ -710,10 +904,20 @@ export const relationshipsRelations = relations(relationships, ({ one }) => ({
     references: [people.id],
     relationName: "relationship_to_person",
   }),
+  treeVisibility: many(treeRelationshipVisibility),
 }));
 
-export const memoriesRelations = relations(memories, ({ one }) => ({
-  tree: one(trees, { fields: [memories.treeId], references: [trees.id] }),
+export const memoriesRelations = relations(memories, ({ one, many }) => ({
+  tree: one(trees, {
+    fields: [memories.treeId],
+    references: [trees.id],
+    relationName: "tree_memories",
+  }),
+  contributingTree: one(trees, {
+    fields: [memories.contributingTreeId],
+    references: [trees.id],
+    relationName: "contributing_tree_memories",
+  }),
   primaryPerson: one(people, {
     fields: [memories.primaryPersonId],
     references: [people.id],
@@ -725,6 +929,8 @@ export const memoriesRelations = relations(memories, ({ one }) => ({
   media: one(media, { fields: [memories.mediaId], references: [media.id] }),
   place: one(places, { fields: [memories.placeId], references: [places.id] }),
   prompt: one(prompts, { fields: [memories.promptId], references: [prompts.id] }),
+  personTags: many(memoryPersonTags),
+  treeVisibility: many(memoryTreeVisibility),
 }));
 
 export const promptsRelations = relations(prompts, ({ one, many }) => ({
@@ -777,6 +983,58 @@ export const transcriptionJobsRelations = relations(
     }),
   }),
 );
+
+export const treePersonScopeRelations = relations(treePersonScope, ({ one }) => ({
+  tree: one(trees, { fields: [treePersonScope.treeId], references: [trees.id] }),
+  person: one(people, { fields: [treePersonScope.personId], references: [people.id] }),
+  addedBy: one(users, {
+    fields: [treePersonScope.addedByUserId],
+    references: [users.id],
+  }),
+}));
+
+export const treeRelationshipVisibilityRelations = relations(
+  treeRelationshipVisibility,
+  ({ one }) => ({
+    tree: one(trees, {
+      fields: [treeRelationshipVisibility.treeId],
+      references: [trees.id],
+    }),
+    relationship: one(relationships, {
+      fields: [treeRelationshipVisibility.relationshipId],
+      references: [relationships.id],
+    }),
+  }),
+);
+
+export const memoryPersonTagsRelations = relations(memoryPersonTags, ({ one }) => ({
+  memory: one(memories, {
+    fields: [memoryPersonTags.memoryId],
+    references: [memories.id],
+  }),
+  person: one(people, {
+    fields: [memoryPersonTags.personId],
+    references: [people.id],
+  }),
+}));
+
+export const memoryTreeVisibilityRelations = relations(memoryTreeVisibility, ({ one }) => ({
+  memory: one(memories, {
+    fields: [memoryTreeVisibility.memoryId],
+    references: [memories.id],
+  }),
+  tree: one(trees, {
+    fields: [memoryTreeVisibility.treeId],
+    references: [trees.id],
+  }),
+}));
+
+export const personMergeAuditRelations = relations(personMergeAudit, ({ one }) => ({
+  performedBy: one(users, {
+    fields: [personMergeAudit.performedByUserId],
+    references: [users.id],
+  }),
+}));
 
 export const treeConnectionsRelations = relations(treeConnections, ({ one, many }) => ({
   treeA: one(trees, {

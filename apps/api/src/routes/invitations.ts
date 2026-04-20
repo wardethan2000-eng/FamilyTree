@@ -6,6 +6,7 @@ import { createTransport } from "nodemailer";
 import * as schema from "@familytree/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
+import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 
 const mailer = createTransport({
   host: process.env.SMTP_HOST ?? "localhost",
@@ -228,6 +229,17 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
         .set({ status: "accepted", acceptedAt: new Date() })
         .where(eq(schema.invitations.id, invitation.id));
       return reply.send({ treeId: invitation.treeId, message: "Already a member" });
+    }
+
+    if (
+      invitation.proposedRole === "founder" ||
+      invitation.proposedRole === "steward" ||
+      invitation.proposedRole === "contributor"
+    ) {
+      const capacity = await checkTreeCanAdd(invitation.treeId, "contributor");
+      if (!capacity.allowed) {
+        return reply.status(capacity.status).send({ error: capacity.reason });
+      }
     }
 
     // Create membership and mark invitation accepted

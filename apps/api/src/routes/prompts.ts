@@ -4,6 +4,12 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { createTransport } from "nodemailer";
 import * as schema from "@familytree/database";
+import {
+  getVisibleMemoryIdsForTree,
+  getTreeScopedPerson,
+  getTreeScopedPersonByLinkedUserId,
+} from "../lib/cross-tree-read-service.js";
+import { createMemoryWithPrimaryTag } from "../lib/cross-tree-write-service.js";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import {
@@ -11,6 +17,7 @@ import {
   isAllowedMimeType,
   mediaUrl,
 } from "../lib/storage.js";
+import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
 
 const mailer = createTransport({
@@ -118,9 +125,7 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
 
     const { toPersonId, questionText } = parsed.data;
 
-    const person = await db.query.people.findFirst({
-      where: (p, { and, eq }) => and(eq(p.id, toPersonId), eq(p.treeId, treeId)),
-    });
+    const person = await getTreeScopedPerson(treeId, toPersonId);
     if (!person) return reply.status(404).send({ error: "Person not found in this tree" });
 
     const [prompt] = await db
@@ -164,7 +169,13 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       orderBy: (p, { desc }) => [desc(p.createdAt)],
     });
 
-    return reply.send(prompts.map((p) => enrichPromptWithReplies(p as PromptWithRelations)));
+    return reply.send(
+      await Promise.all(
+        prompts.map((p) =>
+          enrichPromptWithReplies(treeId, session.user.id, p as PromptWithRelations),
+        ),
+      ),
+    );
   });
 
   /** GET /api/trees/:treeId/prompts/inbox — prompts directed to the current user's linked person */
@@ -176,10 +187,10 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
     const membership = await verifyMembership(treeId, session.user.id);
     if (!membership) return reply.status(403).send({ error: "Not a member of this tree" });
 
-    const linkedPerson = await db.query.people.findFirst({
-      where: (p, { and, eq }) =>
-        and(eq(p.treeId, treeId), eq(p.linkedUserId, session.user.id)),
-    });
+    const linkedPerson = await getTreeScopedPersonByLinkedUserId(
+      treeId,
+      session.user.id,
+    );
 
     if (!linkedPerson) return reply.send([]);
 
@@ -194,7 +205,13 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       orderBy: (p, { desc }) => [desc(p.createdAt)],
     });
 
-    return reply.send(prompts.map((p) => enrichPromptWithReplies(p as PromptWithRelations)));
+    return reply.send(
+      await Promise.all(
+        prompts.map((p) =>
+          enrichPromptWithReplies(treeId, session.user.id, p as PromptWithRelations),
+        ),
+      ),
+    );
   });
 
   /** PATCH /api/trees/:treeId/prompts/:promptId — update status (dismiss, etc.) */
@@ -287,22 +304,21 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const [memory] = await db
-      .insert(schema.memories)
-      .values({
+    const memory = await db.transaction((tx) =>
+      createMemoryWithPrimaryTag(tx, {
         treeId,
         primaryPersonId: prompt.toPersonId,
         contributorUserId: session.user.id,
         kind,
         title,
-        body: body ?? null,
-        mediaId: mediaId ?? null,
+        body,
+        mediaId,
         promptId,
-        dateOfEventText: dateOfEventText ?? null,
-        placeId: placeId ?? null,
-        placeLabelOverride: placeLabelOverride ?? null,
-      })
-      .returning();
+        dateOfEventText,
+        placeId,
+        placeLabelOverride,
+      }),
+    );
     if (!memory) return reply.status(500).send({ error: "Failed to create reply memory" });
 
     await db
@@ -461,6 +477,15 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(415).send({ error: "Unsupported media type" });
     }
 
+    const capacity = await checkTreeCanAdd(
+      resolved.link.treeId,
+      "media",
+      sizeBytes,
+    );
+    if (!capacity.allowed) {
+      return reply.status(capacity.status).send({ error: capacity.reason });
+    }
+
     const ext = filename.includes(".") ? filename.split(".").pop()! : "bin";
     const objectKey = `trees/${resolved.link.treeId}/reply-links/${resolved.link.id}/${randomUUID()}.${ext}`;
     const uploadUrl = await getPresignedUploadUrl(objectKey, contentType);
@@ -469,6 +494,7 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       .insert(schema.media)
       .values({
         treeId: resolved.link.treeId,
+        contributingTreeId: resolved.link.treeId,
         uploadedByUserId: resolved.link.createdByUserId,
         objectKey,
         originalFilename: filename,
@@ -563,22 +589,19 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
           });
         }
 
-        const [memory] = await tx
-          .insert(schema.memories)
-          .values({
-            treeId: resolved.link.treeId,
-            primaryPersonId: resolved.link.prompt.toPersonId,
-            contributorUserId,
-            kind,
-            title,
-            body: body ?? null,
-            mediaId: mediaId ?? null,
-            promptId: resolved.link.promptId,
-            dateOfEventText: dateOfEventText ?? null,
-            placeId: placeId ?? null,
-            placeLabelOverride: placeLabelOverride ?? null,
-          })
-          .returning();
+        const memory = await createMemoryWithPrimaryTag(tx, {
+          treeId: resolved.link.treeId,
+          primaryPersonId: resolved.link.prompt.toPersonId,
+          contributorUserId,
+          kind,
+          title,
+          body,
+          mediaId,
+          promptId: resolved.link.promptId,
+          dateOfEventText,
+          placeId,
+          placeLabelOverride,
+        });
         if (!memory) {
           throw new Error("Failed to create memory");
         }
@@ -728,15 +751,25 @@ function enrichPrompt(p: PromptWithRelations | null | undefined) {
   };
 }
 
-function enrichPromptWithReplies(p: PromptWithRelations) {
+async function enrichPromptWithReplies(
+  treeId: string,
+  viewerUserId: string,
+  p: PromptWithRelations,
+) {
   const base = enrichPrompt(p);
   if (!base) return base;
+  const replyIds = (p.replies ?? []).map((reply) => reply.id);
+  const visibleReplyIds = new Set(
+    await getVisibleMemoryIdsForTree(treeId, replyIds, viewerUserId),
+  );
   return {
     ...base,
-    replies: (p.replies ?? []).map((r) => ({
-      ...r,
-      mediaUrl: r.media ? mediaUrl(r.media.objectKey) : null,
-      mimeType: r.media?.mimeType ?? null,
-    })),
+    replies: (p.replies ?? [])
+      .filter((reply) => visibleReplyIds.has(reply.id))
+      .map((r) => ({
+        ...r,
+        mediaUrl: r.media ? mediaUrl(r.media.objectKey) : null,
+        mimeType: r.media?.mimeType ?? null,
+      })),
   };
 }

@@ -7,14 +7,14 @@ const { db } = await import("./db.js");
 const { createRelationship, RelationshipRuleError } = await import("./relationship-service.js");
 
 type QueueConfig = {
-  peopleFindFirst?: Array<Record<string, unknown> | null>;
+  treePersonScopeFindFirst?: Array<Record<string, unknown> | null>;
   relationshipsFindFirst?: Array<Record<string, unknown> | null>;
   relationshipsFindMany?: Array<Array<Record<string, unknown>>>;
 };
 
 type MockTx = {
   query: {
-    people: {
+    treePersonScope: {
       findFirst: () => Promise<Record<string, unknown> | null>;
     };
     relationships: {
@@ -44,15 +44,16 @@ function nextFromQueue<T>(queue: T[], label: string): T {
 }
 
 function createMockTx(config: QueueConfig = {}) {
-  const peopleQueue = [...(config.peopleFindFirst ?? [])];
+  const treePersonScopeQueue = [...(config.treePersonScopeFindFirst ?? [])];
   const relationshipFirstQueue = [...(config.relationshipsFindFirst ?? [])];
   const relationshipManyQueue = [...(config.relationshipsFindMany ?? [])];
   const insertedValues: Array<Record<string, unknown>> = [];
 
   const tx: MockTx = {
     query: {
-      people: {
-        findFirst: async () => nextFromQueue(peopleQueue, "people.findFirst"),
+      treePersonScope: {
+        findFirst: async () =>
+          nextFromQueue(treePersonScopeQueue, "treePersonScope.findFirst"),
       },
       relationships: {
         findFirst: async () =>
@@ -104,7 +105,7 @@ describe("createRelationship", () => {
 
   it("enforces parent limit of two relationships", async () => {
     const { tx, insertedValues } = createMockTx({
-      peopleFindFirst: [{ id: "parent-3" }, { id: "child-1" }],
+      treePersonScopeFindFirst: [{ personId: "parent-3" }, { personId: "child-1" }],
       relationshipsFindFirst: [null, null],
       relationshipsFindMany: [[{ id: "parent-link-1" }, { id: "parent-link-2" }]],
     });
@@ -130,7 +131,7 @@ describe("createRelationship", () => {
 
   it("rejects a second active spouse for a person", async () => {
     const { tx, insertedValues } = createMockTx({
-      peopleFindFirst: [{ id: "person-a" }, { id: "person-b" }],
+      treePersonScopeFindFirst: [{ personId: "person-a" }, { personId: "person-b" }],
       relationshipsFindFirst: [
         null,
         {
@@ -163,7 +164,7 @@ describe("createRelationship", () => {
 
   it("normalizes spouse pairs and defaults spouse status on success", async () => {
     const { tx, insertedValues } = createMockTx({
-      peopleFindFirst: [{ id: "person-z" }, { id: "person-a" }],
+      treePersonScopeFindFirst: [{ personId: "person-z" }, { personId: "person-a" }],
       relationshipsFindFirst: [null, null, null],
       relationshipsFindMany: [[], []],
     });
@@ -181,6 +182,7 @@ describe("createRelationship", () => {
     };
 
     assert.equal(insertedValues.length, 1);
+    assert.equal(insertedValues[0]?.createdInTreeId, "tree-1");
     assert.equal(insertedValues[0]?.normalizedPersonAId, "person-a");
     assert.equal(insertedValues[0]?.normalizedPersonBId, "person-z");
     assert.equal(insertedValues[0]?.spouseStatus, "active");
@@ -191,7 +193,7 @@ describe("createRelationship", () => {
 
   it("infers a co-parent link when adding an active spouse", async () => {
     const { tx, insertedValues } = createMockTx({
-      peopleFindFirst: [{ id: "melani" }, { id: "barry" }],
+      treePersonScopeFindFirst: [{ personId: "melani" }, { personId: "barry" }],
       relationshipsFindFirst: [null, null, null, null, null],
       relationshipsFindMany: [
         [{ toPersonId: "ethan" }],
@@ -215,6 +217,7 @@ describe("createRelationship", () => {
     assert.equal(insertedValues[0]?.type, "spouse");
     assert.deepEqual(insertedValues[1], {
       treeId: "tree-1",
+      createdInTreeId: "tree-1",
       fromPersonId: "barry",
       toPersonId: "ethan",
       type: "parent_child",
@@ -228,7 +231,7 @@ describe("createRelationship", () => {
 
   it("infers the same parent for an existing sibling", async () => {
     const { tx, insertedValues } = createMockTx({
-      peopleFindFirst: [{ id: "melani" }, { id: "ethan" }],
+      treePersonScopeFindFirst: [{ personId: "melani" }, { personId: "ethan" }],
       relationshipsFindFirst: [null, null, null, null],
       relationshipsFindMany: [
         [],
@@ -255,6 +258,7 @@ describe("createRelationship", () => {
     assert.equal(insertedValues[0]?.toPersonId, "ethan");
     assert.deepEqual(insertedValues[1], {
       treeId: "tree-1",
+      createdInTreeId: "tree-1",
       fromPersonId: "melani",
       toPersonId: "morgan",
       type: "parent_child",
@@ -268,7 +272,7 @@ describe("createRelationship", () => {
 
   it("skips inferred parent links that would exceed the two-parent limit", async () => {
     const { tx, insertedValues } = createMockTx({
-      peopleFindFirst: [{ id: "melani" }, { id: "barry" }],
+      treePersonScopeFindFirst: [{ personId: "melani" }, { personId: "barry" }],
       relationshipsFindFirst: [null, null, null, null, null],
       relationshipsFindMany: [
         [{ toPersonId: "ethan" }],
