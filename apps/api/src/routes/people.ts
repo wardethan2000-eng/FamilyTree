@@ -2,6 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, or } from "drizzle-orm";
 import * as schema from "@familytree/database";
+import {
+  listLikelyDuplicatePeople,
+  mergePeopleRecords,
+  PersonMergeError,
+} from "../lib/cross-tree-merge-service.js";
 import { removePersonFromTree } from "../lib/cross-tree-mutation-service.js";
 import {
   canEditPerson,
@@ -61,6 +66,30 @@ const UpdateScopePersonBody = z.object({
   displayNameOverride: z.string().min(1).max(200).nullable().optional(),
   visibilityDefault: z
     .enum(["all_members", "family_circle", "named_circle"])
+    .optional(),
+});
+
+const FieldSourceSchema = z.enum(["survivor", "merged"]);
+
+const MergePeopleBody = z.object({
+  survivorPersonId: z.string().uuid(),
+  mergedAwayPersonId: z.string().uuid(),
+  fieldResolutions: z
+    .object({
+      displayName: FieldSourceSchema.optional(),
+      alsoKnownAs: FieldSourceSchema.optional(),
+      essenceLine: FieldSourceSchema.optional(),
+      birthDateText: FieldSourceSchema.optional(),
+      deathDateText: FieldSourceSchema.optional(),
+      birthPlace: FieldSourceSchema.optional(),
+      deathPlace: FieldSourceSchema.optional(),
+      birthPlaceId: FieldSourceSchema.optional(),
+      deathPlaceId: FieldSourceSchema.optional(),
+      isLiving: FieldSourceSchema.optional(),
+      portraitMediaId: FieldSourceSchema.optional(),
+      linkedUserId: FieldSourceSchema.optional(),
+      homeTreeId: FieldSourceSchema.optional(),
+    })
     .optional(),
 });
 
@@ -193,6 +222,64 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
     );
   });
 
+  app.get("/api/trees/:treeId/people/:personId/duplicates", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, personId } = request.params as {
+      treeId: string;
+      personId: string;
+    };
+
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) {
+      return reply.status(403).send({ error: "Not a member of this tree" });
+    }
+
+    const personInScope = await isPersonInTreeScope(treeId, personId);
+    if (!personInScope) {
+      return reply.status(404).send({ error: "Person not found" });
+    }
+
+    const candidates = await listLikelyDuplicatePeople(personId);
+    if (!candidates) {
+      return reply.status(404).send({ error: "Person not found" });
+    }
+
+    const visibleCandidates = (
+      await Promise.all(
+        candidates.map(async (candidate) => {
+          const visibleTrees = await getVisibleTreesForPerson(
+            candidate.id,
+            session.user.id,
+          );
+          if (visibleTrees.length === 0) {
+            return null;
+          }
+
+          return {
+            id: candidate.id,
+            displayName: candidate.displayName,
+            essenceLine: candidate.essenceLine,
+            birthDateText: candidate.birthDateText,
+            deathDateText: candidate.deathDateText,
+            linkedUserId: candidate.linkedUserId,
+            homeTreeId: candidate.homeTreeId,
+            portraitUrl: candidate.portraitMedia
+              ? mediaUrl(candidate.portraitMedia.objectKey)
+              : null,
+            score: candidate.score,
+            reasons: candidate.reasons,
+            visibleTrees,
+            alreadyInTree: await isPersonInTreeScope(treeId, candidate.id),
+          };
+        }),
+      )
+    ).filter((candidate) => candidate !== null);
+
+    return reply.send(visibleCandidates);
+  });
+
   app.get("/api/trees/:treeId/people/:personId", async (request, reply) => {
     const session = await getSession(request.headers);
     if (!session) return reply.status(401).send({ error: "Unauthorized" });
@@ -230,6 +317,63 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
       })),
       relationships,
     });
+  });
+
+  app.post("/api/trees/:treeId/people/merge", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId } = request.params as { treeId: string };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) {
+      return reply.status(403).send({ error: "Not a member of this tree" });
+    }
+    if (!canManageTreeScope(membership.role)) {
+      return reply.status(403).send({ error: "Only founders and stewards can merge people" });
+    }
+
+    const parsed = MergePeopleBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid request body" });
+    }
+
+    const { survivorPersonId, mergedAwayPersonId, fieldResolutions } = parsed.data;
+    const [survivorInTree, mergedAwayInTree] = await Promise.all([
+      isPersonInTreeScope(treeId, survivorPersonId),
+      isPersonInTreeScope(treeId, mergedAwayPersonId),
+    ]);
+
+    if (!survivorInTree && !mergedAwayInTree) {
+      return reply.status(404).send({ error: "At least one of these people must belong to this tree" });
+    }
+
+    try {
+      const mergedPerson = await mergePeopleRecords({
+        treeId,
+        survivorPersonId,
+        mergedAwayPersonId,
+        performedByUserId: session.user.id,
+        fieldResolutions,
+      });
+
+      return reply.send({
+        mergedAwayPersonId,
+        person: {
+          ...mergedPerson,
+          portraitUrl: mergedPerson.portraitMedia
+            ? mediaUrl(mergedPerson.portraitMedia.objectKey)
+            : null,
+          birthPlaceResolved: serializePlace(mergedPerson.birthPlaceRef),
+          deathPlaceResolved: serializePlace(mergedPerson.deathPlaceRef),
+        },
+      });
+    } catch (error) {
+      if (error instanceof PersonMergeError) {
+        return reply.status(error.status).send({ error: error.message });
+      }
+      request.log.error({ err: error }, "Failed to merge people");
+      return reply.status(500).send({ error: "Failed to merge people" });
+    }
   });
 
   app.post("/api/trees/:treeId/scope/people", async (request, reply) => {
@@ -414,65 +558,10 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "Person not found" });
       }
 
-      // Find all active cross-tree links for this person (could be personA or personB)
-      const linksRaw = await db.query.crossTreePersonLinks.findMany({
-        where: (l) =>
-          or(eq(l.personAId, personId), eq(l.personBId, personId)),
-        with: {
-          connection: true,
-          personA: { with: { portraitMedia: true } },
-          personB: { with: { portraitMedia: true } },
-        },
-      });
-
-      // Filter to active connections only
-      const activeLinks = linksRaw.filter((l) => l.connection.status === "active");
-
-      // For each active link, resolve the "other" person and their memories.
-      const legacyResults = await Promise.all(
-        activeLinks.map(async (link) => {
-          const isPersonA = link.personAId === personId;
-          const otherPerson = isPersonA ? link.personB : link.personA;
-          const otherTreeId = isPersonA
-            ? link.connection.treeBId
-            : link.connection.treeAId;
-          const otherTree = await db.query.trees.findFirst({
-            where: (tree, { eq }) => eq(tree.id, otherTreeId),
-            columns: {
-              name: true,
-            },
-          });
-
-          const memories = await getTreeMemories(otherTreeId, {
-            personId: otherPerson.id,
-            viewerUserId: session.user.id,
-          });
-
-          return {
-            connectionId: link.connectionId,
-            treeId: otherTreeId,
-            treeName: otherTree?.name ?? null,
-            linkedPerson: {
-              ...otherPerson,
-              portraitUrl: otherPerson.portraitMedia
-                ? mediaUrl(otherPerson.portraitMedia.objectKey)
-                : null,
-            },
-            memories: memories.map((m) => ({
-              ...m,
-              mediaUrl: m.media ? mediaUrl(m.media.objectKey) : null,
-              mimeType: m.media?.mimeType ?? null,
-            })),
-          };
-        }),
-      );
-
-      const legacyTreeIds = new Set(legacyResults.map((result) => result.treeId));
       const visibleTrees = await getVisibleTreesForPerson(personId, session.user.id);
       const scopeResults = await Promise.all(
         visibleTrees
           .filter((candidateTree) => candidateTree.id !== treeId)
-          .filter((candidateTree) => !legacyTreeIds.has(candidateTree.id))
           .map(async (candidateTree) => {
             const scopedPerson = await getTreeScopedPerson(candidateTree.id, personId);
             if (!scopedPerson) {
@@ -503,10 +592,7 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
           }),
       );
 
-      return reply.send([
-        ...legacyResults,
-        ...scopeResults.filter((result) => result !== null),
-      ]);
+      return reply.send(scopeResults.filter((result) => result !== null));
     },
   );
 

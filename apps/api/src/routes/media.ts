@@ -196,55 +196,7 @@ async function checkCrossTreeAccess(
   mediaRecord: MediaRecord,
   userId: string,
 ): Promise<boolean> {
-  const scopedAccess = await checkScopedTreeAccess(mediaRecord, userId);
-  if (scopedAccess) return true;
-
-  // Find active connections involving T1 (the media's tree)
-  const activeConnections = await db.query.treeConnections.findMany({
-    where: (c) =>
-      and(
-        or(
-          eq(c.treeAId, mediaRecord.treeId),
-          eq(c.treeBId, mediaRecord.treeId),
-        ),
-        eq(c.status, "active"),
-      ),
-  });
-  if (activeConnections.length === 0) return false;
-
-  // For each active connection, check if userId is a member of the other tree
-  for (const conn of activeConnections) {
-    const otherTreeId =
-      conn.treeAId === mediaRecord.treeId ? conn.treeBId : conn.treeAId;
-
-    const otherMembership = await db.query.treeMemberships.findFirst({
-      where: (m) => and(eq(m.treeId, otherTreeId), eq(m.userId, userId)),
-    });
-    if (!otherMembership) continue;
-
-    // User is a member of the other tree — now check person links.
-    // Find any memory in T1 whose media is this record.
-    const memory = await db.query.memories.findFirst({
-      where: (m) => and(eq(m.mediaId, mediaRecord.id), eq(m.treeId, mediaRecord.treeId)),
-    });
-    if (!memory) continue;
-
-    // Check for a crossTreePersonLink for the memory's primaryPerson within this connection.
-    // The person in T1 could be personA or personB depending on which side T1 is.
-    const personId = memory.primaryPersonId;
-    const isT1TreeA = conn.treeAId === mediaRecord.treeId;
-
-    const link = await db.query.crossTreePersonLinks.findFirst({
-      where: (l) =>
-        and(
-          eq(l.connectionId, conn.id),
-          isT1TreeA ? eq(l.personAId, personId) : eq(l.personBId, personId),
-        ),
-    });
-    if (link) return true;
-  }
-
-  return false;
+  return checkScopedTreeAccess(mediaRecord, userId);
 }
 
 async function checkScopedTreeAccess(

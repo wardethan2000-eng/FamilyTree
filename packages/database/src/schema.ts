@@ -113,12 +113,6 @@ export const treeSubscriptionStatusEnum = pgEnum("tree_subscription_status", [
   "cancelled",
 ]);
 
-export const treeConnectionStatusEnum = pgEnum("tree_connection_status", [
-  "pending",
-  "active",
-  "ended",
-]);
-
 // ── Better Auth core tables ────────────────────────────────────────────────────
 // These tables are managed by Better Auth. IDs are text (Better Auth generates
 // its own IDs). Domain tables that reference users also use text FKs.
@@ -671,81 +665,6 @@ export const archiveExports = pgTable(
   ],
 );
 
-/**
- * A bilateral connection between two family trees (e.g. in-law relationship).
- * treeAId is always the lexicographically smaller UUID to prevent duplicates.
- * Enforced in application code; a CHECK constraint mirrors this in the DB.
- */
-export const treeConnections = pgTable(
-  "tree_connections",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    treeAId: uuid("tree_a_id")
-      .notNull()
-      .references(() => trees.id, { onDelete: "cascade" }),
-    treeBId: uuid("tree_b_id")
-      .notNull()
-      .references(() => trees.id, { onDelete: "cascade" }),
-    status: treeConnectionStatusEnum("status").default("pending").notNull(),
-    initiatedByUserId: text("initiated_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    initiatedByTreeId: uuid("initiated_by_tree_id")
-      .notNull()
-      .references(() => trees.id, { onDelete: "cascade" }),
-    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
-    endedAt: timestamp("ended_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("tree_connections_pair_unique_idx").on(table.treeAId, table.treeBId),
-    index("tree_connections_tree_a_idx").on(table.treeAId),
-    index("tree_connections_tree_b_idx").on(table.treeBId),
-    index("tree_connections_status_idx").on(table.status),
-    index("tree_connections_initiated_by_user_idx").on(table.initiatedByUserId),
-  ],
-);
-
-/**
- * Identifies that a person in tree A and a person in tree B are the same real person,
- * within the context of a tree connection (e.g. an in-law who has their own family tree).
- */
-export const crossTreePersonLinks = pgTable(
-  "cross_tree_person_links",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    connectionId: uuid("connection_id")
-      .notNull()
-      .references(() => treeConnections.id, { onDelete: "cascade" }),
-    personAId: uuid("person_a_id")
-      .notNull()
-      .references(() => people.id, { onDelete: "cascade" }),
-    personBId: uuid("person_b_id")
-      .notNull()
-      .references(() => people.id, { onDelete: "cascade" }),
-    linkedByUserId: text("linked_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    // Each person in tree A can only be linked once per connection
-    uniqueIndex("cross_tree_person_links_person_a_conn_unique_idx").on(
-      table.connectionId,
-      table.personAId,
-    ),
-    // Each person in tree B can only be linked once per connection
-    uniqueIndex("cross_tree_person_links_person_b_conn_unique_idx").on(
-      table.connectionId,
-      table.personBId,
-    ),
-    index("cross_tree_person_links_connection_idx").on(table.connectionId),
-    index("cross_tree_person_links_person_a_idx").on(table.personAId),
-    index("cross_tree_person_links_person_b_idx").on(table.personBId),
-  ],
-);
-
 // ── Relations ──────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -795,9 +714,6 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
   prompts: many(prompts),
   promptReplyLinks: many(promptReplyLinks),
   transcriptionJobs: many(transcriptionJobs),
-  treeConnectionsAsA: many(treeConnections, { relationName: "tree_connection_a" }),
-  treeConnectionsAsB: many(treeConnections, { relationName: "tree_connection_b" }),
-  treeConnectionsAsInitiator: many(treeConnections, { relationName: "tree_connection_initiator" }),
 }));
 
 export const treeMembershipsRelations = relations(treeMemberships, ({ one }) => ({
@@ -879,8 +795,6 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
   memoryTags: many(memoryPersonTags),
   invitations: many(invitations),
   promptsReceived: many(prompts),
-  crossTreeLinksAsA: many(crossTreePersonLinks, { relationName: "cross_tree_link_person_a" }),
-  crossTreeLinksAsB: many(crossTreePersonLinks, { relationName: "cross_tree_link_person_b" }),
 }));
 
 export const relationshipsRelations = relations(relationships, ({ one, many }) => ({
@@ -1032,50 +946,6 @@ export const memoryTreeVisibilityRelations = relations(memoryTreeVisibility, ({ 
 export const personMergeAuditRelations = relations(personMergeAudit, ({ one }) => ({
   performedBy: one(users, {
     fields: [personMergeAudit.performedByUserId],
-    references: [users.id],
-  }),
-}));
-
-export const treeConnectionsRelations = relations(treeConnections, ({ one, many }) => ({
-  treeA: one(trees, {
-    fields: [treeConnections.treeAId],
-    references: [trees.id],
-    relationName: "tree_connection_a",
-  }),
-  treeB: one(trees, {
-    fields: [treeConnections.treeBId],
-    references: [trees.id],
-    relationName: "tree_connection_b",
-  }),
-  initiatedByUser: one(users, {
-    fields: [treeConnections.initiatedByUserId],
-    references: [users.id],
-  }),
-  initiatedByTree: one(trees, {
-    fields: [treeConnections.initiatedByTreeId],
-    references: [trees.id],
-    relationName: "tree_connection_initiator",
-  }),
-  personLinks: many(crossTreePersonLinks),
-}));
-
-export const crossTreePersonLinksRelations = relations(crossTreePersonLinks, ({ one }) => ({
-  connection: one(treeConnections, {
-    fields: [crossTreePersonLinks.connectionId],
-    references: [treeConnections.id],
-  }),
-  personA: one(people, {
-    fields: [crossTreePersonLinks.personAId],
-    references: [people.id],
-    relationName: "cross_tree_link_person_a",
-  }),
-  personB: one(people, {
-    fields: [crossTreePersonLinks.personBId],
-    references: [people.id],
-    relationName: "cross_tree_link_person_b",
-  }),
-  linkedBy: one(users, {
-    fields: [crossTreePersonLinks.linkedByUserId],
     references: [users.id],
   }),
 }));
