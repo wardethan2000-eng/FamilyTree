@@ -11,6 +11,7 @@ import { memoriesPlugin } from "./routes/memories.js";
 import { relationshipsPlugin } from "./routes/relationships.js";
 import { promptsPlugin } from "./routes/prompts.js";
 import { placesPlugin } from "./routes/places.js";
+import { importPlugin } from "./routes/import.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -91,6 +92,7 @@ export function buildApp() {
   app.register(exportPlugin);
   app.register(promptsPlugin);
   app.register(placesPlugin);
+  app.register(importPlugin);
 
   return app;
 }

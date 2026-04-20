@@ -6,6 +6,8 @@ import { useSession } from "@/lib/auth-client";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+type ImportStage = "idle" | "previewing" | "ready" | "importing" | "done" | "error";
+
 interface Tree {
   id: string;
   name: string;
@@ -55,6 +57,79 @@ export default function TreeSettingsPage() {
 
   // Export
   const [exporting, setExporting] = useState(false);
+
+  // GEDCOM import
+  const [gedcomFile, setGedcomFile] = useState<File | null>(null);
+  const [importStage, setImportStage] = useState<ImportStage>("idle");
+  const [importPreview, setImportPreview] = useState<{ individualsFound: number; familiesFound: number; expectedRelationships: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ peopleCreated: number; relationshipsCreated: number; skipped: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  async function handleGedcomFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setGedcomFile(file);
+    setImportPreview(null);
+    setImportResult(null);
+    setImportError(null);
+    if (!file) { setImportStage("idle"); return; }
+
+    setImportStage("previewing");
+    try {
+      const text = await file.text();
+      const res = await fetch(`${API}/api/trees/${treeId}/import/gedcom/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ gedcom: text }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        setImportError(body.error ?? "Could not parse file");
+        setImportStage("error");
+        return;
+      }
+      setImportPreview(await res.json());
+      setImportStage("ready");
+    } catch {
+      setImportError("Could not read file");
+      setImportStage("error");
+    }
+  }
+
+  async function confirmGedcomImport() {
+    if (!gedcomFile) return;
+    setImportStage("importing");
+    setImportError(null);
+    try {
+      const text = await gedcomFile.text();
+      const res = await fetch(`${API}/api/trees/${treeId}/import/gedcom`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ gedcom: text }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        setImportError(body.error ?? "Import failed");
+        setImportStage("error");
+        return;
+      }
+      setImportResult(await res.json());
+      setImportStage("done");
+    } catch {
+      setImportError("Import failed unexpectedly");
+      setImportStage("error");
+    }
+  }
+
+  function resetImport() {
+    setGedcomFile(null);
+    setImportPreview(null);
+    setImportResult(null);
+    setImportError(null);
+    setImportStage("idle");
+  }
+
 
   async function downloadExport() {
     setExporting(true);
@@ -300,6 +375,102 @@ export default function TreeSettingsPage() {
             </button>
           </div>
         </section>
+
+        {/* GEDCOM import — founders and stewards only */}
+        {isManager && (
+          <section style={{ ...sectionStyle, marginTop: 32 }}>
+            <h2 style={sectionHeadingStyle}>Import from GEDCOM</h2>
+            <p style={sectionDescStyle}>
+              Upload a <code>.ged</code> file exported from another genealogy program (Ancestry, FamilySearch, MacFamilyTree, etc.)
+              to bootstrap this archive with people and relationships. Existing records are not affected.
+            </p>
+
+            {importStage !== "done" && (
+              <div style={{ marginTop: 20 }}>
+                <label
+                  htmlFor="gedcom-file"
+                  style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)", display: "block", marginBottom: 8 }}
+                >
+                  Select a GEDCOM file (.ged)
+                </label>
+                <input
+                  id="gedcom-file"
+                  type="file"
+                  accept=".ged,.gedcom,text/plain"
+                  onChange={handleGedcomFileChange}
+                  style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink)" }}
+                />
+              </div>
+            )}
+
+            {importStage === "previewing" && (
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", marginTop: 14 }}>
+                Parsing file…
+              </p>
+            )}
+
+            {importStage === "ready" && importPreview && (
+              <div style={{ marginTop: 20, padding: "16px 18px", background: "var(--paper)", border: "1px solid var(--rule)", borderRadius: 8 }}>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink)", margin: "0 0 4px", fontWeight: 500 }}>
+                  Ready to import
+                </p>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.8 }}>
+                  {importPreview.individualsFound} people · {importPreview.familiesFound} families · ~{importPreview.expectedRelationships} relationships
+                </p>
+                <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center" }}>
+                  <button
+                    onClick={confirmGedcomImport}
+                    style={primaryBtnStyle}
+                  >
+                    Import into archive
+                  </button>
+                  <button
+                    onClick={resetImport}
+                    style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {importStage === "importing" && (
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", marginTop: 14 }}>
+                Importing… this may take a moment for large files.
+              </p>
+            )}
+
+            {importStage === "done" && importResult && (
+              <div style={{ marginTop: 20, padding: "16px 18px", background: "var(--paper)", border: "1px solid var(--rule)", borderRadius: 8 }}>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--moss)", margin: "0 0 4px", fontWeight: 500 }}>
+                  Import complete
+                </p>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.8 }}>
+                  {importResult.peopleCreated} people added · {importResult.relationshipsCreated} relationships created
+                  {importResult.skipped > 0 && ` · ${importResult.skipped} duplicates skipped`}
+                </p>
+                <button
+                  onClick={resetImport}
+                  style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 12 }}
+                >
+                  Import another file
+                </button>
+              </div>
+            )}
+
+            {importStage === "error" && importError && (
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--rose)", marginTop: 14 }}>
+                {importError} —{" "}
+                <button
+                  onClick={resetImport}
+                  style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--rose)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                >
+                  try again
+                </button>
+              </p>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
