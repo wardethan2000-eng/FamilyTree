@@ -79,7 +79,7 @@ function useMockTransaction(tx: MockTx) {
     callback(tx as never);
 }
 
-describe("createRelationship invariants", () => {
+describe("createRelationship", () => {
   it("rejects self-referential relationships", async () => {
     const { tx, insertedValues } = createMockTx();
     useMockTransaction(tx);
@@ -165,6 +165,7 @@ describe("createRelationship invariants", () => {
     const { tx, insertedValues } = createMockTx({
       peopleFindFirst: [{ id: "person-z" }, { id: "person-a" }],
       relationshipsFindFirst: [null, null, null],
+      relationshipsFindMany: [[], []],
     });
     useMockTransaction(tx);
 
@@ -186,5 +187,105 @@ describe("createRelationship invariants", () => {
     assert.equal(created.normalizedPersonAId, "person-a");
     assert.equal(created.normalizedPersonBId, "person-z");
     assert.equal(created.spouseStatus, "active");
+  });
+
+  it("infers a co-parent link when adding an active spouse", async () => {
+    const { tx, insertedValues } = createMockTx({
+      peopleFindFirst: [{ id: "melani" }, { id: "barry" }],
+      relationshipsFindFirst: [null, null, null, null, null],
+      relationshipsFindMany: [
+        [{ toPersonId: "ethan" }],
+        [],
+        [{ id: "melani-ethan" }],
+        [],
+        [],
+        [],
+      ],
+    });
+    useMockTransaction(tx);
+
+    await createRelationship({
+      treeId: "tree-1",
+      fromPersonId: "melani",
+      toPersonId: "barry",
+      type: "spouse",
+    });
+
+    assert.equal(insertedValues.length, 2);
+    assert.equal(insertedValues[0]?.type, "spouse");
+    assert.deepEqual(insertedValues[1], {
+      treeId: "tree-1",
+      fromPersonId: "barry",
+      toPersonId: "ethan",
+      type: "parent_child",
+      normalizedPersonAId: null,
+      normalizedPersonBId: null,
+      spouseStatus: null,
+      startDateText: null,
+      endDateText: null,
+    });
+  });
+
+  it("infers the same parent for an existing sibling", async () => {
+    const { tx, insertedValues } = createMockTx({
+      peopleFindFirst: [{ id: "melani" }, { id: "ethan" }],
+      relationshipsFindFirst: [null, null, null, null],
+      relationshipsFindMany: [
+        [],
+        [],
+        [{ fromPersonId: "melani" }],
+        [{ fromPersonId: "ethan", toPersonId: "morgan" }],
+        [],
+        [],
+        [],
+        [],
+        [{ fromPersonId: "ethan", toPersonId: "morgan" }],
+      ],
+    });
+    useMockTransaction(tx);
+
+    await createRelationship({
+      treeId: "tree-1",
+      fromPersonId: "melani",
+      toPersonId: "ethan",
+      type: "parent_child",
+    });
+
+    assert.equal(insertedValues.length, 2);
+    assert.equal(insertedValues[0]?.toPersonId, "ethan");
+    assert.deepEqual(insertedValues[1], {
+      treeId: "tree-1",
+      fromPersonId: "melani",
+      toPersonId: "morgan",
+      type: "parent_child",
+      normalizedPersonAId: null,
+      normalizedPersonBId: null,
+      spouseStatus: null,
+      startDateText: null,
+      endDateText: null,
+    });
+  });
+
+  it("skips inferred parent links that would exceed the two-parent limit", async () => {
+    const { tx, insertedValues } = createMockTx({
+      peopleFindFirst: [{ id: "melani" }, { id: "barry" }],
+      relationshipsFindFirst: [null, null, null, null, null],
+      relationshipsFindMany: [
+        [{ toPersonId: "ethan" }],
+        [],
+        [{ id: "melani-ethan" }, { id: "existing-parent-2" }],
+      ],
+    });
+    useMockTransaction(tx);
+
+    await createRelationship({
+      treeId: "tree-1",
+      fromPersonId: "melani",
+      toPersonId: "barry",
+      type: "spouse",
+    });
+
+    assert.equal(insertedValues.length, 1);
+    assert.equal(insertedValues[0]?.type, "spouse");
   });
 });

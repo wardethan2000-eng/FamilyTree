@@ -142,6 +142,8 @@ export default function PersonPage({
     isLiving: true,
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingPerson, setDeletingPerson] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Portrait upload
   const [uploadingPortrait, setUploadingPortrait] = useState(false);
@@ -247,6 +249,7 @@ export default function PersonPage({
   }
 
   function startEditing(p: Person) {
+    setDeleteError(null);
     setEditForm({
       displayName: p.displayName,
       essenceLine: p.essenceLine ?? "",
@@ -264,6 +267,7 @@ export default function PersonPage({
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     setSavingEdit(true);
+    setDeleteError(null);
     const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -285,6 +289,32 @@ export default function PersonPage({
       await loadPerson();
     }
     setSavingEdit(false);
+  }
+
+  async function deletePerson() {
+    if (!person) return;
+
+    const confirmed = window.confirm(
+      `Delete ${person.displayName}? This also removes their relationships, memories, prompts, and cross-tree links from this tree.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingPerson(true);
+    setDeleteError(null);
+
+    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      setDeleteError(err?.error ?? "Failed to delete person");
+      setDeletingPerson(false);
+      return;
+    }
+
+    router.replace(`/trees/${treeId}`);
   }
 
   async function uploadPortrait(file: File) {
@@ -490,12 +520,22 @@ export default function PersonPage({
         </span>
         <div style={{ flex: 1 }} />
         {!editing && (
-          <button
-            onClick={() => startEditing(person)}
-            style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 20, padding: "5px 12px", cursor: "pointer" }}
-          >
-            Edit this page
-          </button>
+          <>
+            <button
+              onClick={() => startEditing(person)}
+              style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 20, padding: "5px 12px", cursor: "pointer" }}
+            >
+              Edit this page
+            </button>
+            <button
+              type="button"
+              onClick={deletePerson}
+              disabled={deletingPerson}
+              style={{ ...dangerBtnStyle, borderRadius: 20, padding: "5px 12px" }}
+            >
+              {deletingPerson ? "Deleting…" : "Delete person"}
+            </button>
+          </>
         )}
         <a
           href={`/trees/${treeId}/map?personId=${personId}`}
@@ -510,6 +550,21 @@ export default function PersonPage({
           Ask a question
         </button>
       </header>
+
+      {deleteError && !editing && (
+        <div
+          style={{
+            padding: "12px 24px",
+            background: "rgba(154,79,70,0.08)",
+            borderBottom: "1px solid rgba(154,79,70,0.18)",
+            fontFamily: "var(--font-ui)",
+            fontSize: 12,
+            color: "#9a4f46",
+          }}
+        >
+          {deleteError}
+        </div>
+      )}
 
       {/* Portrait header */}
       <div style={{ position: "relative", height: 320, overflow: "hidden", flexShrink: 0 }}>
@@ -594,6 +649,11 @@ export default function PersonPage({
                 onChange={(e) => setEditForm((f) => ({ ...f, isLiving: e.target.checked }))} />
               Still living
             </label>
+            {deleteError && (
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "#9a4f46" }}>
+                {deleteError}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button type="submit" disabled={savingEdit} style={primaryBtnStyle}>
                 {savingEdit ? "Saving…" : "Save"}
@@ -601,6 +661,17 @@ export default function PersonPage({
               <button type="button" onClick={() => setEditing(false)} style={secondaryBtnStyle}>
                 Cancel
               </button>
+              <button
+                type="button"
+                onClick={deletePerson}
+                disabled={savingEdit || deletingPerson}
+                style={dangerBtnStyle}
+              >
+                {deletingPerson ? "Deleting…" : "Delete person"}
+              </button>
+            </div>
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)" }}>
+              Deleting a person also removes their relationships, memories, prompts, and cross-tree links.
             </div>
           </form>
         </div>
@@ -1063,6 +1134,17 @@ const secondaryBtnStyle: React.CSSProperties = {
   background: "none",
   color: "var(--ink-soft)",
   border: "1px solid var(--rule)",
+  borderRadius: 6,
+  padding: "9px 20px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const dangerBtnStyle: React.CSSProperties = {
+  background: "rgba(154,79,70,0.08)",
+  color: "#9a4f46",
+  border: "1px solid rgba(154,79,70,0.28)",
   borderRadius: 6,
   padding: "9px 20px",
   fontFamily: "var(--font-ui)",

@@ -375,4 +375,33 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
       deathPlaceResolved: serializePlace(fullUpdated?.deathPlaceRef),
     });
   });
+
+  app.delete("/api/trees/:treeId/people/:personId", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, personId } = request.params as {
+      treeId: string;
+      personId: string;
+    };
+
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) {
+      return reply.status(403).send({ error: "Not a member of this tree" });
+    }
+    if (membership.role === "viewer") {
+      return reply.status(403).send({ error: "Viewers cannot delete people" });
+    }
+
+    const [deleted] = await db
+      .delete(schema.people)
+      .where(and(eq(schema.people.treeId, treeId), eq(schema.people.id, personId)))
+      .returning({ id: schema.people.id });
+
+    if (!deleted) {
+      return reply.status(404).send({ error: "Person not found" });
+    }
+
+    return reply.status(200).send({ deleted: true, personId: deleted.id });
+  });
 }

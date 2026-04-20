@@ -7,6 +7,7 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useViewport,
   ReactFlowProvider,
   ReactFlow as ReactFlowBase,
   type EdgeProps,
@@ -32,8 +33,12 @@ import {
   buildPersonNodes,
   buildEdges,
   buildEditSlots,
+  buildParentPlaceholderGroups,
+  getFocusBoundsForIds,
   getConstellationFocusBounds,
   getConstellationFocusIds,
+  getLineageFocusIds,
+  type LineageFocusMode,
 } from "./treeLayout";
 
 // Cast to avoid React 19 JSX type incompatibility with @xyflow/react's React 18 types
@@ -50,6 +55,7 @@ const EDGE_TYPES = {
 
 const CONTROL_SURFACE = "rgba(246,241,231,0.82)";
 const CONTROL_BORDER = "rgba(177,165,145,0.48)";
+const CANVAS_TOP_PADDING = 68;
 const CANVAS_BACKGROUND =
   "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.72), transparent 32%), radial-gradient(circle at 82% 20%, rgba(226,214,194,0.38), transparent 28%), linear-gradient(180deg, #f7f2e9 0%, #f1eadf 100%)";
 
@@ -89,6 +95,8 @@ interface CreatePersonFormState {
   relationshipStartDateText: string;
 }
 
+type RelationTargetMode = "new" | "existing";
+
 type EditInteractionState =
   | { mode: "idle" }
   | { mode: "node-selected"; personId: string }
@@ -110,16 +118,15 @@ function TreeCanvasInner({
 }: TreeCanvasProps) {
   const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const reactFlow = useReactFlow();
+  const viewport = useViewport();
   const [nodes, setNodes, onNodesChange] = useNodesState<TreeFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<TreeEdge>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [hoverState, setHoverState] = useState<HoverState | null>(null);
   const [showLegend, setShowLegend] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [lineageMode, setLineageMode] = useState<LineageFocusMode>("full");
   const [editInteraction, setEditInteraction] = useState<EditInteractionState>({ mode: "idle" });
-  const [projectedEditSlots, setProjectedEditSlots] = useState<
-    Array<{ kind: EditRelationKind; x: number; y: number; label: string }>
-  >([]);
   const [editingRelationshipType, setEditingRelationshipType] = useState<
     "parent_child" | "sibling" | "spouse"
   >("parent_child");
@@ -133,6 +140,8 @@ function TreeCanvasInner({
   const [savingRelationship, setSavingRelationship] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creatingPerson, setCreatingPerson] = useState(false);
+  const [relationTargetMode, setRelationTargetMode] = useState<RelationTargetMode>("new");
+  const [existingPersonId, setExistingPersonId] = useState("");
   const [showAdvancedForm, setShowAdvancedForm] = useState(false);
   const [createForm, setCreateForm] = useState<CreatePersonFormState>({
     displayName: "",
@@ -145,40 +154,75 @@ function TreeCanvasInner({
   const layoutRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const didInitializeLineageRef = useRef(false);
 
-  const layout = useMemo(
-    () => computeLayout(people, relationships),
-    [people, relationships]
+  const immediateFocusIds = useMemo(
+    () => getConstellationFocusIds(selectedPersonId, relationships),
+    [selectedPersonId, relationships],
   );
-  const focusPersonId = editMode ? selectedPersonId : (selectedPersonId ?? hoverState?.personId ?? null);
-  const focusPersonIds = useMemo(
-    () => getConstellationFocusIds(focusPersonId, relationships),
-    [focusPersonId, relationships],
+  const lineageFocusIds = useMemo(
+    () => getLineageFocusIds(selectedPersonId, relationships, lineageMode),
+    [selectedPersonId, relationships, lineageMode],
+  );
+  const activeFocusIds = editMode ? immediateFocusIds : lineageFocusIds;
+  const renderFocusIds =
+    !editMode && lineageMode !== "full" && lineageFocusIds ? lineageFocusIds : null;
+  const renderPeople = useMemo(
+    () =>
+      renderFocusIds
+        ? people.filter((person) => renderFocusIds.has(person.id))
+        : people,
+    [people, renderFocusIds],
+  );
+  const renderRelationships = useMemo(
+    () =>
+      renderFocusIds
+        ? relationships.filter(
+            (relationship) =>
+              renderFocusIds.has(relationship.fromPersonId) &&
+              renderFocusIds.has(relationship.toPersonId),
+          )
+        : relationships,
+    [relationships, renderFocusIds],
+  );
+  const layout = useMemo(
+    () => computeLayout(renderPeople, renderRelationships),
+    [renderPeople, renderRelationships]
   );
 
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
 
+  useEffect(() => {
+    if (didInitializeLineageRef.current) return;
+    if (!currentUserPersonId) return;
+    if (!people.some((person) => person.id === currentUserPersonId)) return;
+
+    didInitializeLineageRef.current = true;
+    setSelectedPersonId(currentUserPersonId);
+    setLineageMode("birth");
+  }, [currentUserPersonId, people]);
+
   // Rebuild nodes whenever people/layout/selected changes
   useEffect(() => {
     const personNodes = buildPersonNodes(
-      people,
+      renderPeople,
       layout,
       selectedPersonId,
       currentUserPersonId,
-      focusPersonIds,
+      renderFocusIds,
     );
-    const edgeList = buildEdges(relationships, layout, focusPersonIds);
+    const edgeList = buildEdges(renderRelationships, layout, renderFocusIds);
     setNodes(personNodes);
     setEdges(edgeList);
   }, [
-    people,
-    relationships,
+    renderPeople,
+    renderRelationships,
     layout,
     selectedPersonId,
     currentUserPersonId,
-    focusPersonIds,
+    renderFocusIds,
     setNodes,
     setEdges,
   ]);
@@ -196,12 +240,16 @@ function TreeCanvasInner({
   const selectPerson = useCallback(
     (personId: string, focusCamera = true) => {
       setSelectedPersonId(personId);
+      const nextLineageMode = lineageMode === "full" ? "birth" : lineageMode;
+      if (lineageMode === "full") {
+        setLineageMode("birth");
+      }
       if (focusCamera) {
-        const bounds = getConstellationFocusBounds(
-          personId,
-          relationships,
-          layoutRef.current,
-        );
+        const bounds =
+          getFocusBoundsForIds(
+            getLineageFocusIds(personId, relationships, nextLineageMode),
+            layoutRef.current,
+          );
         if (bounds) {
           reactFlow.fitBounds(bounds, { duration: 650, padding: 0.16 });
           return;
@@ -212,7 +260,7 @@ function TreeCanvasInner({
         }
       }
     },
-    [reactFlow, relationships]
+    [lineageMode, reactFlow, relationships]
   );
 
   const resetRelationshipEditorDrafts = useCallback(() => {
@@ -222,16 +270,21 @@ function TreeCanvasInner({
     setEditingRelationshipEndDateText("");
   }, []);
 
-  const clearSelection = useCallback(() => {
-    setSelectedPersonId(null);
+  const resetEditDrafts = useCallback(() => {
     setEditInteraction({ mode: "idle" });
     setCreateError(null);
     setShowAdvancedForm(false);
     resetRelationshipEditorDrafts();
+  }, [resetRelationshipEditorDrafts]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedPersonId(null);
+    setLineageMode("full");
+    resetEditDrafts();
     setTimeout(() => {
       reactFlow.fitView({ duration: 600, padding: 0.12 });
     }, 50);
-  }, [reactFlow, resetRelationshipEditorDrafts]);
+  }, [reactFlow, resetEditDrafts]);
 
   const handleNodeClick: NodeMouseHandler<TreeFlowNode> = useCallback(
     (_, node) => {
@@ -323,13 +376,18 @@ function TreeCanvasInner({
     }
   }, [currentUserPersonId, reactFlow, relationships]);
 
+  const handleZoomIn = useCallback(() => {
+    reactFlow.zoomIn({ duration: 300 });
+  }, [reactFlow]);
+
+  const handleZoomOut = useCallback(() => {
+    reactFlow.zoomOut({ duration: 300 });
+  }, [reactFlow]);
+
   const handleToggleEditMode = useCallback(() => {
     const next = !editMode;
     setEditMode(next);
-    setEditInteraction({ mode: "idle" });
-    setCreateError(null);
-    setShowAdvancedForm(false);
-    resetRelationshipEditorDrafts();
+    resetEditDrafts();
 
     if (next) {
       const targetPersonId = selectedPersonId ?? currentUserPersonId ?? people[0]?.id ?? null;
@@ -363,7 +421,35 @@ function TreeCanvasInner({
     people,
     reactFlow,
     relationships,
-    resetRelationshipEditorDrafts,
+    resetEditDrafts,
+    selectedPersonId,
+  ]);
+
+  useEffect(() => {
+    if (editMode || !selectedPersonId) return;
+
+    const timer = setTimeout(() => {
+      if (lineageMode === "full") {
+        reactFlow.fitView({ duration: 560, padding: 0.12 });
+        return;
+      }
+
+      const bounds = getFocusBoundsForIds(lineageFocusIds, layout);
+      if (bounds) {
+        reactFlow.fitBounds(bounds, {
+          duration: 760,
+          padding: 0.22,
+        });
+      }
+    }, 20);
+    return () => clearTimeout(timer);
+  }, [
+    editMode,
+    layout,
+    lineageFocusIds,
+    lineageMode,
+    reactFlow,
+    relationships,
     selectedPersonId,
   ]);
 
@@ -388,82 +474,117 @@ function TreeCanvasInner({
   const relationAnchorPerson = pendingRelation
     ? people.find((p) => p.id === pendingRelation.anchorPersonId) ?? null
     : null;
+  const existingRelationCandidates = useMemo(
+    () =>
+      pendingRelation
+        ? people
+            .filter((person) => person.id !== pendingRelation.anchorPersonId)
+            .sort((left, right) => left.name.localeCompare(right.name))
+        : [],
+    [pendingRelation, people],
+  );
 
   const editingRelationship = useMemo(() => {
     if (editInteraction.mode !== "edge-editing") return null;
     return relationships.find((r) => r.id === editInteraction.relationshipId) ?? null;
   }, [editInteraction, relationships]);
 
-  useEffect(() => {
-    if (!editMode) {
-      setEditInteraction({ mode: "idle" });
-      setCreateError(null);
-      setShowAdvancedForm(false);
-      resetRelationshipEditorDrafts();
-      setProjectedEditSlots([]);
+  const projectedEditSlots = useMemo(() => {
+    if (!editMode || !selectedPersonId || editInteraction.mode !== "node-selected") {
+      return [];
     }
-  }, [editMode, resetRelationshipEditorDrafts]);
 
-  // Intentionally removed: former relay useEffect for relation-slot-chosen → create-link-modal
-  // openRelationForm() now transitions directly to create-link-modal
+    return buildEditSlots(selectedPersonId, relationships, layout).map((slot) => ({
+      kind: slot.kind,
+      x: slot.flowX * viewport.zoom + viewport.x,
+      y: slot.flowY * viewport.zoom + viewport.y + CANVAS_TOP_PADDING,
+      label: slot.label,
+    }));
+  }, [
+    editInteraction.mode,
+    editMode,
+    layout,
+    relationships,
+    selectedPersonId,
+    viewport.x,
+    viewport.y,
+    viewport.zoom,
+  ]);
 
-  useEffect(() => {
-    if (editInteraction.mode !== "edge-editing") return;
-    if (editingRelationship) return;
-    setEditInteraction(
-      selectedPersonId
-        ? { mode: "node-selected", personId: selectedPersonId }
-        : { mode: "idle" },
-    );
-    resetRelationshipEditorDrafts();
-  }, [editInteraction, editingRelationship, resetRelationshipEditorDrafts, selectedPersonId]);
+  const parentPlaceholderGroups = useMemo(() => {
+    return buildParentPlaceholderGroups(renderPeople, renderRelationships, layout).map((group) => ({
+      ...group,
+      isDimmed: activeFocusIds
+        ? group.childAnchors.every((anchor) => !activeFocusIds.has(anchor.personId))
+        : false,
+    }));
+  }, [
+    activeFocusIds,
+    layout,
+    renderPeople,
+    renderRelationships,
+  ]);
 
-  const refreshSelectedCenter = useCallback(() => {
-    if (!editMode || !selectedPersonId) {
-      setProjectedEditSlots([]);
-      return;
-    }
-    if (!rootRef.current) {
-      setProjectedEditSlots([]);
-      return;
-    }
-    const rootRect = rootRef.current.getBoundingClientRect();
-    const slots = buildEditSlots(selectedPersonId, relationships, layoutRef.current).map(
-      (slot) => {
-        const screenCenter = reactFlow.flowToScreenPosition({
-          x: slot.flowX,
-          y: slot.flowY,
-        });
+  const projectedParentPlaceholderGroups = useMemo(() => {
+    const rootBounds = rootRef.current?.getBoundingClientRect() ?? null;
+    const flowToScreenPosition = (
+      reactFlow as typeof reactFlow & {
+        flowToScreenPosition?: (point: { x: number; y: number }) => { x: number; y: number };
+      }
+    ).flowToScreenPosition;
+    const projectPoint = (x: number, y: number) => {
+      if (flowToScreenPosition && rootBounds) {
+        const screenPoint = flowToScreenPosition({ x, y });
         return {
-          kind: slot.kind,
-          x: screenCenter.x - rootRect.left,
-          y: screenCenter.y - rootRect.top,
-          label: slot.label,
+          x: screenPoint.x - rootBounds.left,
+          y: screenPoint.y - rootBounds.top,
         };
-      },
-    );
-    setProjectedEditSlots(slots);
-  }, [editMode, selectedPersonId, reactFlow, relationships]);
+      }
 
-  useEffect(() => {
-    refreshSelectedCenter();
-  }, [nodes, refreshSelectedCenter]);
+      return {
+        x: x * viewport.zoom + viewport.x,
+        y: y * viewport.zoom + viewport.y + CANVAS_TOP_PADDING,
+      };
+    };
 
-  useEffect(() => {
-    const onResize = () => refreshSelectedCenter();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [refreshSelectedCenter]);
+    return parentPlaceholderGroups.map((group) => ({
+      ...group,
+      branchY: group.branchY === null ? null : projectPoint(0, group.branchY).y,
+      childAnchors: group.childAnchors.map((anchor) => ({
+        ...anchor,
+        ...projectPoint(anchor.x, anchor.y),
+      })),
+      actualParentAnchors: group.actualParentAnchors.map((anchor) => ({
+        ...anchor,
+        ...projectPoint(anchor.x, anchor.y),
+      })),
+      placeholderCenters: group.placeholderCenters.map((placeholder) => ({
+        ...placeholder,
+        ...projectPoint(placeholder.x, placeholder.y),
+      })),
+    }));
+  }, [
+    parentPlaceholderGroups,
+    reactFlow,
+    viewport.x,
+    viewport.y,
+    viewport.zoom,
+  ]);
 
-  const openRelationForm = useCallback(
-    (kind: EditRelationKind) => {
-      if (!selectedPersonId) return;
+  const openRelationFormForPerson = useCallback(
+    (anchorPersonId: string, kind: EditRelationKind) => {
+      const nextTargetMode =
+        (kind === "spouse" || kind === "sibling") && people.length > 1 ? "existing" : "new";
+      setEditMode(true);
+      setSelectedPersonId(anchorPersonId);
       setEditInteraction({
         mode: "create-link-modal",
-        personId: selectedPersonId,
+        personId: anchorPersonId,
         relationKind: kind,
       });
       setCreateError(null);
+      setRelationTargetMode(nextTargetMode);
+      setExistingPersonId("");
       setShowAdvancedForm(false);
       setCreateForm({
         displayName: "",
@@ -474,21 +595,143 @@ function TreeCanvasInner({
         relationshipStartDateText: "",
       });
     },
-    [selectedPersonId],
+    [people.length],
+  );
+
+  const openRelationForm = useCallback(
+    (kind: EditRelationKind) => {
+      if (!selectedPersonId) return;
+      openRelationFormForPerson(selectedPersonId, kind);
+    },
+    [openRelationFormForPerson, selectedPersonId],
+  );
+
+  const buildRelationshipPayloads = useCallback(
+    (anchorPersonId: string, targetPersonId: string, relationKind: EditRelationKind) => {
+      const anchorParentIds = relationships
+        .filter(
+          (relationship) =>
+            relationship.type === "parent_child" &&
+            relationship.toPersonId === anchorPersonId,
+        )
+        .map((relationship) => relationship.fromPersonId);
+
+      return relationKind === "parent"
+        ? [
+            {
+              type: "parent_child" as const,
+              fromPersonId: targetPersonId,
+              toPersonId: anchorPersonId,
+            },
+          ]
+        : relationKind === "child"
+          ? [
+              {
+                type: "parent_child" as const,
+                fromPersonId: anchorPersonId,
+                toPersonId: targetPersonId,
+              },
+            ]
+          : relationKind === "sibling"
+            ? anchorParentIds.length > 0
+              ? anchorParentIds.map((parentId) => ({
+                  type: "parent_child" as const,
+                  fromPersonId: parentId,
+                  toPersonId: targetPersonId,
+                }))
+              : [
+                  {
+                    type: "sibling" as const,
+                    fromPersonId: anchorPersonId,
+                    toPersonId: targetPersonId,
+                  },
+                ]
+            : [
+                {
+                  type: "spouse" as const,
+                  fromPersonId: anchorPersonId,
+                  toPersonId: targetPersonId,
+                  spouseStatus: "active" as const,
+                  startDateText: createForm.relationshipStartDateText.trim() || undefined,
+                },
+              ];
+    },
+    [createForm.relationshipStartDateText, relationships],
+  );
+
+  const submitRelationshipPayloads = useCallback(
+    async (
+      relationshipPayloads: Array<{
+        type: "parent_child" | "sibling" | "spouse";
+        fromPersonId: string;
+        toPersonId: string;
+        spouseStatus?: "active";
+        startDateText?: string;
+      }>,
+      duplicateFallbackMessage: string,
+    ) => {
+      let createdCount = 0;
+
+      for (const relationshipPayload of relationshipPayloads) {
+        const relRes = await fetch(`${API}/api/trees/${treeId}/relationships`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(relationshipPayload),
+        });
+        if (relRes.ok) {
+          createdCount += 1;
+          continue;
+        }
+
+        const err = (await relRes.json()) as { error?: string };
+        const errorMessage = err.error ?? "Relationship failed";
+        if (relRes.status === 409 && /already exists/i.test(errorMessage)) {
+          continue;
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (createdCount === 0) {
+        throw new Error(duplicateFallbackMessage);
+      }
+    },
+    [API, treeId],
   );
 
   const submitCreateRelatedPerson = useCallback(async () => {
     if (editInteraction.mode !== "create-link-modal" || !relationAnchorPerson) return;
-    const relationKind = editInteraction.relationKind;
-    const displayName = createForm.displayName.trim();
-    if (!displayName) {
-      setCreateError("Please enter a name.");
-      return;
-    }
 
     setCreatingPerson(true);
     setCreateError(null);
     try {
+      if (relationTargetMode === "existing") {
+        if (!existingPersonId) {
+          setCreateError("Choose someone already in this tree.");
+          return;
+        }
+
+        await submitRelationshipPayloads(
+          buildRelationshipPayloads(
+            relationAnchorPerson.id,
+            existingPersonId,
+            editInteraction.relationKind,
+          ),
+          "These people are already connected that way.",
+        );
+
+        await onConstellationChanged?.();
+        setSelectedPersonId(existingPersonId);
+        setEditInteraction({ mode: "node-selected", personId: existingPersonId });
+        return;
+      }
+
+      const displayName = createForm.displayName.trim();
+      if (!displayName) {
+        setCreateError("Please enter a name.");
+        return;
+      }
+
       const personRes = await fetch(`${API}/api/trees/${treeId}/people`, {
         method: "POST",
         credentials: "include",
@@ -507,97 +750,55 @@ function TreeCanvasInner({
       }
       const created = (await personRes.json()) as { id: string };
 
-      const anchorParentIds = relationships
-        .filter(
-          (relationship) =>
-            relationship.type === "parent_child" &&
-            relationship.toPersonId === relationAnchorPerson.id,
-        )
-        .map((relationship) => relationship.fromPersonId);
-
-      const relationshipPayloads =
-        relationKind === "parent"
-          ? [
-              {
-                type: "parent_child" as const,
-                fromPersonId: created.id,
-                toPersonId: relationAnchorPerson.id,
-              },
-            ]
-          : relationKind === "child"
-            ? [
-                {
-                  type: "parent_child" as const,
-                  fromPersonId: relationAnchorPerson.id,
-                  toPersonId: created.id,
-                },
-              ]
-            : relationKind === "sibling"
-              ? anchorParentIds.length > 0
-                ? anchorParentIds.map((parentId) => ({
-                    type: "parent_child" as const,
-                    fromPersonId: parentId,
-                    toPersonId: created.id,
-                  }))
-                : [
-                    {
-                      type: "sibling" as const,
-                      fromPersonId: relationAnchorPerson.id,
-                      toPersonId: created.id,
-                    },
-                  ]
-              : [
-                  {
-                    type: "spouse" as const,
-                    fromPersonId: relationAnchorPerson.id,
-                    toPersonId: created.id,
-                    spouseStatus: "active" as const,
-                    startDateText:
-                      createForm.relationshipStartDateText.trim() || undefined,
-                  },
-                ];
-
-      for (const relationshipPayload of relationshipPayloads) {
-        const relRes = await fetch(`${API}/api/trees/${treeId}/relationships`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(relationshipPayload),
-        });
-        if (!relRes.ok) {
-          const err = (await relRes.json()) as { error?: string };
-          throw new Error(err.error ?? "Person added but relationship failed");
-        }
-      }
+      await submitRelationshipPayloads(
+        buildRelationshipPayloads(
+          relationAnchorPerson.id,
+          created.id,
+          editInteraction.relationKind,
+        ),
+        "Person added, but that relationship already existed.",
+      );
 
       await onConstellationChanged?.();
       if (editMode) {
-        setSelectedPersonId(created.id);
-        setEditInteraction({ mode: "node-selected", personId: created.id });
+        const nextSelectedPersonId =
+          editInteraction.relationKind === "parent"
+            ? relationAnchorPerson.id
+            : created.id;
+        setSelectedPersonId(nextSelectedPersonId);
+        setEditInteraction({ mode: "node-selected", personId: nextSelectedPersonId });
       } else {
         selectPerson(created.id);
         setTimeout(() => selectPerson(created.id), 220);
         setEditInteraction({ mode: "idle" });
       }
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to add person");
+      setCreateError(
+        err instanceof Error
+          ? err.message
+          : relationTargetMode === "existing"
+            ? "Failed to connect person"
+            : "Failed to add person",
+      );
     } finally {
       setCreatingPerson(false);
     }
   }, [
     API,
+    buildRelationshipPayloads,
     createForm.birthDateText,
     createForm.deathDateText,
     createForm.displayName,
     createForm.essenceLine,
     createForm.isLiving,
-    createForm.relationshipStartDateText,
     editInteraction,
-    onConstellationChanged,
     editMode,
-    relationships,
+    existingPersonId,
+    onConstellationChanged,
     relationAnchorPerson,
+    relationTargetMode,
     selectPerson,
+    submitRelationshipPayloads,
     treeId,
   ]);
 
@@ -672,7 +873,7 @@ function TreeCanvasInner({
     treeId,
   ]);
 
-  const deleteRelationship = useCallback(async () => {
+  const disconnectRelationship = useCallback(async () => {
     if (!editingRelationship) return;
     setSavingRelationship(true);
     setCreateError(null);
@@ -686,7 +887,7 @@ function TreeCanvasInner({
       );
       if (!res.ok && res.status !== 204) {
         const err = (await res.json()) as { error?: string };
-        throw new Error(err.error ?? "Failed to delete relationship");
+        throw new Error(err.error ?? "Failed to disconnect relationship");
       }
       await onConstellationChanged?.();
       setEditInteraction(
@@ -697,7 +898,7 @@ function TreeCanvasInner({
       resetRelationshipEditorDrafts();
     } catch (err) {
       setCreateError(
-        err instanceof Error ? err.message : "Failed to delete relationship",
+        err instanceof Error ? err.message : "Failed to disconnect relationship",
       );
     } finally {
       setSavingRelationship(false);
@@ -713,6 +914,7 @@ function TreeCanvasInner({
 
   const closeCreateModal = useCallback(() => {
     setCreateError(null);
+    setExistingPersonId("");
     setShowAdvancedForm(false);
     if (pendingRelation) {
       setEditInteraction({
@@ -848,6 +1050,75 @@ function TreeCanvasInner({
             {editMode ? "Exit edit mode" : "Edit constellation"}
           </button>
 
+          {editMode && (
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                color: "var(--ink-faded)",
+                background: "rgba(255,255,255,0.28)",
+                border: `1px solid ${CONTROL_BORDER}`,
+                borderRadius: 999,
+                padding: "6px 10px",
+              }}
+            >
+              Click a person to add family. Click a connection line to edit or disconnect it.
+            </div>
+          )}
+
+          {!editMode && selectedPerson && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: 4,
+                borderRadius: 999,
+                border: `1px solid ${CONTROL_BORDER}`,
+                background: "rgba(255,255,255,0.28)",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  color: "var(--ink-faded)",
+                  paddingLeft: 6,
+                  paddingRight: 2,
+                }}
+              >
+                Lineage
+              </span>
+              {([
+                ["full", "Full tree"],
+                ["birth", "Birth family"],
+                ["household", "Household"],
+              ] as const).map(([mode, label]) => {
+                const active = lineageMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setLineageMode(mode)}
+                    style={{
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 11,
+                      color: active ? "white" : "var(--ink-faded)",
+                      background: active ? "var(--moss)" : "transparent",
+                      border: active ? "1px solid rgba(78,93,66,0.28)" : "1px solid transparent",
+                      borderRadius: 999,
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <button
             onClick={onDriftClick}
             style={{
@@ -961,36 +1232,31 @@ function TreeCanvasInner({
           gap: 4,
         }}
       >
-        {[
-          { label: "+", action: () => reactFlow.zoomIn({ duration: 300 }) },
-          { label: "−", action: () => reactFlow.zoomOut({ duration: 300 }) },
-          { label: "⊕", action: handleLocateMe, disabled: !currentUserPersonId, title: "Locate me" },
-        ].map(({ label, action, disabled, title }) => (
-          <button
-            key={label}
-            onClick={action}
-            disabled={disabled}
-            title={title}
-            style={{
-              width: 32,
-              height: 32,
-              background: CONTROL_SURFACE,
-              border: `1px solid ${CONTROL_BORDER}`,
-              borderRadius: 999,
-              cursor: disabled ? "default" : "pointer",
-              fontFamily: "var(--font-ui)",
-              fontSize: label === "⊕" ? 14 : 18,
-              color: disabled ? "var(--rule)" : label === "⊕" ? "var(--moss)" : "var(--ink)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backdropFilter: "blur(10px)",
-              boxShadow: "0 10px 22px rgba(28,25,21,0.06)",
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        <button
+          onClick={handleZoomIn}
+          style={zoomControlStyle}
+        >
+          +
+        </button>
+        <button
+          onClick={handleZoomOut}
+          style={zoomControlStyle}
+        >
+          −
+        </button>
+        <button
+          onClick={handleLocateMe}
+          disabled={!currentUserPersonId}
+          title="Locate me"
+          style={{
+            ...zoomControlStyle,
+            cursor: !currentUserPersonId ? "default" : "pointer",
+            fontSize: 14,
+            color: !currentUserPersonId ? "var(--rule)" : "var(--moss)",
+          }}
+        >
+          ⊕
+        </button>
       </div>
 
       {/* Legend button */}
@@ -1197,14 +1463,13 @@ function TreeCanvasInner({
         onNodeMouseLeave={handleNodeMouseLeave}
         onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
-        onMove={refreshSelectedCenter}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         panOnScroll={false}
         zoomOnScroll={true}
         minZoom={0.15}
         maxZoom={2.5}
-        style={{ background: "transparent", paddingTop: 68 }}
+        style={{ background: "transparent", paddingTop: CANVAS_TOP_PADDING }}
         proOptions={{ hideAttribution: true }}
       >
         <Background
@@ -1214,6 +1479,38 @@ function TreeCanvasInner({
           color="rgba(177,165,145,0.22)"
         />
       </ReactFlow>
+
+      {projectedParentPlaceholderGroups.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 16,
+            overflow: "hidden",
+          }}
+        >
+          {projectedParentPlaceholderGroups.map((group) => (
+            <ParentPlaceholderOverlay
+              key={group.id}
+              branchY={group.branchY}
+              childAnchors={group.childAnchors}
+              actualParentAnchors={group.actualParentAnchors}
+              placeholderCenters={group.placeholderCenters}
+              dimmed={group.isDimmed}
+              zoom={viewport.zoom}
+              onPlaceholderClick={() =>
+                openRelationFormForPerson(
+                  selectedPersonId && group.memberIds.includes(selectedPersonId)
+                    ? selectedPersonId
+                    : group.anchorPersonId,
+                  "parent",
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
 
       {/* Edit-mode relationship ghosts aligned to family geometry */}
       {editMode &&
@@ -1269,81 +1566,95 @@ function TreeCanvasInner({
                 marginBottom: 10,
               }}
             >
-              Add person
+              {relationTargetMode === "existing" ? "Connect existing person" : "Add person"}
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
-              <FormRow
-                label="Name *"
-                value={createForm.displayName}
-                onChange={(value) =>
-                  setCreateForm((s) => ({ ...s, displayName: value }))
-                }
-                placeholder="Full name"
-              />
-              <button
-                onClick={() => setShowAdvancedForm((v) => !v)}
+              <div
                 style={{
-                  ...subtleButtonStyle,
+                  display: "inline-flex",
+                  gap: 6,
+                  padding: 4,
+                  borderRadius: 999,
+                  background: "var(--paper-deep)",
+                  border: "1px solid var(--rule)",
                   justifySelf: "start",
-                  padding: "6px 10px",
                 }}
-                disabled={creatingPerson}
               >
-                {showAdvancedForm ? "Hide details" : "Add details (optional)"}
-              </button>
-              {showAdvancedForm && (
+                <button
+                  onClick={() => {
+                    setRelationTargetMode("existing");
+                    setCreateError(null);
+                  }}
+                  style={{
+                    ...subtleButtonStyle,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    borderColor:
+                      relationTargetMode === "existing" ? "rgba(78,93,66,0.35)" : "transparent",
+                    background:
+                      relationTargetMode === "existing" ? "rgba(78,93,66,0.12)" : "transparent",
+                    color:
+                      relationTargetMode === "existing" ? "var(--moss)" : "var(--ink-faded)",
+                  }}
+                  disabled={creatingPerson}
+                >
+                  Connect existing
+                </button>
+                <button
+                  onClick={() => {
+                    setRelationTargetMode("new");
+                    setCreateError(null);
+                  }}
+                  style={{
+                    ...subtleButtonStyle,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    borderColor:
+                      relationTargetMode === "new" ? "rgba(78,93,66,0.35)" : "transparent",
+                    background:
+                      relationTargetMode === "new" ? "rgba(78,93,66,0.12)" : "transparent",
+                    color: relationTargetMode === "new" ? "var(--moss)" : "var(--ink-faded)",
+                  }}
+                  disabled={creatingPerson}
+                >
+                  Add new
+                </button>
+              </div>
+
+              {relationTargetMode === "existing" ? (
                 <>
-                  <FormRow
-                    label="Essence line"
-                    value={createForm.essenceLine}
-                    onChange={(value) =>
-                      setCreateForm((s) => ({ ...s, essenceLine: value }))
-                    }
-                    placeholder="Short defining line"
-                  />
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 8,
-                    }}
-                  >
-                    <FormRow
-                      label="Birth"
-                      value={createForm.birthDateText}
-                      onChange={(value) =>
-                        setCreateForm((s) => ({ ...s, birthDateText: value }))
-                      }
-                      placeholder="e.g. 1948"
-                    />
-                    <FormRow
-                      label="Death"
-                      value={createForm.deathDateText}
-                      onChange={(value) =>
-                        setCreateForm((s) => ({ ...s, deathDateText: value }))
-                      }
-                      placeholder="e.g. 2021"
-                    />
-                  </div>
                   <label
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
+                      display: "grid",
+                      gap: 5,
                       fontFamily: "var(--font-ui)",
                       fontSize: 12,
-                      color: "var(--ink-soft)",
+                      color: "var(--ink-faded)",
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={createForm.isLiving}
-                      onChange={(e) =>
-                        setCreateForm((s) => ({ ...s, isLiving: e.target.checked }))
-                      }
-                    />
-                    Living
+                    Person
+                    <select
+                      value={existingPersonId}
+                      onChange={(event) => setExistingPersonId(event.target.value)}
+                      style={{
+                        border: "1px solid var(--rule)",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        fontFamily: "var(--font-body)",
+                        fontSize: 14,
+                        color: "var(--ink)",
+                        background: "var(--paper-deep)",
+                      }}
+                      disabled={creatingPerson}
+                    >
+                      <option value="">Choose someone already in this tree</option>
+                      {existingRelationCandidates.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   {pendingRelation.kind === "spouse" && (
                     <FormRow
@@ -1357,6 +1668,96 @@ function TreeCanvasInner({
                       }
                       placeholder="e.g. 1974"
                     />
+                  )}
+                </>
+              ) : (
+                <>
+                  <FormRow
+                    label="Name *"
+                    value={createForm.displayName}
+                    onChange={(value) =>
+                      setCreateForm((s) => ({ ...s, displayName: value }))
+                    }
+                    placeholder="Full name"
+                  />
+                  <button
+                    onClick={() => setShowAdvancedForm((v) => !v)}
+                    style={{
+                      ...subtleButtonStyle,
+                      justifySelf: "start",
+                      padding: "6px 10px",
+                    }}
+                    disabled={creatingPerson}
+                  >
+                    {showAdvancedForm ? "Hide details" : "Add details (optional)"}
+                  </button>
+                  {showAdvancedForm && (
+                    <>
+                      <FormRow
+                        label="Essence line"
+                        value={createForm.essenceLine}
+                        onChange={(value) =>
+                          setCreateForm((s) => ({ ...s, essenceLine: value }))
+                        }
+                        placeholder="Short defining line"
+                      />
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 8,
+                        }}
+                      >
+                        <FormRow
+                          label="Birth"
+                          value={createForm.birthDateText}
+                          onChange={(value) =>
+                            setCreateForm((s) => ({ ...s, birthDateText: value }))
+                          }
+                          placeholder="e.g. 1948"
+                        />
+                        <FormRow
+                          label="Death"
+                          value={createForm.deathDateText}
+                          onChange={(value) =>
+                            setCreateForm((s) => ({ ...s, deathDateText: value }))
+                          }
+                          placeholder="e.g. 2021"
+                        />
+                      </div>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 12,
+                          color: "var(--ink-soft)",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={createForm.isLiving}
+                          onChange={(e) =>
+                            setCreateForm((s) => ({ ...s, isLiving: e.target.checked }))
+                          }
+                        />
+                        Living
+                      </label>
+                      {pendingRelation.kind === "spouse" && (
+                        <FormRow
+                          label="Relationship start (optional)"
+                          value={createForm.relationshipStartDateText}
+                          onChange={(value) =>
+                            setCreateForm((s) => ({
+                              ...s,
+                              relationshipStartDateText: value,
+                            }))
+                          }
+                          placeholder="e.g. 1974"
+                        />
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -1388,7 +1789,13 @@ function TreeCanvasInner({
                 style={primaryButtonStyle}
                 disabled={creatingPerson}
               >
-                {creatingPerson ? "Adding…" : "Add to constellation"}
+                {creatingPerson
+                  ? relationTargetMode === "existing"
+                    ? "Connecting…"
+                    : "Adding…"
+                  : relationTargetMode === "existing"
+                    ? "Connect in constellation"
+                    : "Add to constellation"}
               </button>
             </div>
           </div>
@@ -1429,7 +1836,7 @@ function TreeCanvasInner({
                 marginBottom: 10,
               }}
             >
-              Edit relationship
+              Edit connection
             </div>
             <label
               style={{
@@ -1529,7 +1936,7 @@ function TreeCanvasInner({
             )}
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
               <button
-                onClick={deleteRelationship}
+                onClick={disconnectRelationship}
                 style={{
                   ...subtleButtonStyle,
                   color: "var(--rose)",
@@ -1537,7 +1944,7 @@ function TreeCanvasInner({
                 }}
                 disabled={savingRelationship}
               >
-                Remove
+                Disconnect
               </button>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -1574,16 +1981,25 @@ function TreeCanvasInner({
 
 function ParentChildEdge({
   id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
   data,
 }: EdgeProps<TreeEdge>) {
   const edgeData = data as ConstellationEdgeData | undefined;
   const stroke = "rgba(177, 165, 145, 0.95)";
   const opacity = edgeData?.opacity ?? 1;
   const strokeWidth = edgeData?.strokeWidth ?? 1.3;
+  const sourceX = edgeData?.renderSourceX;
+  const sourceY = edgeData?.renderSourceY;
+  const targetX = edgeData?.renderTargetX;
+  const targetY = edgeData?.renderTargetY;
+
+  if (
+    sourceX === undefined ||
+    sourceY === undefined ||
+    targetX === undefined ||
+    targetY === undefined
+  ) {
+    return null;
+  }
 
   if (
     edgeData?.unionX === undefined ||
@@ -1595,7 +2011,14 @@ function ParentChildEdge({
       `M ${sourceX} ${sourceY}`,
       `C ${sourceX} ${midY}, ${targetX} ${midY}, ${targetX} ${targetY}`,
     ].join(" ");
-    return <BaseEdge id={id} path={path} style={{ stroke, opacity, strokeWidth }} />;
+    return (
+      <BaseEdge
+        id={id}
+        path={path}
+        interactionWidth={32}
+        style={{ stroke, opacity, strokeWidth, cursor: "pointer" }}
+      />
+    );
   }
 
   const unionX = edgeData.unionX;
@@ -1610,21 +2033,38 @@ function ParentChildEdge({
     `L ${targetX} ${targetY}`,
   ].join(" ");
 
-  return <BaseEdge id={id} path={path} style={{ stroke, opacity, strokeWidth }} />;
+  return (
+    <BaseEdge
+      id={id}
+      path={path}
+      interactionWidth={32}
+      style={{ stroke, opacity, strokeWidth, cursor: "pointer" }}
+    />
+  );
 }
 
 function SpouseEdge({
   id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
   data,
 }: EdgeProps<TreeEdge>) {
   const edgeData = data as ConstellationEdgeData | undefined;
   const stroke = "rgba(177, 165, 145, 0.95)";
   const opacity = edgeData?.opacity ?? 1;
   const strokeWidth = edgeData?.strokeWidth ?? 1.2;
+  const sourceX = edgeData?.renderSourceX;
+  const sourceY = edgeData?.renderSourceY;
+  const targetX = edgeData?.renderTargetX;
+  const targetY = edgeData?.renderTargetY;
+
+  if (
+    sourceX === undefined ||
+    sourceY === undefined ||
+    targetX === undefined ||
+    targetY === undefined
+  ) {
+    return null;
+  }
+
   const controlY = Math.min(sourceY, targetY) - 18;
   const path = [
     `M ${sourceX} ${sourceY}`,
@@ -1634,11 +2074,13 @@ function SpouseEdge({
     <BaseEdge
       id={id}
       path={path}
+      interactionWidth={32}
       style={{
         stroke,
         opacity,
         strokeWidth,
         strokeDasharray: edgeData?.strokeDasharray,
+        cursor: "pointer",
       }}
     />
   );
@@ -1649,6 +2091,159 @@ function relationLabel(kind: EditRelationKind): string {
   if (kind === "child") return "Child";
   if (kind === "sibling") return "Sibling";
   return "Spouse";
+}
+
+function ParentPlaceholderOverlay({
+  branchY,
+  childAnchors,
+  actualParentAnchors,
+  placeholderCenters,
+  dimmed,
+  zoom,
+  onPlaceholderClick,
+}: {
+  branchY: number | null;
+  childAnchors: Array<{ personId: string; x: number; y: number }>;
+  actualParentAnchors: Array<{ personId: string; x: number; y: number }>;
+  placeholderCenters: Array<{ id: string; x: number; y: number }>;
+  dimmed: boolean;
+  zoom: number;
+  onPlaceholderClick: () => void;
+}) {
+  const bubbleSize = 58;
+  const opacity = dimmed ? 0.18 : 0.92;
+  const childXs = childAnchors.map((anchor) => anchor.x);
+  const hasFullPlaceholderParents = actualParentAnchors.length === 0 && placeholderCenters.length === 2;
+  const computedBranchY = branchY;
+  const showLabel = zoom >= 0.72;
+
+  return (
+    <>
+      <svg
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          overflow: "visible",
+          pointerEvents: "none",
+        }}
+      >
+        {hasFullPlaceholderParents && computedBranchY !== null && (
+          <>
+            <line
+              x1={placeholderCenters[0]!.x}
+              y1={placeholderCenters[0]!.y}
+              x2={placeholderCenters[1]!.x}
+              y2={placeholderCenters[1]!.y}
+              stroke="rgba(177,165,145,0.78)"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+              opacity={opacity}
+            />
+            <line
+              x1={(placeholderCenters[0]!.x + placeholderCenters[1]!.x) / 2}
+              y1={placeholderCenters[0]!.y + bubbleSize / 2 - 4}
+              x2={(placeholderCenters[0]!.x + placeholderCenters[1]!.x) / 2}
+              y2={computedBranchY}
+              stroke="rgba(177,165,145,0.78)"
+              strokeWidth="1.5"
+              opacity={opacity}
+            />
+            <line
+              x1={Math.min(...childXs)}
+              y1={computedBranchY}
+              x2={Math.max(...childXs)}
+              y2={computedBranchY}
+              stroke="rgba(177,165,145,0.78)"
+              strokeWidth="1.5"
+              opacity={opacity}
+            />
+            {childAnchors.map((anchor) => (
+              <line
+                key={anchor.personId}
+                x1={anchor.x}
+                y1={computedBranchY}
+                x2={anchor.x}
+                y2={anchor.y}
+                stroke="rgba(177,165,145,0.78)"
+                strokeWidth="1.5"
+                opacity={opacity}
+              />
+            ))}
+          </>
+        )}
+        {actualParentAnchors.length === 1 &&
+          placeholderCenters.length === 1 && (
+            <line
+              x1={actualParentAnchors[0]!.x}
+              y1={actualParentAnchors[0]!.y}
+              x2={placeholderCenters[0]!.x}
+              y2={placeholderCenters[0]!.y}
+              stroke="rgba(177,165,145,0.78)"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+              opacity={opacity}
+            />
+          )}
+      </svg>
+      {placeholderCenters.map((placeholder) => (
+        <div
+          key={placeholder.id}
+          style={{
+            position: "absolute",
+            left: placeholder.x - bubbleSize / 2,
+            top: placeholder.y - bubbleSize / 2,
+            zIndex: 17,
+            display: "grid",
+            justifyItems: "center",
+            gap: 6,
+            pointerEvents: "auto",
+            opacity,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onPlaceholderClick}
+            title="Add parent"
+            style={{
+              width: bubbleSize,
+              height: bubbleSize,
+              borderRadius: "50%",
+              border: "1px dashed rgba(78,93,66,0.45)",
+              background: "rgba(246,241,231,0.74)",
+              color: "var(--moss)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 24,
+              lineHeight: 1,
+              cursor: "pointer",
+              boxShadow: "0 8px 20px rgba(28,25,21,0.08)",
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            +
+          </button>
+          {showLabel && (
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                color: "var(--ink-faded)",
+                background: "rgba(246,241,231,0.88)",
+                border: "1px solid rgba(177,165,145,0.5)",
+                borderRadius: 999,
+                padding: "3px 8px",
+                whiteSpace: "nowrap",
+                boxShadow: "0 6px 16px rgba(28,25,21,0.06)",
+              }}
+            >
+              Add parent
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
 }
 
 function RelationGhost({
@@ -1777,6 +2372,23 @@ const subtleButtonStyle: React.CSSProperties = {
   borderRadius: 7,
   padding: "8px 12px",
   cursor: "pointer",
+};
+
+const zoomControlStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  background: CONTROL_SURFACE,
+  border: `1px solid ${CONTROL_BORDER}`,
+  borderRadius: 999,
+  cursor: "pointer",
+  fontFamily: "var(--font-ui)",
+  fontSize: 18,
+  color: "var(--ink)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 10px 22px rgba(28,25,21,0.06)",
 };
 
 export function TreeCanvas(props: TreeCanvasProps) {
