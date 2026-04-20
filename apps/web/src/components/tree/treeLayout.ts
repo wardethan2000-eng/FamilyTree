@@ -20,7 +20,7 @@ const GENERATION_GAP = 280;  // vertical distance between generation rows
 const EDIT_SLOT_GAP = 104;
 const ROW_GAP = 112;
 const SPOUSE_ATTACH_GAP = 144;
-const MIN_LANE_GAP = 160;
+const MIN_LANE_GAP = 200;
 
 function sortedPair(leftId: string, rightId: string): [string, string] {
   return leftId <= rightId ? [leftId, rightId] : [rightId, leftId];
@@ -948,6 +948,8 @@ function alignParentsOverChildren(
           attachedAnchorByPersonId,
           componentMembersByPersonId,
           positions,
+          undefined,
+          delta,
         );
         continue;
       }
@@ -957,6 +959,7 @@ function alignParentsOverChildren(
       if (Math.abs(delta) >= 1) {
         changed = true;
       }
+
       const shiftedComponentKeys = new Set<string>();
       for (const parentId of parentIds) {
         const componentKey = (componentMembersByPersonId.get(parentId) ?? [parentId])
@@ -973,14 +976,20 @@ function alignParentsOverChildren(
           componentMembersByPersonId,
           positions,
         );
-        clearLaneOverlapAround(
-          parentId,
-          activeSpousesByPersonId,
-          attachedAnchorByPersonId,
-          componentMembersByPersonId,
-          positions,
-        );
       }
+
+      // Clear overlaps once per parent group, treating all parents as a unit
+      const firstParentId = parentIds[0]!;
+      const otherParentIds = parentIds.slice(1);
+      clearLaneOverlapAround(
+        firstParentId,
+        activeSpousesByPersonId,
+        attachedAnchorByPersonId,
+        componentMembersByPersonId,
+        positions,
+        otherParentIds,
+        delta,
+      );
     }
     if (!changed) break;
   }
@@ -992,11 +1001,33 @@ function clearLaneOverlapAround(
   attachedAnchorByPersonId: Map<string, string>,
   componentMembersByPersonId: Map<string, string[]>,
   positions: Map<string, { x: number; y: number }>,
+  extraAnchorIds?: string[],
+  movementDelta?: number,
 ) {
   const anchorPosition = positions.get(personId);
   if (!anchorPosition) return;
 
   const anchorMembers = new Set(componentMembersByPersonId.get(personId) ?? [personId]);
+  if (extraAnchorIds) {
+    for (const extraId of extraAnchorIds) {
+      anchorMembers.add(extraId);
+      for (const memberId of componentMembersByPersonId.get(extraId) ?? [extraId]) {
+        anchorMembers.add(memberId);
+      }
+    }
+  }
+
+  // Compute full extent of the anchor group
+  let anchorMinX = anchorPosition.x;
+  let anchorMaxX = anchorPosition.x;
+  for (const memberId of anchorMembers) {
+    const memberPos = positions.get(memberId);
+    if (memberPos && memberPos.y === anchorPosition.y) {
+      anchorMinX = Math.min(anchorMinX, memberPos.x);
+      anchorMaxX = Math.max(anchorMaxX, memberPos.x);
+    }
+  }
+
   const sameLaneEntries = [...positions.entries()]
     .filter(
       ([otherId, otherPosition]) =>
@@ -1004,10 +1035,49 @@ function clearLaneOverlapAround(
     )
     .sort(([, left], [, right]) => left.x - right.x);
 
-  for (let index = sameLaneEntries.length - 1; index >= 0; index -= 1) {
-    const [otherId, otherPosition] = sameLaneEntries[index]!;
-    if (otherPosition.x >= anchorPosition.x) continue;
-    const gap = anchorPosition.x - otherPosition.x;
+  // Push components that ended up inside the anchor group's extent to the
+  // appropriate side based on the movement direction.
+  if (movementDelta && Math.abs(movementDelta) > 1) {
+    const interiorProcessedKeys = new Set<string>();
+    for (const [otherId, otherPosition] of sameLaneEntries) {
+      // Component is "interior" if it's between anchorMinX and anchorMaxX
+      if (otherPosition.x <= anchorMinX || otherPosition.x >= anchorMaxX) continue;
+      const otherKey = (componentMembersByPersonId.get(otherId) ?? [otherId])
+        .slice().sort().join("|");
+      if (interiorProcessedKeys.has(otherKey)) continue;
+      interiorProcessedKeys.add(otherKey);
+      if (movementDelta < 0) {
+        // Anchor moved left: push interior component to left of anchor
+        const pushDelta = anchorMinX - MIN_LANE_GAP - otherPosition.x;
+        shiftCluster(
+          otherId, pushDelta,
+          activeSpousesByPersonId, attachedAnchorByPersonId,
+          componentMembersByPersonId, positions,
+        );
+      } else {
+        // Anchor moved right: push interior component to right of anchor
+        const pushDelta = anchorMaxX + MIN_LANE_GAP - otherPosition.x;
+        shiftCluster(
+          otherId, pushDelta,
+          activeSpousesByPersonId, attachedAnchorByPersonId,
+          componentMembersByPersonId, positions,
+        );
+      }
+    }
+  }
+
+  // Re-read sameLaneEntries after interior push
+  const updatedSameLaneEntries = [...positions.entries()]
+    .filter(
+      ([otherId, otherPosition]) =>
+        otherPosition.y === anchorPosition.y && !anchorMembers.has(otherId),
+    )
+    .sort(([, left], [, right]) => left.x - right.x);
+
+  for (let index = updatedSameLaneEntries.length - 1; index >= 0; index -= 1) {
+    const [otherId, otherPosition] = updatedSameLaneEntries[index]!;
+    if (otherPosition.x >= anchorMinX) continue;
+    const gap = anchorMinX - otherPosition.x;
     if (gap >= MIN_LANE_GAP) break;
     shiftCluster(
       otherId,
@@ -1019,9 +1089,9 @@ function clearLaneOverlapAround(
     );
   }
 
-  for (const [otherId, otherPosition] of sameLaneEntries) {
-    if (otherPosition.x <= anchorPosition.x) continue;
-    const gap = otherPosition.x - anchorPosition.x;
+  for (const [otherId, otherPosition] of updatedSameLaneEntries) {
+    if (otherPosition.x <= anchorMaxX) continue;
+    const gap = otherPosition.x - anchorMaxX;
     if (gap >= MIN_LANE_GAP) break;
     shiftCluster(
       otherId,
