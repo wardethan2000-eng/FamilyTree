@@ -75,6 +75,15 @@ Features to implement:
   - The UX should distinguish between "referenced media" and "preserved media"
     without making the user think about storage architecture.
 
+- [ ] Mobile share capture
+  - Let users create memories directly from Android and iPhone share sheets.
+  - Shared photos, videos, audio, links, and text should open a prefilled
+    memory composer rather than a generic upload flow.
+  - The flow should support "save now, enrich later" while still nudging users
+    to add at least one memory signal such as person, event, place, or meaning.
+  - This should make capture feel lightweight without turning Heirloom into a
+    generic camera roll backup product.
+
 - [ ] Batch import from folder / ZIP
   - Let a user drag in a folder or archive of media and ingest many items at
     once.
@@ -163,6 +172,14 @@ Features to implement:
 - [ ] Family-wide contribution drives
   - Support temporary collection efforts for funerals, anniversaries, reunions,
     birthdays, and family projects.
+
+- [ ] Future delivery memories
+  - Let parents or guardians create journal entries, voice notes, photos, and
+    short videos intended for a child to access later in life.
+  - Support unlock rules such as date, milestone, or steward approval rather
+    than requiring child accounts in the first version.
+  - Treat these as intentional legacy artifacts attached to a person in the
+    family context, not as private chat or a generic messaging system.
 
 Definition of done for this phase:
 
