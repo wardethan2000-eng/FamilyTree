@@ -16,9 +16,9 @@ const NODE_WIDTH = 112;
 const NODE_HEIGHT = 156;
 const PORTRAIT_SIZE = 64;
 const PORTRAIT_RADIUS = PORTRAIT_SIZE / 2;
-const GENERATION_GAP = 280;  // vertical distance between generation rows
+const GENERATION_GAP = 240;  // vertical distance between generation rows
 const EDIT_SLOT_GAP = 32;
-const ROW_GAP = 112;
+const ROW_GAP = 100;
 const SPOUSE_ATTACH_GAP = 144;
 const FAMILY_GROUP_GAP = 80;   // extra horizontal gap between different parent-family groups
 const FAMILY_BAR_STAGGER = 16; // vertical offset between successive parent-couple branch bars
@@ -558,22 +558,89 @@ function computeLanePositions(
     tokenWidths.reduce((sum, width) => sum + width, 0) +
     Math.max(0, tokens.length - 1) * ROW_GAP +
     familyTransitionGaps.reduce<number>((sum, gap) => sum + gap, 0);
-  let cursorX = -totalWidth / 2;
 
-  tokens.forEach((token, index) => {
-    const tokenWidth = tokenWidths[index] ?? NODE_WIDTH;
-    const anchorCenterX = cursorX + NODE_WIDTH / 2;
-    positions.set(token.anchorId, anchorCenterX);
+  // Build family segments: contiguous runs sharing the same parentSignature.
+  type TokenSegment = {
+    tokens: RowToken[];
+    widths: number[];
+    totalWidth: number;
+    parentSignature: string;
+    desiredCenter: number | null;
+    interGapBefore: number;
+  };
+  const tokenSegments: TokenSegment[] = [];
+  let segIdx = 0;
+  while (segIdx < tokens.length) {
+    const sig = tokens[segIdx]!.parentSignature;
+    const segStart = segIdx;
+    while (segIdx < tokens.length && tokens[segIdx]!.parentSignature === sig) {
+      segIdx++;
+    }
+    const segTokens = tokens.slice(segStart, segIdx);
+    const segWidths = segTokens.map((_, j) => tokenWidths[segStart + j] ?? NODE_WIDTH);
+    const segTotalWidth =
+      segWidths.reduce((sum, w) => sum + w, 0) +
+      Math.max(0, segTokens.length - 1) * ROW_GAP;
+    const interGapBefore = segStart > 0 ? (familyTransitionGaps[segStart - 1] ?? 0) : 0;
+    tokenSegments.push({
+      tokens: segTokens,
+      widths: segWidths,
+      totalWidth: segTotalWidth,
+      parentSignature: sig,
+      desiredCenter: null,
+      interGapBefore,
+    });
+  }
 
+  // Compute desired center for each parented segment from known parent positions.
+  for (const seg of tokenSegments) {
+    if (!seg.parentSignature.startsWith("parents:")) continue;
+    if (!existingPositions || existingPositions.size === 0) continue;
+    const parentIds = seg.parentSignature.slice("parents:".length).split("|").filter(Boolean);
+    const parentCenters = parentIds
+      .map((id) => existingPositions.get(id))
+      .filter((pos): pos is { x: number; y: number } => Boolean(pos))
+      .map((pos) => pos.x + NODE_WIDTH / 2);
+    if (parentCenters.length > 0) {
+      seg.desiredCenter = average(parentCenters);
+    }
+  }
+
+  // Place segments greedily left-to-right, centering each parented segment
+  // over its parents while preventing overlap with previous segments.
+  let prevRightEdge: number | null = null;
+  const segmentStartXs: number[] = [];
+  for (const seg of tokenSegments) {
+    const interGap = prevRightEdge !== null ? ROW_GAP + seg.interGapBefore : 0;
+    let startX: number;
+    if (seg.desiredCenter !== null) {
+      const anchoredStart = seg.desiredCenter - seg.totalWidth / 2;
+      startX =
+        prevRightEdge !== null
+          ? Math.max(anchoredStart, prevRightEdge + interGap)
+          : anchoredStart;
+    } else {
+      startX = prevRightEdge !== null ? prevRightEdge + interGap : -totalWidth / 2;
+    }
+    segmentStartXs.push(startX);
+    prevRightEdge = startX + seg.totalWidth;
+  }
+
+  // Assign positions within each segment.
+  for (let si = 0; si < tokenSegments.length; si++) {
+    const seg = tokenSegments[si]!;
+    let cursorX = segmentStartXs[si]!;
+    for (let ti = 0; ti < seg.tokens.length; ti++) {
+      const token = seg.tokens[ti]!;
+      const tokenWidth = seg.widths[ti] ?? NODE_WIDTH;
+      const anchorCenterX = cursorX + NODE_WIDTH / 2;
+      positions.set(token.anchorId, anchorCenterX);
       token.attachedSpouseIds.forEach((spouseId, spouseIndex) => {
-        positions.set(
-          spouseId,
-          anchorCenterX + (spouseIndex + 1) * SPOUSE_ATTACH_GAP,
-        );
+        positions.set(spouseId, anchorCenterX + (spouseIndex + 1) * SPOUSE_ATTACH_GAP);
       });
-
-    cursorX += tokenWidth + ROW_GAP + (familyTransitionGaps[index] ?? 0);
-  });
+      cursorX += tokenWidth + ROW_GAP;
+    }
+  }
 
   return { positions, componentMembersByPersonId };
 }
