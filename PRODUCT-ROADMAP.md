@@ -93,6 +93,9 @@ Features to implement:
     YouTube, Vimeo, iCloud-shared links, and generic external URLs.
   - The UX should distinguish between "referenced media" and "preserved media"
     without making the user think about storage architecture.
+  - TODO after Drive-link V1: add Google Drive Picker so users can choose Drive
+    files directly instead of pasting share URLs, while keeping pasted links as
+    a fallback path.
 
 - [ ] Mobile share capture
   - Let users create memories directly from Android and iPhone share sheets.

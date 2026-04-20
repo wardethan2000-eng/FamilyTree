@@ -20,6 +20,10 @@ export interface LightboxMemory {
   dateOfEventText?: string | null;
   mediaUrl?: string | null;
   mimeType?: string | null;
+  linkedMediaProvider?: "google_drive" | null;
+  linkedMediaOpenUrl?: string | null;
+  linkedMediaSourceUrl?: string | null;
+  linkedMediaLabel?: string | null;
   treeVisibilityLevel?: TreeVisibilityLevel;
   treeVisibilityIsOverride?: boolean;
 }
@@ -169,6 +173,25 @@ export function MemoryLightbox({
             >
               {memory.dateOfEventText}
             </span>
+          )}
+          {memory.linkedMediaOpenUrl && (
+            <div style={{ marginTop: 6 }}>
+              <a
+                href={memory.linkedMediaOpenUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: "rgba(246,241,231,0.55)",
+                  textDecoration: "none",
+                }}
+              >
+                Open in Google Drive
+              </a>
+            </div>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -446,6 +469,23 @@ export function MemoryLightbox({
               >
                 {memory.body}
               </p>
+            )}
+            {memory.linkedMediaOpenUrl && (
+              <div style={{ marginTop: 18 }}>
+                <a
+                  href={memory.linkedMediaOpenUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    color: "rgba(246,241,231,0.55)",
+                    textDecoration: "none",
+                  }}
+                >
+                  Open in Google Drive
+                </a>
+              </div>
             )}
           </div>
         )}

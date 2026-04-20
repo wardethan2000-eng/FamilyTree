@@ -33,6 +33,8 @@ interface Step2State {
   title: string;
   body: string;
   file: File | null;
+  attachmentMode: "upload" | "drive_link";
+  driveUrl: string;
 }
 
 interface Step3State {
@@ -71,7 +73,13 @@ export function AddMemoryWizard({
 }: AddMemoryWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [step1, setStep1] = useState<Step1State>({ kind: defaultKind ?? "photo" });
-  const [step2, setStep2] = useState<Step2State>({ title: "", body: "", file: null });
+  const [step2, setStep2] = useState<Step2State>({
+    title: "",
+    body: "",
+    file: null,
+    attachmentMode: "upload",
+    driveUrl: "",
+  });
   const [step3, setStep3] = useState<Step3State>({
     personId: defaultPersonId ?? (people[0]?.id ?? ""),
     taggedPersonIds: defaultPersonId ? [defaultPersonId] : [],
@@ -105,14 +113,19 @@ export function AddMemoryWizard({
 
   const apiBase_ = apiBase ?? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
 
-  const needsFile = step1.kind === "photo" || step1.kind === "voice" || step1.kind === "document";
+  const supportsDriveLink =
+    step1.kind === "photo" || step1.kind === "document" || step1.kind === "other";
+  const needsFile =
+    step1.kind === "photo" || step1.kind === "voice" || step1.kind === "document";
+  const usingDriveLink = supportsDriveLink && step2.attachmentMode === "drive_link";
 
   const canProceedStep2 = useCallback(() => {
     if (!step2.title.trim()) return false;
     if (step1.kind === "story" && !step2.body.trim()) return false;
-    if (needsFile && !step2.file) return false;
+    if (needsFile && !usingDriveLink && !step2.file) return false;
+    if (usingDriveLink && !step2.driveUrl.trim()) return false;
     return true;
-  }, [step1.kind, step2.title, step2.body, step2.file, needsFile]);
+  }, [step1.kind, step2.title, step2.body, step2.file, step2.driveUrl, needsFile, usingDriveLink]);
 
   const handleSubmit = async () => {
     if (!promptId && !step3.personId) return;
@@ -122,7 +135,7 @@ export function AddMemoryWizard({
     try {
       let resolvedMediaId: string | undefined;
 
-      if (step2.file && needsFile) {
+      if (step2.file && needsFile && !usingDriveLink) {
         const presignRes = await fetch(`${apiBase_}/api/trees/${treeId}/media/presign`, {
           method: "POST",
           credentials: "include",
@@ -150,6 +163,12 @@ export function AddMemoryWizard({
       };
       if (step2.body.trim()) body.body = step2.body.trim();
       if (resolvedMediaId) body.mediaId = resolvedMediaId;
+      if (usingDriveLink) {
+        body.linkedMedia = {
+          provider: "google_drive",
+          url: step2.driveUrl.trim(),
+        };
+      }
       if (!promptId) {
         body.taggedPersonIds = step3.taggedPersonIds;
         body.reach = [
@@ -435,11 +454,15 @@ export function AddMemoryWizard({
               }}
             >
               {step1.kind === "photo"
-                ? "Upload a photograph"
+                ? usingDriveLink
+                  ? "Link a Google Drive photograph"
+                  : "Upload a photograph"
                 : step1.kind === "voice"
                 ? "Upload a voice recording"
                 : step1.kind === "document"
-                ? "Upload a document"
+                ? usingDriveLink
+                  ? "Link a Google Drive document"
+                  : "Upload a document"
                 : "Write the memory"}
             </div>
 
@@ -482,8 +505,91 @@ export function AddMemoryWizard({
               />
             </div>
 
+            {supportsDriveLink && (
+              <div style={{ marginBottom: 14 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    color: "var(--ink-faded)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Attachment source
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    padding: 4,
+                    borderRadius: 8,
+                    border: "1px solid var(--rule)",
+                    background: "var(--paper-deep)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setStep2((current) => ({
+                        ...current,
+                        attachmentMode: "upload",
+                        driveUrl: "",
+                      }))
+                    }
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "9px 12px",
+                      cursor: "pointer",
+                      background:
+                        step2.attachmentMode === "upload" ? "var(--paper)" : "transparent",
+                      color:
+                        step2.attachmentMode === "upload"
+                          ? "var(--ink)"
+                          : "var(--ink-faded)",
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 12,
+                    }}
+                  >
+                    Upload file
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setStep2((current) => ({
+                        ...current,
+                        attachmentMode: "drive_link",
+                        file: null,
+                      }))
+                    }
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "9px 12px",
+                      cursor: "pointer",
+                      background:
+                        step2.attachmentMode === "drive_link"
+                          ? "var(--paper)"
+                          : "transparent",
+                      color:
+                        step2.attachmentMode === "drive_link"
+                          ? "var(--ink)"
+                          : "var(--ink-faded)",
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 12,
+                    }}
+                  >
+                    Google Drive link
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* File upload (photo/voice/document) */}
-            {needsFile && (
+            {needsFile && !usingDriveLink && (
               <div style={{ marginBottom: 14 }}>
                 <label
                   style={{
@@ -564,6 +670,57 @@ export function AddMemoryWizard({
                     setStep2((s) => ({ ...s, file: f }));
                   }}
                 />
+              </div>
+            )}
+
+            {usingDriveLink && (
+              <div style={{ marginBottom: 14 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 12,
+                    color: "var(--ink-faded)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Google Drive share URL *
+                </label>
+                <input
+                  value={step2.driveUrl}
+                  onChange={(e) =>
+                    setStep2((current) => ({
+                      ...current,
+                      driveUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="https://drive.google.com/file/d/..."
+                  style={{
+                    width: "100%",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    color: "var(--ink)",
+                    background: "var(--paper-deep)",
+                    border: "1px solid var(--rule)",
+                    borderRadius: 6,
+                    padding: "9px 12px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <p
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    color: "var(--ink-faded)",
+                    margin: "6px 0 0",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  This first version expects a standard Google Drive share link.
+                  Other relatives will only see the preview if the Drive file is
+                  shared broadly enough for Google to serve it.
+                </p>
               </div>
             )}
 

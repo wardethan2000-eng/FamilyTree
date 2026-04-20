@@ -45,6 +45,10 @@ export const memoryKindEnum = pgEnum("memory_kind", [
   "other",
 ]);
 
+export const linkedMediaProviderEnum = pgEnum("linked_media_provider", [
+  "google_drive",
+]);
+
 export const memoryReachKindEnum = pgEnum("memory_reach_kind", [
   "immediate_family",
   "ancestors",
@@ -470,6 +474,14 @@ export const memories = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     mediaId: uuid("media_id").references(() => media.id, { onDelete: "set null" }),
+    linkedMediaProvider: linkedMediaProviderEnum("linked_media_provider"),
+    linkedMediaProviderItemId: varchar("linked_media_provider_item_id", {
+      length: 255,
+    }),
+    linkedMediaSourceUrl: text("linked_media_source_url"),
+    linkedMediaOpenUrl: text("linked_media_open_url"),
+    linkedMediaPreviewUrl: text("linked_media_preview_url"),
+    linkedMediaLabel: varchar("linked_media_label", { length: 255 }),
     promptId: uuid("prompt_id").references(() => prompts.id, { onDelete: "set null" }),
     kind: memoryKindEnum("kind").notNull(),
     title: varchar("title", { length: 200 }).notNull(),
@@ -493,6 +505,8 @@ export const memories = pgTable(
     index("memories_primary_person_idx").on(table.primaryPersonId),
     index("memories_contributor_idx").on(table.contributorUserId),
     index("memories_media_idx").on(table.mediaId),
+    index("memories_linked_media_provider_idx").on(table.linkedMediaProvider),
+    index("memories_linked_media_item_idx").on(table.linkedMediaProviderItemId),
     index("memories_place_idx").on(table.placeId),
     index("memories_transcript_status_idx").on(table.transcriptStatus),
   ],

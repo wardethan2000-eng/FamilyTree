@@ -28,6 +28,14 @@ type CreateTaggedMemoryInput = {
   title: string;
   body?: string | null;
   mediaId?: string | null;
+  linkedMedia?: {
+    provider: "google_drive";
+    providerItemId: string;
+    sourceUrl: string;
+    openUrl: string;
+    previewUrl: string;
+    label?: string | null;
+  } | null;
   promptId?: string | null;
   dateOfEventText?: string | null;
   placeId?: string | null;
@@ -187,6 +195,12 @@ export async function createMemoryWithPrimaryTag(
       title: input.title,
       body: input.body ?? null,
       mediaId: input.mediaId ?? null,
+      linkedMediaProvider: input.linkedMedia?.provider ?? null,
+      linkedMediaProviderItemId: input.linkedMedia?.providerItemId ?? null,
+      linkedMediaSourceUrl: input.linkedMedia?.sourceUrl ?? null,
+      linkedMediaOpenUrl: input.linkedMedia?.openUrl ?? null,
+      linkedMediaPreviewUrl: input.linkedMedia?.previewUrl ?? null,
+      linkedMediaLabel: input.linkedMedia?.label ?? null,
       promptId: input.promptId ?? null,
       dateOfEventText: input.dateOfEventText ?? null,
       placeId: input.placeId ?? null,

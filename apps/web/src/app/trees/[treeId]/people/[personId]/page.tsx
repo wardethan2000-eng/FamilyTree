@@ -65,6 +65,10 @@ type Memory = {
   place?: ResolvedPlace | null;
   mediaUrl: string | null;
   mimeType?: string | null;
+  linkedMediaProvider?: "google_drive" | null;
+  linkedMediaOpenUrl?: string | null;
+  linkedMediaSourceUrl?: string | null;
+  linkedMediaLabel?: string | null;
   createdAt: string;
   memoryContext?: "direct" | "contextual";
   memoryReasonLabel?: string | null;
@@ -511,6 +515,10 @@ export default function PersonPage({
       dateOfEventText: m.dateOfEventText,
       mediaUrl: m.mediaUrl,
       mimeType: m.mimeType,
+      linkedMediaProvider: m.linkedMediaProvider,
+      linkedMediaOpenUrl: m.linkedMediaOpenUrl,
+      linkedMediaSourceUrl: m.linkedMediaSourceUrl,
+      linkedMediaLabel: m.linkedMediaLabel,
       treeVisibilityLevel: m.treeVisibilityLevel,
       treeVisibilityIsOverride: m.treeVisibilityIsOverride,
     })));
@@ -1757,6 +1765,11 @@ function MemoryCard({
           <span style={{ fontSize: 11, opacity: 0.4 }}>{kindIcon[memory.kind]}</span>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 15, color: "var(--ink)", margin: 0, fontWeight: 400, lineHeight: 1.3 }}>{memory.title}</h3>
         </div>
+        {memory.linkedMediaProvider === "google_drive" && (
+          <div style={{ marginBottom: 8 }}>
+            <span style={pillStyle}>Linked from Drive</span>
+          </div>
+        )}
         {memory.memoryContext === "contextual" && memory.memoryReasonLabel && (
           <div style={{ marginBottom: 8 }}>
             <span style={pillStyle}>{memory.memoryReasonLabel}</span>

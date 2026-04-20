@@ -13,6 +13,7 @@ import {
 } from "../lib/cross-tree-read-service.js";
 import { createMemoryWithPrimaryTag } from "../lib/cross-tree-write-service.js";
 import { db } from "../lib/db.js";
+import { normalizeLinkedMedia } from "../lib/linked-media.js";
 import { getSession } from "../lib/session.js";
 import { mediaUrl } from "../lib/storage.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
@@ -22,6 +23,13 @@ const CreateMemoryBody = z.object({
   title: z.string().min(1).max(200),
   body: z.string().optional(),
   mediaId: z.string().uuid().optional(),
+  linkedMedia: z
+    .object({
+      provider: z.literal("google_drive"),
+      url: z.string().url().max(2000),
+      label: z.string().max(255).optional(),
+    })
+    .optional(),
   dateOfEventText: z.string().max(100).optional(),
   placeId: z.string().uuid().optional(),
   placeLabelOverride: z.string().max(200).optional(),
@@ -90,6 +98,26 @@ function serializeTreeVisibility(
   };
 }
 
+function serializeLinkedMemory(memory: {
+  media?: { objectKey: string; mimeType: string } | null;
+  linkedMediaProvider: "google_drive" | null;
+  linkedMediaOpenUrl: string | null;
+  linkedMediaSourceUrl: string | null;
+  linkedMediaPreviewUrl: string | null;
+  linkedMediaLabel: string | null;
+}) {
+  return {
+    mediaUrl: memory.media
+      ? mediaUrl(memory.media.objectKey)
+      : memory.linkedMediaPreviewUrl ?? null,
+    mimeType: memory.media?.mimeType ?? null,
+    linkedMediaProvider: memory.linkedMediaProvider,
+    linkedMediaOpenUrl: memory.linkedMediaOpenUrl,
+    linkedMediaSourceUrl: memory.linkedMediaSourceUrl,
+    linkedMediaLabel: memory.linkedMediaLabel,
+  };
+}
+
 export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
   app.post(
     "/api/trees/:treeId/people/:personId/memories",
@@ -119,6 +147,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         title,
         body,
         mediaId,
+        linkedMedia,
         dateOfEventText,
         placeId,
         placeLabelOverride,
@@ -130,14 +159,28 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       if (kind === "story" && !body) {
         return reply.status(400).send({ error: "Story memories require a body" });
       }
-      if (kind === "photo" && !mediaId) {
-        return reply.status(400).send({ error: "Photo memories require a mediaId" });
+      if (mediaId && linkedMedia) {
+        return reply.status(400).send({
+          error: "Use either an uploaded file or linked media, not both.",
+        });
+      }
+      if (linkedMedia && kind === "voice") {
+        return reply.status(400).send({
+          error: "Voice memories do not support linked media yet.",
+        });
+      }
+      if (kind === "photo" && !mediaId && !linkedMedia) {
+        return reply.status(400).send({
+          error: "Photo memories require a mediaId or linked media.",
+        });
       }
       if (kind === "voice" && !mediaId) {
         return reply.status(400).send({ error: "Voice memories require a mediaId" });
       }
-      if (kind === "document" && !mediaId) {
-        return reply.status(400).send({ error: "Document memories require a mediaId" });
+      if (kind === "document" && !mediaId && !linkedMedia) {
+        return reply.status(400).send({
+          error: "Document memories require a mediaId or linked media.",
+        });
       }
 
       const personInScope = await isPersonInTreeScope(treeId, personId);
@@ -153,6 +196,10 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
           return reply.status(400).send({ error: "Media not found in this tree" });
         }
       }
+
+      const normalizedLinkedMedia = linkedMedia
+        ? normalizeLinkedMedia(linkedMedia)
+        : null;
 
       if (placeId) {
         const place = await db.query.places.findFirst({
@@ -223,6 +270,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
           title,
           body,
           mediaId,
+          linkedMedia: normalizedLinkedMedia,
           promptId,
           dateOfEventText,
           placeId,
@@ -259,17 +307,13 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         },
       });
 
-      const withUrl =
-        full?.media
-          ? {
-              ...full,
-              mediaUrl: mediaUrl(full.media.objectKey),
-              mimeType: full.media.mimeType,
-              place: serializePlace(full.place),
-            }
-          : full
-            ? { ...full, place: serializePlace(full.place) }
-          : full;
+      const withUrl = full
+        ? {
+            ...full,
+            ...serializeLinkedMemory(full),
+            place: serializePlace(full.place),
+          }
+        : full;
 
       const [visibility] = await getResolvedMemoryVisibilitiesForTree(treeId, [memory.id]);
 
@@ -318,8 +362,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       return reply.send(
         memories.map((m) => ({
           ...m,
-          mediaUrl: m.media ? mediaUrl(m.media.objectKey) : null,
-          mimeType: m.media?.mimeType ?? null,
+          ...serializeLinkedMemory(m),
           place: serializePlace(m.place),
           ...serializeTreeVisibility(visibilityById.get(m.id)),
         })),
@@ -356,8 +399,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
     return reply.send(
       memories.map((m) => ({
         ...m,
-        mediaUrl: m.media ? mediaUrl(m.media.objectKey) : null,
-        mimeType: m.media?.mimeType ?? null,
+        ...serializeLinkedMemory(m),
         personName: m.primaryPerson?.displayName ?? null,
         personPortraitUrl: m.primaryPerson?.portraitMedia
           ? mediaUrl(m.primaryPerson.portraitMedia.objectKey)

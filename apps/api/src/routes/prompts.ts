@@ -11,6 +11,7 @@ import {
 } from "../lib/cross-tree-read-service.js";
 import { createMemoryWithPrimaryTag } from "../lib/cross-tree-write-service.js";
 import { db } from "../lib/db.js";
+import { normalizeLinkedMedia } from "../lib/linked-media.js";
 import { getSession } from "../lib/session.js";
 import {
   getPresignedUploadUrl,
@@ -38,6 +39,13 @@ const ReplyBody = z.object({
   title: z.string().min(1).max(200),
   body: z.string().optional(),
   mediaId: z.string().uuid().optional(),
+  linkedMedia: z
+    .object({
+      provider: z.literal("google_drive"),
+      url: z.string().url().max(2000),
+      label: z.string().max(255).optional(),
+    })
+    .optional(),
   dateOfEventText: z.string().max(100).optional(),
   placeId: z.string().uuid().optional(),
   placeLabelOverride: z.string().max(200).optional(),
@@ -280,12 +288,35 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(409).send({ error: "Prompt is not pending" });
     }
 
-    const { kind, title, body, mediaId, dateOfEventText, placeId, placeLabelOverride } = parsed.data;
+    const {
+      kind,
+      title,
+      body,
+      mediaId,
+      linkedMedia,
+      dateOfEventText,
+      placeId,
+      placeLabelOverride,
+    } = parsed.data;
     if (kind === "story" && !body) {
       return reply.status(400).send({ error: "Story memories require a body" });
     }
-    if ((kind === "photo" || kind === "voice" || kind === "document") && !mediaId) {
-      return reply.status(400).send({ error: `${kind} memories require a mediaId` });
+    if (mediaId && linkedMedia) {
+      return reply.status(400).send({
+        error: "Use either an uploaded file or linked media, not both.",
+      });
+    }
+    if (linkedMedia && kind === "voice") {
+      return reply.status(400).send({ error: "Voice memories do not support linked media yet." });
+    }
+    if (kind === "photo" && !mediaId && !linkedMedia) {
+      return reply.status(400).send({ error: "Photo memories require a mediaId or linked media" });
+    }
+    if (kind === "voice" && !mediaId) {
+      return reply.status(400).send({ error: "voice memories require a mediaId" });
+    }
+    if (kind === "document" && !mediaId && !linkedMedia) {
+      return reply.status(400).send({ error: "Document memories require a mediaId or linked media" });
     }
     if (mediaId) {
       const mediaRecord = await db.query.media.findFirst({
@@ -295,6 +326,10 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: "Media not found in this tree" });
       }
     }
+
+    const normalizedLinkedMedia = linkedMedia
+      ? normalizeLinkedMedia(linkedMedia)
+      : null;
     if (placeId) {
       const place = await db.query.places.findFirst({
         where: (p) => and(eq(p.id, placeId), eq(p.treeId, treeId)),
@@ -313,6 +348,7 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
         title,
         body,
         mediaId,
+        linkedMedia: normalizedLinkedMedia,
         promptId,
         dateOfEventText,
         placeId,
@@ -337,8 +373,14 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
 
     return reply.status(201).send({
       ...full,
-      mediaUrl: full?.media ? mediaUrl(full.media.objectKey) : null,
+      mediaUrl: full?.media
+        ? mediaUrl(full.media.objectKey)
+        : full?.linkedMediaPreviewUrl ?? null,
       mimeType: full?.media?.mimeType ?? null,
+      linkedMediaProvider: full?.linkedMediaProvider ?? null,
+      linkedMediaOpenUrl: full?.linkedMediaOpenUrl ?? null,
+      linkedMediaSourceUrl: full?.linkedMediaSourceUrl ?? null,
+      linkedMediaLabel: full?.linkedMediaLabel ?? null,
     });
   });
 
