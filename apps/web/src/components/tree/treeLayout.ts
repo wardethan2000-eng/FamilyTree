@@ -201,7 +201,7 @@ export function computeLayout(
     }
   }
 
-  for (let pass = 0; pass < 3; pass += 1) {
+  for (let pass = 0; pass < 2; pass += 1) {
     alignParentsOverChildren(
       sortedRelationships,
       activeSpousesByPersonId,
@@ -209,13 +209,6 @@ export function computeLayout(
       laneComponentMembersByPersonId,
       positions,
       "all",
-    );
-    alignChildrenUnderParents(
-      sortedRelationships,
-      activeSpousesByPersonId,
-      attachedAnchorByPersonId,
-      laneComponentMembersByPersonId,
-      positions,
     );
     resolveLaneCollisions(
       sortedRelationships,
@@ -225,6 +218,21 @@ export function computeLayout(
       positions,
     );
   }
+  alignParentsOverChildren(
+    sortedRelationships,
+    activeSpousesByPersonId,
+    attachedAnchorByPersonId,
+    laneComponentMembersByPersonId,
+    positions,
+    "all",
+  );
+  resolveLaneCollisions(
+    sortedRelationships,
+    activeSpousesByPersonId,
+    attachedAnchorByPersonId,
+    laneComponentMembersByPersonId,
+    positions,
+  );
   alignParentsOverChildren(
     sortedRelationships,
     activeSpousesByPersonId,
@@ -1200,94 +1208,6 @@ function alignParentsOverChildren(
       );
     }
     if (!changed) break;
-  }
-}
-
-/**
- * Complementary pass to `alignParentsOverChildren`.  When parents are
- * constrained by their own lane (sibling neighbours) and cannot fully
- * center over their children, this function shifts the *children* to
- * center under the parents instead.
- */
-function alignChildrenUnderParents(
-  relationships: ApiRelationship[],
-  activeSpousesByPersonId: Map<string, string[]>,
-  attachedAnchorByPersonId: Map<string, string>,
-  componentMembersByPersonId: Map<string, string[]>,
-  positions: Map<string, { x: number; y: number }>,
-) {
-  const parentIdsByChild = buildParentIdsByChild(relationships);
-  const childGroups = new Map<string, string[]>();
-
-  for (const [childId, parentIds] of parentIdsByChild.entries()) {
-    const signature = parentIds.join("|");
-    const group = childGroups.get(signature) ?? [];
-    group.push(childId);
-    childGroups.set(signature, group);
-  }
-
-  // Process parent groups left-to-right so shifts accumulate predictably.
-  const sortedGroups = [...childGroups.entries()].sort(([sigA], [sigB]) => {
-    const centersA = sigA
-      .split("|")
-      .filter(Boolean)
-      .map((id) => getNodeCenter(id, positions))
-      .filter((v): v is { x: number; y: number } => Boolean(v));
-    const centersB = sigB
-      .split("|")
-      .filter(Boolean)
-      .map((id) => getNodeCenter(id, positions))
-      .filter((v): v is { x: number; y: number } => Boolean(v));
-    const avgA = centersA.length > 0 ? average(centersA.map((c) => c.x)) : 0;
-    const avgB = centersB.length > 0 ? average(centersB.map((c) => c.x)) : 0;
-    return avgA - avgB;
-  });
-
-  for (const [signature, childIds] of sortedGroups) {
-    const parentIds = signature.split("|").filter(Boolean);
-    const childCenters = childIds
-      .map((childId) => getNodeCenter(childId, positions))
-      .filter((v): v is { x: number; y: number } => Boolean(v));
-    const parentCenters = parentIds
-      .map((parentId) => getNodeCenter(parentId, positions))
-      .filter((v): v is { x: number; y: number } => Boolean(v));
-    if (childCenters.length === 0 || parentCenters.length === 0) continue;
-
-    const parentCenterX = average(parentCenters.map((e) => e.x));
-    const childCenterX = average(childCenters.map((e) => e.x));
-    const delta = parentCenterX - childCenterX;
-    if (Math.abs(delta) < 1) continue;
-
-    const shiftedComponentKeys = new Set<string>();
-    for (const childId of childIds) {
-      const componentKey = (componentMembersByPersonId.get(childId) ?? [childId])
-        .slice()
-        .sort()
-        .join("|");
-      if (shiftedComponentKeys.has(componentKey)) continue;
-      shiftedComponentKeys.add(componentKey);
-      shiftCluster(
-        childId,
-        delta,
-        activeSpousesByPersonId,
-        attachedAnchorByPersonId,
-        componentMembersByPersonId,
-        positions,
-      );
-    }
-
-    // Clear overlaps around the child group as a unit
-    const firstChildId = childIds[0]!;
-    const otherChildIds = childIds.slice(1);
-    clearLaneOverlapAround(
-      firstChildId,
-      activeSpousesByPersonId,
-      attachedAnchorByPersonId,
-      componentMembersByPersonId,
-      positions,
-      otherChildIds,
-      delta,
-    );
   }
 }
 
