@@ -44,7 +44,8 @@ function OnboardingPersonForm() {
       setError(data.error ?? "Failed to add person. Please try again.");
       return;
     }
-    router.push(`/dashboard?treeId=${treeId}`);
+    const person = await res.json() as { id: string };
+    router.push(`/onboarding/relative?treeId=${treeId}&selfPersonId=${person.id}`);
   }
 
   if (isPending || !session) {
@@ -54,7 +55,7 @@ function OnboardingPersonForm() {
   return (
     <div className="w-full max-w-sm space-y-8">
       <div className="text-center space-y-2">
-        <p className="text-xs uppercase tracking-widest text-stone-400">Step 2 of 2</p>
+        <p className="text-xs uppercase tracking-widest text-stone-400">Step 2 of 4</p>
         <h1 className="text-2xl font-semibold text-stone-900">
           Add yourself to the tree
         </h1>

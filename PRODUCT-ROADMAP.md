@@ -84,7 +84,7 @@ Features to implement:
     clean their archive manually first.
   - Offer "import now, organize later" as a valid path.
 
-- [ ] Tree bootstrap import
+- [x] Tree bootstrap import
   - Import people and relationships from GEDCOM or similar structured sources.
   - The first implementation does not need perfect genealogy fidelity.
   - The job of the importer is to avoid blank-slate onboarding and reduce the
