@@ -46,6 +46,12 @@ const UpdateMemoryVisibilityBody = z.object({
   unlockDate: z.string().datetime().nullable().optional(),
 });
 
+const PatchMemoryBody = z.object({
+  title: z.string().min(1).max(200).optional(),
+  dateOfEventText: z.string().max(100).nullable().optional(),
+  placeLabelOverride: z.string().max(200).nullable().optional(),
+});
+
 function serializePlace(place: {
   id: string;
   label: string;
@@ -454,12 +460,6 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       if (membership.role === "viewer") {
         return reply.status(403).send({ error: "Viewers cannot edit memories" });
       }
-
-      const PatchMemoryBody = z.object({
-        title: z.string().min(1).max(200).optional(),
-        dateOfEventText: z.string().max(100).nullable().optional(),
-        placeLabelOverride: z.string().max(200).nullable().optional(),
-      });
 
       const parsed = PatchMemoryBody.safeParse(request.body);
       if (!parsed.success) {

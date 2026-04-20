@@ -14,28 +14,40 @@ interface CurationMemory {
   createdAt: string;
 }
 
-async function buildQueueItem(m: {
+type RawMemory = {
   id: string;
   title: string;
   kind: string;
   createdAt: Date;
   primaryPersonId: string | null;
-}): Promise<CurationMemory> {
-  let primaryPersonName: string | null = null;
-  if (m.primaryPersonId) {
-    const person = await db.query.people.findFirst({
-      where: (p, { eq }) => eq(p.id, m.primaryPersonId!),
-      columns: { displayName: true },
+};
+
+/** Resolve primaryPersonId → displayName for a batch of memories */
+async function resolvePersonNames(
+  items: RawMemory[],
+): Promise<CurationMemory[]> {
+  const personIds = [
+    ...new Set(items.map((m) => m.primaryPersonId).filter(Boolean) as string[]),
+  ];
+  const nameMap = new Map<string, string>();
+
+  if (personIds.length > 0) {
+    const people = await db.query.people.findMany({
+      where: (p, { inArray: inArr }) => inArr(p.id, personIds),
+      columns: { id: true, displayName: true },
     });
-    primaryPersonName = person?.displayName ?? null;
+    for (const p of people) nameMap.set(p.id, p.displayName);
   }
-  return {
+
+  return items.map((m) => ({
     id: m.id,
     title: m.title,
     kind: m.kind,
-    primaryPersonName,
+    primaryPersonName: m.primaryPersonId
+      ? nameMap.get(m.primaryPersonId) ?? null
+      : null,
     createdAt: m.createdAt.toISOString(),
-  };
+  }));
 }
 
 export async function curationPlugin(app: FastifyInstance): Promise<void> {
@@ -55,48 +67,69 @@ export async function curationPlugin(app: FastifyInstance): Promise<void> {
 
     const baseWhere = eq(schema.memories.treeId, treeId);
 
-    // Needs date: dateOfEventText is null
-    const needsDateRaw = await db.query.memories.findMany({
-      where: and(baseWhere, isNull(schema.memories.dateOfEventText)),
-      columns: { id: true, title: true, kind: true, createdAt: true, primaryPersonId: true },
-      orderBy: (m, { desc }) => [desc(m.createdAt)],
-      limit: QUEUE_LIMIT,
-    });
-
-    // Needs place: both placeId and placeLabelOverride are null
-    const needsPlaceRaw = await db.query.memories.findMany({
-      where: and(
-        baseWhere,
-        isNull(schema.memories.placeId),
-        isNull(schema.memories.placeLabelOverride),
-      ),
-      columns: { id: true, title: true, kind: true, createdAt: true, primaryPersonId: true },
-      orderBy: (m, { desc }) => [desc(m.createdAt)],
-      limit: QUEUE_LIMIT,
-    });
-
-    // Needs people: no rows in memory_person_tags for this memory
-    const needsPeopleRaw = await db.query.memories.findMany({
-      where: and(
-        baseWhere,
-        notExists(
-          db
-            .select({ id: schema.memoryPersonTags.memoryId })
-            .from(schema.memoryPersonTags)
-            .where(eq(schema.memoryPersonTags.memoryId, schema.memories.id)),
+    // Run all three queries in parallel
+    const [needsDateRaw, needsPlaceRaw, needsPeopleRaw] = await Promise.all([
+      // Needs date: dateOfEventText is null
+      db.query.memories.findMany({
+        where: and(baseWhere, isNull(schema.memories.dateOfEventText)),
+        columns: { id: true, title: true, kind: true, createdAt: true, primaryPersonId: true },
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+        limit: QUEUE_LIMIT,
+      }),
+      // Needs place: both placeId and placeLabelOverride are null
+      db.query.memories.findMany({
+        where: and(
+          baseWhere,
+          isNull(schema.memories.placeId),
+          isNull(schema.memories.placeLabelOverride),
         ),
-      ),
-      columns: { id: true, title: true, kind: true, createdAt: true, primaryPersonId: true },
-      orderBy: (m, { desc }) => [desc(m.createdAt)],
-      limit: QUEUE_LIMIT,
-    });
-
-    const [needsDate, needsPlace, needsPeople] = await Promise.all([
-      Promise.all(needsDateRaw.map(buildQueueItem)),
-      Promise.all(needsPlaceRaw.map(buildQueueItem)),
-      Promise.all(needsPeopleRaw.map(buildQueueItem)),
+        columns: { id: true, title: true, kind: true, createdAt: true, primaryPersonId: true },
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+        limit: QUEUE_LIMIT,
+      }),
+      // Needs people: no rows in memory_person_tags for this memory
+      db.query.memories.findMany({
+        where: and(
+          baseWhere,
+          notExists(
+            db
+              .select({ id: schema.memoryPersonTags.memoryId })
+              .from(schema.memoryPersonTags)
+              .where(eq(schema.memoryPersonTags.memoryId, schema.memories.id)),
+          ),
+        ),
+        columns: { id: true, title: true, kind: true, createdAt: true, primaryPersonId: true },
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+        limit: QUEUE_LIMIT,
+      }),
     ]);
 
-    return reply.send({ needsDate, needsPlace, needsPeople });
+    // Batch-resolve person names across all three lists at once
+    const allRaw = [...needsDateRaw, ...needsPlaceRaw, ...needsPeopleRaw];
+    const allResolved = await resolvePersonNames(allRaw);
+
+    // Split back into three lists
+    const needsDate = allResolved.slice(0, needsDateRaw.length);
+    const needsPlace = allResolved.slice(
+      needsDateRaw.length,
+      needsDateRaw.length + needsPlaceRaw.length,
+    );
+    const needsPeople = allResolved.slice(
+      needsDateRaw.length + needsPlaceRaw.length,
+    );
+
+    // Compute distinct memory count for the nudge badge
+    const allIds = new Set([
+      ...needsDateRaw.map((m) => m.id),
+      ...needsPlaceRaw.map((m) => m.id),
+      ...needsPeopleRaw.map((m) => m.id),
+    ]);
+
+    return reply.send({
+      needsDate,
+      needsPlace,
+      needsPeople,
+      distinctCount: allIds.size,
+    });
   });
 }

@@ -61,9 +61,10 @@ export default function TreeSettingsPage() {
   // GEDCOM import
   const [gedcomFile, setGedcomFile] = useState<File | null>(null);
   const [importStage, setImportStage] = useState<ImportStage>("idle");
-  const [importPreview, setImportPreview] = useState<{ individualsFound: number; familiesFound: number; expectedRelationships: number } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ individualsFound: number; familiesFound: number; expectedRelationships: number; treeHadExistingPeople?: boolean } | null>(null);
   const [importResult, setImportResult] = useState<{ peopleCreated: number; relationshipsCreated: number; skipped: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [cachedGedcomText, setCachedGedcomText] = useState<string | null>(null);
 
   async function handleGedcomFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -76,6 +77,7 @@ export default function TreeSettingsPage() {
     setImportStage("previewing");
     try {
       const text = await file.text();
+      setCachedGedcomText(text);
       const res = await fetch(`${API}/api/trees/${treeId}/import/gedcom/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,16 +99,15 @@ export default function TreeSettingsPage() {
   }
 
   async function confirmGedcomImport() {
-    if (!gedcomFile) return;
+    if (!cachedGedcomText || importStage === "importing") return;
     setImportStage("importing");
     setImportError(null);
     try {
-      const text = await gedcomFile.text();
       const res = await fetch(`${API}/api/trees/${treeId}/import/gedcom`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ gedcom: text }),
+        body: JSON.stringify({ gedcom: cachedGedcomText }),
       });
       if (!res.ok) {
         const body = await res.json();
@@ -124,6 +125,7 @@ export default function TreeSettingsPage() {
 
   function resetImport() {
     setGedcomFile(null);
+    setCachedGedcomText(null);
     setImportPreview(null);
     setImportResult(null);
     setImportError(null);
@@ -417,6 +419,11 @@ export default function TreeSettingsPage() {
                 <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.8 }}>
                   {importPreview.individualsFound} people · {importPreview.familiesFound} families · ~{importPreview.expectedRelationships} relationships
                 </p>
+                {importPreview.treeHadExistingPeople && (
+                  <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--amber, #c97d1a)", margin: "8px 0 0", lineHeight: 1.5 }}>
+                    ⚠ This tree already has people. Importing will add new records — it will not merge with existing ones. Duplicates may result.
+                  </p>
+                )}
                 <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center" }}>
                   <button
                     onClick={confirmGedcomImport}

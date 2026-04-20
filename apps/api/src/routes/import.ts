@@ -17,6 +17,12 @@ function normalizePair(aId: string, bId: string) {
     : { normalizedPersonAId: bId, normalizedPersonBId: aId };
 }
 
+/** Truncate a string to `max` characters, safe for DB varchar columns */
+function truncate(value: string | null | undefined, max: number): string | undefined {
+  if (value == null) return undefined;
+  return value.length > max ? value.slice(0, max) : value;
+}
+
 export async function importPlugin(app: FastifyInstance): Promise<void> {
   app.post("/api/trees/:treeId/import/gedcom", async (request, reply) => {
     const session = await getSession(request.headers);
@@ -41,6 +47,13 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
       columns: { id: true },
     });
     if (!tree) return reply.status(404).send({ error: "Tree not found" });
+
+    // Warn if tree already has people (re-import creates duplicates)
+    const existingPeople = await db.query.people.findFirst({
+      where: (p, { eq }) => eq(p.treeId, treeId),
+      columns: { id: true },
+    });
+    // We don't block — just include a flag in the response so UI can warn
 
     const parsed = GedcomImportBody.safeParse(request.body);
     if (!parsed.success) {
@@ -69,15 +82,15 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
     let skipped = 0;
 
     await db.transaction(async (tx) => {
-      // Insert all individuals
+      // Insert all individuals with field-length truncation
       const peopleRows = [...gedcom.individuals.values()].map((individual) => ({
         id: xrefToId.get(individual.xref)!,
         treeId,
-        displayName: individual.displayName,
-        birthDateText: individual.birthDateText ?? undefined,
-        deathDateText: individual.deathDateText ?? undefined,
-        birthPlace: individual.birthPlace ?? undefined,
-        deathPlace: individual.deathPlace ?? undefined,
+        displayName: truncate(individual.displayName, 200) ?? "Unknown",
+        birthDateText: truncate(individual.birthDateText, 100),
+        deathDateText: truncate(individual.deathDateText, 100),
+        birthPlace: truncate(individual.birthPlace, 200),
+        deathPlace: truncate(individual.deathPlace, 200),
         isLiving: !individual.isDeceased,
       }));
 
@@ -97,6 +110,7 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
         toPersonId: string,
         type: "parent_child" | "sibling" | "spouse",
         spouseStatus?: "active",
+        startDateText?: string | null,
       ) {
         const key = pairKey(fromPersonId, toPersonId, type);
         if (insertedPairs.has(key)) {
@@ -105,10 +119,11 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
         }
         insertedPairs.add(key);
 
-        const { normalizedPersonAId, normalizedPersonBId } = normalizePair(
-          fromPersonId,
-          toPersonId,
-        );
+        // Only spouse/sibling get normalized pair IDs (matches relationship-service)
+        const normalizedPair =
+          type === "spouse" || type === "sibling"
+            ? normalizePair(fromPersonId, toPersonId)
+            : { normalizedPersonAId: null, normalizedPersonBId: null };
 
         await tx.insert(schema.relationships).values({
           id: randomUUID(),
@@ -117,9 +132,10 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
           fromPersonId,
           toPersonId,
           type,
-          normalizedPersonAId,
-          normalizedPersonBId,
+          normalizedPersonAId: normalizedPair.normalizedPersonAId,
+          normalizedPersonBId: normalizedPair.normalizedPersonBId,
           spouseStatus: type === "spouse" ? (spouseStatus ?? "active") : undefined,
+          startDateText: startDateText ? truncate(startDateText, 100) : undefined,
         });
 
         relationshipsCreated++;
@@ -132,7 +148,7 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
 
         // Spouse relationship
         if (husbandId && wifeId) {
-          await insertRelationship(husbandId, wifeId, "spouse", "active");
+          await insertRelationship(husbandId, wifeId, "spouse", "active", family.marriageDateText);
         }
 
         // Parent-child relationships
@@ -155,6 +171,7 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
       peopleCreated,
       relationshipsCreated,
       skipped,
+      treeHadExistingPeople: !!existingPeople,
     });
   });
 
@@ -212,10 +229,17 @@ export async function importPlugin(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Check if tree already has people (for re-import warning)
+    const existingPeople = await db.query.people.findFirst({
+      where: (p, { eq }) => eq(p.treeId, treeId),
+      columns: { id: true },
+    });
+
     return reply.send({
       individualsFound: gedcom.individuals.size,
       familiesFound: gedcom.families.size,
       expectedRelationships,
+      treeHadExistingPeople: !!existingPeople,
     });
   });
 }

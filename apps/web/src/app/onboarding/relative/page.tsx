@@ -51,51 +51,53 @@ function OnboardingRelativeForm() {
     setLoading(true);
     setError("");
 
-    // 1. Create the relative person
-    const personRes = await fetch(`${API}/api/trees/${treeId}/people`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ displayName }),
-    });
+    try {
+      // 1. Create the relative person
+      const personRes = await fetch(`${API}/api/trees/${treeId}/people`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ displayName }),
+      });
 
-    if (!personRes.ok) {
-      const data = await personRes.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Failed to add person.");
-      setLoading(false);
-      return;
-    }
+      if (!personRes.ok) {
+        const data = await personRes.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Failed to add person.");
+        return;
+      }
 
-    const relative = await personRes.json() as { id: string };
-    const option: RelationshipOption = RELATIONSHIP_OPTIONS[relationshipIdx] ?? RELATIONSHIP_OPTIONS[0] as RelationshipOption;
+      const relative = await personRes.json() as { id: string };
+      const option: RelationshipOption = RELATIONSHIP_OPTIONS[relationshipIdx] ?? RELATIONSHIP_OPTIONS[0] as RelationshipOption;
 
-    // 2. Create the relationship
-    const fromPersonId = option.direction === "from" ? relative.id : selfPersonId;
-    const toPersonId   = option.direction === "from" ? selfPersonId  : relative.id;
+      // 2. Create the relationship
+      const fromPersonId = option.direction === "from" ? relative.id : selfPersonId;
+      const toPersonId   = option.direction === "from" ? selfPersonId  : relative.id;
 
-    const relRes = await fetch(`${API}/api/trees/${treeId}/relationships`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        fromPersonId,
-        toPersonId,
-        type: option.type,
-        ...(option.spouseStatus ? { spouseStatus: option.spouseStatus } : {}),
-      }),
-    });
+      const relRes = await fetch(`${API}/api/trees/${treeId}/relationships`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          fromPersonId,
+          toPersonId,
+          type: option.type,
+          ...(option.spouseStatus ? { spouseStatus: option.spouseStatus } : {}),
+        }),
+      });
 
-    setLoading(false);
+      if (!relRes.ok) {
+        const data = await relRes.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Person was added but the relationship could not be created. You can fix this later in the tree.");
+        // Stay on page so user sees the error — don't navigate
+        return;
+      }
 
-    if (!relRes.ok) {
-      const data = await relRes.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Person added but relationship failed.");
-      // Still advance — the person exists, they can fix the rel later
       router.push(nextUrl());
-      return;
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push(nextUrl());
   }
 
   if (isPending || !session) {

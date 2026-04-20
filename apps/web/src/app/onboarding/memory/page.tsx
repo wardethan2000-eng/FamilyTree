@@ -32,29 +32,46 @@ function OnboardingMemoryForm() {
     setLoading(true);
     setError("");
 
-    const res = await fetch(
-      `${API}/api/trees/${treeId}/people/${selfPersonId}/memories`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          kind: "story",
-          title: body.trim().slice(0, 60) + (body.trim().length > 60 ? "…" : ""),
-          body: body.trim(),
-        }),
-      },
-    );
+    try {
+      const trimmed = body.trim();
+      // Grapheme-safe title: use Array.from for proper Unicode handling,
+      // then try to break at a word boundary
+      const chars = Array.from(trimmed);
+      let titleText: string;
+      if (chars.length <= 60) {
+        titleText = trimmed;
+      } else {
+        const raw = chars.slice(0, 60).join("");
+        const lastSpace = raw.lastIndexOf(" ");
+        titleText = (lastSpace > 20 ? raw.slice(0, lastSpace) : raw) + "…";
+      }
 
-    setLoading(false);
+      const res = await fetch(
+        `${API}/api/trees/${treeId}/people/${selfPersonId}/memories`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            kind: "story",
+            title: titleText,
+            body: trimmed,
+          }),
+        },
+      );
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Failed to save memory.");
-      return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Failed to save memory.");
+        return;
+      }
+
+      router.push(atriumUrl());
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push(atriumUrl());
   }
 
   if (isPending || !session) {

@@ -27,25 +27,34 @@ function OnboardingPersonForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const res = await fetch(`${API}/api/trees/${treeId}/people`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        displayName,
-        birthDateText: birthDateText || undefined,
-        essenceLine: essenceLine || undefined,
-        linkToUser: true,
-      }),
-    });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Failed to add person. Please try again.");
-      return;
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/people`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          displayName,
+          birthDateText: birthDateText || undefined,
+          essenceLine: essenceLine || undefined,
+          linkToUser: true,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Failed to add person. Please try again.");
+        return;
+      }
+      const person = await res.json().catch(() => ({})) as { id?: string };
+      if (!person.id) {
+        setError("Unexpected response — please try again.");
+        return;
+      }
+      router.push(`/onboarding/relative?treeId=${treeId}&selfPersonId=${person.id}`);
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    const person = await res.json() as { id: string };
-    router.push(`/onboarding/relative?treeId=${treeId}&selfPersonId=${person.id}`);
   }
 
   if (isPending || !session) {

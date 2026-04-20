@@ -23,20 +23,25 @@ export default function OnboardingPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const res = await fetch(`${API}/api/trees`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ name }),
-    });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Failed to create tree. Please try again.");
-      return;
+    try {
+      const res = await fetch(`${API}/api/trees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setError(data.error ?? "Failed to create tree. Please try again.");
+        return;
+      }
+      const tree = (await res.json()) as { id: string };
+      router.push(`/onboarding/person?treeId=${tree.id}`);
+    } catch {
+      setError("Network error — please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    const tree = (await res.json()) as { id: string };
-    router.push(`/onboarding/person?treeId=${tree.id}`);
   }
 
   if (isPending || !session) {
@@ -48,7 +53,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
           <p className="text-xs uppercase tracking-widest text-stone-400">
-            Step 1 of 2
+            Step 1 of 4
           </p>
           <h1 className="text-2xl font-semibold text-stone-900">
             Name your family tree

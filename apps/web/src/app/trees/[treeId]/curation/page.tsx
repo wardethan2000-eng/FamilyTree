@@ -47,12 +47,14 @@ export default function CurationPage() {
 
   const [queue, setQueue] = useState<Queue | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("needsDate");
 
   // Per-card inline edit state: memoryId → draft value
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isPending && !session) router.replace("/auth/signin");
@@ -60,44 +62,64 @@ export default function CurationPage() {
 
   const fetchQueue = useCallback(async () => {
     if (!treeId) return;
-    const res = await fetch(`${API}/api/trees/${treeId}/curation/queue`, {
-      credentials: "include",
-    });
-    if (res.ok) setQueue(await res.json());
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/curation/queue`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        setQueue(await res.json());
+        setFetchError(null);
+      } else {
+        setFetchError("Could not load curation queue.");
+      }
+    } catch {
+      setFetchError("Network error — could not load curation queue.");
+    }
     setLoading(false);
   }, [treeId]);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
   async function saveField(memoryId: string, section: Section) {
+    if (section === "needsPeople") return; // People tagging not handled here
     const value = drafts[memoryId]?.trim();
     if (!value) return;
     setSaving((s) => ({ ...s, [memoryId]: true }));
+    setSaveErrors((s) => { const copy = { ...s }; delete copy[memoryId]; return copy; });
 
     const body: Record<string, string> =
       section === "needsDate"
         ? { dateOfEventText: value }
         : { placeLabelOverride: value };
 
-    const res = await fetch(`${API}/api/trees/${treeId}/memories/${memoryId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/memories/${memoryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        setSaved((s) => ({ ...s, [memoryId]: true }));
+        setTimeout(() => {
+          setQueue((q) => {
+            if (!q) return q;
+            return { ...q, [section]: q[section].filter((m) => m.id !== memoryId) };
+          });
+          // Clean up stale state for removed card
+          setDrafts((d) => { const copy = { ...d }; delete copy[memoryId]; return copy; });
+          setSaved((s) => { const copy = { ...s }; delete copy[memoryId]; return copy; });
+        }, 800);
+      } else {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setSaveErrors((s) => ({ ...s, [memoryId]: data.error ?? "Save failed" }));
+      }
+    } catch {
+      setSaveErrors((s) => ({ ...s, [memoryId]: "Network error" }));
+    }
 
     setSaving((s) => ({ ...s, [memoryId]: false }));
-
-    if (res.ok) {
-      setSaved((s) => ({ ...s, [memoryId]: true }));
-      // Remove from queue after short delay so user sees the tick
-      setTimeout(() => {
-        setQueue((q) => {
-          if (!q) return q;
-          return { ...q, [section]: q[section].filter((m) => m.id !== memoryId) };
-        });
-      }, 800);
-    }
   }
 
   function skipCard(memoryId: string, section: Section) {
@@ -111,6 +133,25 @@ export default function CurationPage() {
     return (
       <main style={pageStyle}>
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)" }}>Loading…</p>
+      </main>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <main style={pageStyle}>
+        <div style={{ maxWidth: 660, width: "100%", margin: "0 auto" }}>
+          <button onClick={() => router.push(`/trees/${treeId}/atrium`)} style={backBtnStyle}>← Back to archive</button>
+          <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--rose, #b91c1c)", marginTop: 32 }}>
+            {fetchError}
+          </p>
+          <button
+            onClick={() => { setLoading(true); setFetchError(null); fetchQueue(); }}
+            style={{ ...saveBtnStyle, marginTop: 12 }}
+          >
+            Retry
+          </button>
+        </div>
       </main>
     );
   }
@@ -207,44 +248,57 @@ export default function CurationPage() {
                           ✓ Saved
                         </p>
                       ) : isPeopleSection ? (
-                        <div>
-                          <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", margin: "0 0 8px" }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", margin: 0, flex: 1 }}>
                             {meta.fieldLabel}
                           </p>
                           <a
-                            href={`/trees/${treeId}/people/${memory.id}`}
+                            href={`/trees/${treeId}/memories/${memory.id}`}
                             style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)", textDecoration: "underline" }}
                           >
-                            Open memory to tag people →
+                            Open memory →
                           </a>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <input
-                            type="text"
-                            placeholder={meta.placeholder}
-                            value={draft}
-                            onChange={(e) =>
-                              setDrafts((d) => ({ ...d, [memory.id]: e.target.value }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveField(memory.id, activeSection);
-                            }}
-                            style={inputStyle}
-                          />
-                          <button
-                            onClick={() => saveField(memory.id, activeSection)}
-                            disabled={isSaving || !draft.trim()}
-                            style={saveBtnStyle}
-                          >
-                            {isSaving ? "Saving…" : "Save"}
-                          </button>
                           <button
                             onClick={() => skipCard(memory.id, activeSection)}
                             style={skipBtnStyle}
                           >
                             Skip
                           </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <input
+                              type="text"
+                              placeholder={meta.placeholder}
+                              value={draft}
+                              onChange={(e) =>
+                                setDrafts((d) => ({ ...d, [memory.id]: e.target.value }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveField(memory.id, activeSection);
+                              }}
+                              style={inputStyle}
+                            />
+                            <button
+                              onClick={() => saveField(memory.id, activeSection)}
+                              disabled={isSaving || !draft.trim()}
+                              style={saveBtnStyle}
+                            >
+                              {isSaving ? "Saving…" : "Save"}
+                            </button>
+                            <button
+                              onClick={() => skipCard(memory.id, activeSection)}
+                              style={skipBtnStyle}
+                            >
+                              Skip
+                            </button>
+                          </div>
+                          {saveErrors[memory.id] && (
+                            <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--rose, #b91c1c)", margin: "6px 0 0" }}>
+                              {saveErrors[memory.id]}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>

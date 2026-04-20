@@ -56,7 +56,9 @@ function normalizeXref(raw: string): string {
 }
 
 export function parseGedcom(content: string): ParsedGedcom {
-  const lines = content.split(/\r?\n/);
+  // Strip BOM if present
+  const cleaned = content.replace(/^\uFEFF/, "");
+  const lines = cleaned.split(/\r?\n/);
   const individuals = new Map<string, GedcomIndividual>();
   const families = new Map<string, GedcomFamily>();
 
@@ -83,27 +85,47 @@ export function parseGedcom(content: string): ParsedGedcom {
   let inDeat = false;
   let inMarr = false;
 
+  // Track which field last received a value (for CONC/CONT)
+  let lastValueTarget: "indiName" | "indiBirthDate" | "indiBirthPlace" | "indiDeathDate" | "indiDeathPlace" | "famMarriageDate" | null = null;
+
+  function appendToLastValue(text: string, separator: string) {
+    if (!lastValueTarget) return;
+    switch (lastValueTarget) {
+      case "indiName": indiName = (indiName ?? "") + separator + text; break;
+      case "indiBirthDate": indiBirthDate = (indiBirthDate ?? "") + separator + text; break;
+      case "indiBirthPlace": indiBirthPlace = (indiBirthPlace ?? "") + separator + text; break;
+      case "indiDeathDate": indiDeathDate = (indiDeathDate ?? "") + separator + text; break;
+      case "indiDeathPlace": indiDeathPlace = (indiDeathPlace ?? "") + separator + text; break;
+      case "famMarriageDate": famMarriageDate = (famMarriageDate ?? "") + separator + text; break;
+    }
+  }
+
   function commitRecord() {
     if (!currentXref) return;
 
     if (currentType === "INDI") {
-      individuals.set(currentXref, {
-        xref: currentXref,
-        displayName: indiName ?? "Unknown",
-        birthDateText: indiBirthDate,
-        deathDateText: indiDeathDate,
-        birthPlace: indiBirthPlace,
-        deathPlace: indiDeathPlace,
-        isDeceased: indiIsDeceased,
-      });
+      // Keep first occurrence if duplicate xref; skip subsequent
+      if (!individuals.has(currentXref)) {
+        individuals.set(currentXref, {
+          xref: currentXref,
+          displayName: indiName ? normalizeName(indiName) : "Unknown",
+          birthDateText: indiBirthDate,
+          deathDateText: indiDeathDate,
+          birthPlace: indiBirthPlace,
+          deathPlace: indiDeathPlace,
+          isDeceased: indiIsDeceased,
+        });
+      }
     } else if (currentType === "FAM") {
-      families.set(currentXref, {
-        xref: currentXref,
-        husbandXref: famHusband,
-        wifeXref: famWife,
-        childXrefs: famChildren,
-        marriageDateText: famMarriageDate,
-      });
+      if (!families.has(currentXref)) {
+        families.set(currentXref, {
+          xref: currentXref,
+          husbandXref: famHusband,
+          wifeXref: famWife,
+          childXrefs: famChildren,
+          marriageDateText: famMarriageDate,
+        });
+      }
     }
   }
 
@@ -123,11 +145,22 @@ export function parseGedcom(content: string): ParsedGedcom {
     inBirt = false;
     inDeat = false;
     inMarr = false;
+    lastValueTarget = null;
   }
 
   for (const rawLine of lines) {
     const parsed = parseLine(rawLine);
     if (!parsed) continue;
+
+    // Handle CONC (concatenate without space) and CONT (new line) at any level
+    if (parsed.tag === "CONC") {
+      appendToLastValue(parsed.value, "");
+      continue;
+    }
+    if (parsed.tag === "CONT") {
+      appendToLastValue(parsed.value, "\n");
+      continue;
+    }
 
     if (parsed.level === 0) {
       commitRecord();
@@ -153,20 +186,34 @@ export function parseGedcom(content: string): ParsedGedcom {
         inBirt = parsed.tag === "BIRT";
         inDeat = parsed.tag === "DEAT";
         inMarr = false;
+        lastValueTarget = null;
 
         if (parsed.tag === "NAME" && !indiName && parsed.value) {
-          indiName = normalizeName(parsed.value);
+          indiName = parsed.value;
+          lastValueTarget = "indiName";
         }
         if (parsed.tag === "DEAT") {
           indiIsDeceased = true;
         }
       } else if (parsed.level === 2) {
         if (inBirt) {
-          if (parsed.tag === "DATE" && parsed.value) indiBirthDate = parsed.value;
-          if (parsed.tag === "PLAC" && parsed.value) indiBirthPlace = parsed.value;
+          if (parsed.tag === "DATE" && parsed.value) {
+            indiBirthDate = parsed.value;
+            lastValueTarget = "indiBirthDate";
+          }
+          if (parsed.tag === "PLAC" && parsed.value) {
+            indiBirthPlace = parsed.value;
+            lastValueTarget = "indiBirthPlace";
+          }
         } else if (inDeat) {
-          if (parsed.tag === "DATE" && parsed.value) indiDeathDate = parsed.value;
-          if (parsed.tag === "PLAC" && parsed.value) indiDeathPlace = parsed.value;
+          if (parsed.tag === "DATE" && parsed.value) {
+            indiDeathDate = parsed.value;
+            lastValueTarget = "indiDeathDate";
+          }
+          if (parsed.tag === "PLAC" && parsed.value) {
+            indiDeathPlace = parsed.value;
+            lastValueTarget = "indiDeathPlace";
+          }
         }
       }
     } else if (currentType === "FAM") {
@@ -174,6 +221,7 @@ export function parseGedcom(content: string): ParsedGedcom {
         inMarr = parsed.tag === "MARR";
         inBirt = false;
         inDeat = false;
+        lastValueTarget = null;
 
         if (parsed.tag === "HUSB" && parsed.value) {
           famHusband = normalizeXref(parsed.value);
@@ -183,7 +231,10 @@ export function parseGedcom(content: string): ParsedGedcom {
           famChildren.push(normalizeXref(parsed.value));
         }
       } else if (parsed.level === 2 && inMarr) {
-        if (parsed.tag === "DATE" && parsed.value) famMarriageDate = parsed.value;
+        if (parsed.tag === "DATE" && parsed.value) {
+          famMarriageDate = parsed.value;
+          lastValueTarget = "famMarriageDate";
+        }
       }
     }
   }

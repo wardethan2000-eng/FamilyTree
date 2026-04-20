@@ -357,8 +357,8 @@ export default function AtriumPage() {
         // Fetch curation queue count
         const curationRes = await fetch(`${API}/api/trees/${treeId}/curation/queue`, { credentials: "include" });
         if (curationRes.ok) {
-          const curationData = await curationRes.json() as { needsDate: unknown[]; needsPlace: unknown[]; needsPeople: unknown[] };
-          setCurationCount(curationData.needsDate.length + curationData.needsPlace.length + curationData.needsPeople.length);
+          const curationData = await curationRes.json() as { distinctCount?: number; needsDate: unknown[]; needsPlace: unknown[]; needsPeople: unknown[] };
+          setCurationCount(curationData.distinctCount ?? (curationData.needsDate.length + curationData.needsPlace.length + curationData.needsPeople.length));
         }
       } finally {
         setLoading(false);
