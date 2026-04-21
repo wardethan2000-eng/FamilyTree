@@ -216,6 +216,68 @@ function getPosition(positions: Map<string, { x: number; y: number }>, personId:
   return position;
 }
 
+/**
+ * Property check used across every fixture: any two co-parent couples on
+ * the same row must not interleave horizontally.  This is the invariant
+ * that the production tree was violating (Ron+Virginia were split by the
+ * David+Jan couple sliding into the middle of them).
+ */
+function assertNoCoupleInterleave(
+  positions: Map<string, { x: number; y: number }>,
+  relationships: ApiRelationship[],
+  label: string,
+) {
+  const parentIdsByChild = new Map<string, Set<string>>();
+  for (const r of relationships) {
+    if (r.type !== "parent_child") continue;
+    const set = parentIdsByChild.get(r.toPersonId) ?? new Set<string>();
+    set.add(r.fromPersonId);
+    parentIdsByChild.set(r.toPersonId, set);
+  }
+  const couples = new Set<string>();
+  for (const r of relationships) {
+    if (r.type === "spouse" && (r.spouseStatus ?? "active") === "active") {
+      const [a, b] = [r.fromPersonId, r.toPersonId].sort();
+      couples.add(`${a}|${b}`);
+    }
+  }
+  for (const parents of parentIdsByChild.values()) {
+    if (parents.size !== 2) continue;
+    const [a, b] = [...parents].sort();
+    couples.add(`${a}|${b}`);
+  }
+  const intervals = [...couples]
+    .map((key) => {
+      const [a, b] = key.split("|") as [string, string];
+      const pa = positions.get(a);
+      const pb = positions.get(b);
+      if (!pa || !pb || pa.y !== pb.y) return null;
+      return {
+        key,
+        y: pa.y,
+        left: Math.min(pa.x, pb.x),
+        right: Math.max(pa.x, pb.x) + NODE_WIDTH,
+      };
+    })
+    .filter((value): value is { key: string; y: number; left: number; right: number } => Boolean(value));
+
+  for (let i = 0; i < intervals.length; i += 1) {
+    for (let j = i + 1; j < intervals.length; j += 1) {
+      const a = intervals[i]!;
+      const b = intervals[j]!;
+      if (a.y !== b.y) continue;
+      const disjoint = a.right <= b.left || b.right <= a.left;
+      const aInsideB = b.left <= a.left && a.right <= b.right;
+      const bInsideA = a.left <= b.left && b.right <= a.right;
+      const acceptable = disjoint || aInsideB || bInsideA;
+      assert.ok(
+        acceptable,
+        `[${label}] Couples ${a.key} (${a.left}..${a.right}) and ${b.key} (${b.left}..${b.right}) interleave on row y=${a.y}`,
+      );
+    }
+  }
+}
+
 function layoutSnapshot(layout: Map<string, { x: number; y: number }>) {
   return Object.fromEntries(
     [...layout.entries()]
@@ -640,5 +702,172 @@ describe("computeLayout", () => {
       davidBrianUnionY,
       `Virginia+Ron unionY (${ronAmyUnionY}) should differ from David+Jan unionY (${davidBrianUnionY})`,
     );
+  });
+
+  it("keeps co-parents adjacent even when no spouse relationship exists", () => {
+    // Reproduces the production tree where Ron and Virginia share children
+    // (Amy, Melani) but have no explicit spouse record.  Without this
+    // attachment, collision resolution scatters them to opposite ends of
+    // the row when the David+Jan family overlaps the Ron+Virginia family
+    // through the Barry↔Melani marriage.
+    const people: ApiPerson[] = [
+      { id: "Amy", name: "Amy" },
+      { id: "Austin", name: "Austin" },
+      { id: "Barry", name: "Barry" },
+      { id: "Brent", name: "Brent" },
+      { id: "Brian", name: "Brian" },
+      { id: "David", name: "David" },
+      { id: "Ethan Ward", name: "Ethan Ward" },
+      { id: "Jan", name: "Jan" },
+      { id: "Kaleb", name: "Kaleb" },
+      { id: "Karsen", name: "Karsen" },
+      { id: "Melani", name: "Melani" },
+      { id: "Morgan", name: "Morgan" },
+      { id: "Ron", name: "Ron" },
+      { id: "sophie", name: "sophie" },
+      { id: "Vicki", name: "Vicki" },
+      { id: "Virginia", name: "Virginia" },
+    ];
+    const rels: ApiRelationship[] = [
+      { id: "1", fromPersonId: "Barry", toPersonId: "Ethan Ward", type: "parent_child" },
+      { id: "2", fromPersonId: "Barry", toPersonId: "Kaleb", type: "parent_child" },
+      { id: "3", fromPersonId: "Barry", toPersonId: "Morgan", type: "parent_child" },
+      { id: "4", fromPersonId: "Brian", toPersonId: "Austin", type: "parent_child" },
+      { id: "5", fromPersonId: "David", toPersonId: "Barry", type: "parent_child" },
+      { id: "6", fromPersonId: "David", toPersonId: "Brian", type: "parent_child" },
+      { id: "7", fromPersonId: "Jan", toPersonId: "Barry", type: "parent_child" },
+      { id: "8", fromPersonId: "Jan", toPersonId: "Brian", type: "parent_child" },
+      { id: "9", fromPersonId: "Melani", toPersonId: "Ethan Ward", type: "parent_child" },
+      { id: "10", fromPersonId: "Melani", toPersonId: "Kaleb", type: "parent_child" },
+      { id: "11", fromPersonId: "Melani", toPersonId: "Morgan", type: "parent_child" },
+      { id: "12", fromPersonId: "Ron", toPersonId: "Amy", type: "parent_child" },
+      { id: "13", fromPersonId: "Ron", toPersonId: "Melani", type: "parent_child" },
+      { id: "14", fromPersonId: "Vicki", toPersonId: "Austin", type: "parent_child" },
+      { id: "15", fromPersonId: "Virginia", toPersonId: "Amy", type: "parent_child" },
+      { id: "16", fromPersonId: "Virginia", toPersonId: "Melani", type: "parent_child" },
+      { id: "17", fromPersonId: "Melani", toPersonId: "Amy", type: "sibling" },
+      { id: "18", fromPersonId: "Amy", toPersonId: "Brent", type: "spouse", spouseStatus: "active" },
+      { id: "19", fromPersonId: "Barry", toPersonId: "Melani", type: "spouse", spouseStatus: "active" },
+      { id: "20", fromPersonId: "Brian", toPersonId: "Vicki", type: "spouse", spouseStatus: "active" },
+      { id: "21", fromPersonId: "Ethan Ward", toPersonId: "Karsen", type: "spouse", spouseStatus: "active" },
+      { id: "22", fromPersonId: "Jan", toPersonId: "David", type: "spouse", spouseStatus: "active" },
+      { id: "23", fromPersonId: "Kaleb", toPersonId: "sophie", type: "spouse", spouseStatus: "active" },
+    ];
+
+    const positions = computeLayout(people, rels);
+
+    const david = getPosition(positions, "David");
+    const jan = getPosition(positions, "Jan");
+    const ron = getPosition(positions, "Ron");
+    const virginia = getPosition(positions, "Virginia");
+
+    // Same generation row.
+    assert.equal(david.y, jan.y);
+    assert.equal(ron.y, virginia.y);
+    assert.equal(david.y, ron.y);
+
+    // Each couple sits at SPOUSE_ATTACH_GAP — including Ron+Virginia who
+    // have no spouse record but share children.
+    assert.equal(Math.abs(david.x - jan.x), SPOUSE_ATTACH_GAP);
+    assert.equal(Math.abs(ron.x - virginia.x), SPOUSE_ATTACH_GAP);
+
+    // The two couples must not interleave: the rightmost of one couple
+    // must come before the leftmost of the other.
+    const davidJanRight = Math.max(david.x, jan.x);
+    const davidJanLeft = Math.min(david.x, jan.x);
+    const ronVirginiaRight = Math.max(ron.x, virginia.x);
+    const ronVirginiaLeft = Math.min(ron.x, virginia.x);
+    const couplesDoNotInterleave =
+      davidJanRight < ronVirginiaLeft || ronVirginiaRight < davidJanLeft;
+    assert.ok(
+      couplesDoNotInterleave,
+      `David+Jan (${davidJanLeft}..${davidJanRight}) must not interleave with Ron+Virginia (${ronVirginiaLeft}..${ronVirginiaRight})`,
+    );
+
+    // Children row sanity: Brian-Vicki on the David+Jan side (since Brian
+    // is their child), Amy-Brent and Melani-Barry on the Ron+Virginia side
+    // (since Amy and Melani are their children).
+    const brian = getPosition(positions, "Brian");
+    const vicki = getPosition(positions, "Vicki");
+    const amy = getPosition(positions, "Amy");
+    const melani = getPosition(positions, "Melani");
+    const barry = getPosition(positions, "Barry");
+    assert.equal(brian.y, amy.y);
+    assert.equal(amy.y, melani.y);
+    assert.equal(Math.abs(brian.x - vicki.x), SPOUSE_ATTACH_GAP);
+    assert.equal(Math.abs(melani.x - barry.x), SPOUSE_ATTACH_GAP);
+
+    // Grandchildren on a third generation row.
+    const austin = getPosition(positions, "Austin");
+    const ethan = getPosition(positions, "Ethan Ward");
+    const morgan = getPosition(positions, "Morgan");
+    assert.equal(austin.y, ethan.y);
+    assert.equal(ethan.y, morgan.y);
+    assert.ok(austin.y > brian.y);
+  });
+
+  it("does not attach co-parents when one of them has an explicit spouse", () => {
+    // Co-parent attachment must not override an explicit spouse.  Here Ron
+    // is married to Wanda but also raised a child with Virginia; the
+    // explicit Ron↔Wanda bond should win, leaving Virginia free.
+    const people: ApiPerson[] = [
+      { id: "ron", name: "Ron" },
+      { id: "wanda", name: "Wanda" },
+      { id: "virginia", name: "Virginia" },
+      { id: "amy", name: "Amy" },
+    ];
+    const rels: ApiRelationship[] = [
+      { id: "ron-wanda", fromPersonId: "ron", toPersonId: "wanda", type: "spouse", spouseStatus: "active" },
+      { id: "ron-amy", fromPersonId: "ron", toPersonId: "amy", type: "parent_child" },
+      { id: "virginia-amy", fromPersonId: "virginia", toPersonId: "amy", type: "parent_child" },
+    ];
+    const positions = computeLayout(people, rels);
+    const ron = getPosition(positions, "ron");
+    const wanda = getPosition(positions, "wanda");
+    const virginia = getPosition(positions, "virginia");
+
+    assert.equal(Math.abs(ron.x - wanda.x), SPOUSE_ATTACH_GAP);
+    assert.notEqual(Math.abs(ron.x - virginia.x), SPOUSE_ATTACH_GAP);
+  });
+
+  it("never interleaves couples on the same row across all fixtures", () => {
+    const fixtures: Array<{ name: string; people: ApiPerson[]; relationships: ApiRelationship[] }> = [
+      { name: "peopleFixture", people: peopleFixture, relationships: relationshipFixture },
+      { name: "overlapFixture", people: overlapFixturePeople, relationships: overlapFixtureRelationships },
+      { name: "siblingPlaceholder", people: siblingPlaceholderPeople, relationships: siblingPlaceholderRelationships },
+      { name: "siblingInheritedParents", people: siblingInheritedParentsPeople, relationships: siblingInheritedParentsRelationships },
+      { name: "siblingFullParents", people: siblingFullParentsPeople, relationships: siblingFullParentsRelationships },
+      { name: "overlappingFamilyParents", people: overlappingFamilyParentsPeople, relationships: overlappingFamilyParentsRelationships },
+      { name: "liveOverlap", people: liveOverlapPeople, relationships: liveOverlapRelationships },
+    ];
+    for (const fixture of fixtures) {
+      const positions = computeLayout(fixture.people, fixture.relationships);
+      assertNoCoupleInterleave(positions, fixture.relationships, fixture.name);
+    }
+  });
+
+  it("does not attach co-parents when one of them has multiple co-parents", () => {
+    // Ron has children with both Virginia AND Wanda — there is no clean
+    // implicit couple, so neither attachment should fire.
+    const people: ApiPerson[] = [
+      { id: "ron", name: "Ron" },
+      { id: "virginia", name: "Virginia" },
+      { id: "wanda", name: "Wanda" },
+      { id: "amy", name: "Amy" },
+      { id: "bob", name: "Bob" },
+    ];
+    const rels: ApiRelationship[] = [
+      { id: "ron-amy", fromPersonId: "ron", toPersonId: "amy", type: "parent_child" },
+      { id: "virginia-amy", fromPersonId: "virginia", toPersonId: "amy", type: "parent_child" },
+      { id: "ron-bob", fromPersonId: "ron", toPersonId: "bob", type: "parent_child" },
+      { id: "wanda-bob", fromPersonId: "wanda", toPersonId: "bob", type: "parent_child" },
+    ];
+    const positions = computeLayout(people, rels);
+    const ron = getPosition(positions, "ron");
+    const virginia = getPosition(positions, "virginia");
+    const wanda = getPosition(positions, "wanda");
+
+    assert.notEqual(Math.abs(ron.x - virginia.x), SPOUSE_ATTACH_GAP);
+    assert.notEqual(Math.abs(ron.x - wanda.x), SPOUSE_ATTACH_GAP);
   });
 });

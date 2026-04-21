@@ -438,6 +438,24 @@ function propagateSpouseLanes(
   return laneByPersonId;
 }
 
+function buildCoParentMap(parentIdsByChild: Map<string, string[]>) {
+  // Two people are "co-parents" if they share at least one child where
+  // both appear in the child's parent set.  Used to detect implicit couples
+  // (people who clearly raised kids together but have no spouse record).
+  const coParentsByPerson = new Map<string, Set<string>>();
+  for (const parentIds of parentIdsByChild.values()) {
+    if (parentIds.length < 2) continue;
+    for (const parentId of parentIds) {
+      const set = coParentsByPerson.get(parentId) ?? new Set<string>();
+      for (const otherId of parentIds) {
+        if (otherId !== parentId) set.add(otherId);
+      }
+      coParentsByPerson.set(parentId, set);
+    }
+  }
+  return coParentsByPerson;
+}
+
 function buildAttachedSpouseMap(
   people: ApiPerson[],
   generationLaneByPersonId: Map<string, number>,
@@ -460,7 +478,23 @@ function buildAttachedSpouseMap(
       explicitSiblingComponentByPersonId.has(person.id) ? 1 : 0,
     ]),
   );
+  const coParentsByPerson = buildCoParentMap(parentIdsByChild);
 
+  function pickAnchor(leftId: string, rightId: string): string {
+    const leftStructural = structuralDegreeByPersonId.get(leftId) ?? 0;
+    const rightStructural = structuralDegreeByPersonId.get(rightId) ?? 0;
+    if (leftStructural !== rightStructural) {
+      return leftStructural > rightStructural ? leftId : rightId;
+    }
+    const leftSibling = siblingWeightByPersonId.get(leftId) ?? 0;
+    const rightSibling = siblingWeightByPersonId.get(rightId) ?? 0;
+    if (leftSibling !== rightSibling) {
+      return leftSibling > rightSibling ? leftId : rightId;
+    }
+    return leftId < rightId ? leftId : rightId;
+  }
+
+  // Pass 1: explicit spouse couples (existing behavior).
   for (const person of people) {
     if (attachedAnchorByPersonId.has(person.id)) continue;
     const spouseIds = activeSpousesByPersonId.get(person.id) ?? [];
@@ -474,24 +508,41 @@ function buildAttachedSpouseMap(
       continue;
     }
 
-    const personStructuralDegree = structuralDegreeByPersonId.get(person.id) ?? 0;
-    const spouseStructuralDegree = structuralDegreeByPersonId.get(spouseId) ?? 0;
-    const personSiblingWeight = siblingWeightByPersonId.get(person.id) ?? 0;
-    const spouseSiblingWeight = siblingWeightByPersonId.get(spouseId) ?? 0;
-    const anchorId =
-      personStructuralDegree > spouseStructuralDegree
-        ? person.id
-        : spouseStructuralDegree > personStructuralDegree
-          ? spouseId
-          : personSiblingWeight > spouseSiblingWeight
-            ? person.id
-            : spouseSiblingWeight > personSiblingWeight
-              ? spouseId
-              : person.id < spouseId
-                ? person.id
-                : spouseId;
+    const anchorId = pickAnchor(person.id, spouseId);
     const attachedId = anchorId === person.id ? spouseId : person.id;
+    attachedAnchorByPersonId.set(attachedId, anchorId);
+  }
 
+  // Pass 2: implicit co-parent couples — two people without explicit
+  // spouses who share children together.  Without this, the collision
+  // resolver pushes them to opposite ends of the row when their family
+  // overlaps another family in the same generation.
+  for (const person of people) {
+    if (attachedAnchorByPersonId.has(person.id)) continue;
+    const spouseIds = activeSpousesByPersonId.get(person.id) ?? [];
+    if (spouseIds.length > 0) continue;
+
+    const coParents = [...(coParentsByPerson.get(person.id) ?? new Set<string>())];
+    if (coParents.length !== 1) continue;
+    const partnerId = coParents[0]!;
+    if (partnerId === person.id) continue;
+    if (attachedAnchorByPersonId.has(partnerId)) continue;
+
+    const partnerSpouses = activeSpousesByPersonId.get(partnerId) ?? [];
+    if (partnerSpouses.length > 0) continue;
+
+    const partnerCoParents = coParentsByPerson.get(partnerId) ?? new Set<string>();
+    if (partnerCoParents.size !== 1 || !partnerCoParents.has(person.id)) continue;
+
+    if (
+      (generationLaneByPersonId.get(person.id) ?? 0) !==
+      (generationLaneByPersonId.get(partnerId) ?? 0)
+    ) {
+      continue;
+    }
+
+    const anchorId = pickAnchor(person.id, partnerId);
+    const attachedId = anchorId === person.id ? partnerId : person.id;
     attachedAnchorByPersonId.set(attachedId, anchorId);
   }
 
