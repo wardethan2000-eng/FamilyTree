@@ -50,6 +50,42 @@ interface Memory {
   createdAt?: string;
 }
 
+interface HomeStats {
+  peopleCount: number;
+  memoryCount: number;
+  generationCount: number;
+  peopleWithoutPortraitCount: number;
+  peopleWithoutDirectMemoriesCount: number;
+}
+
+interface HomeCoverage {
+  earliestYear: number | null;
+  latestYear: number | null;
+  decadeBuckets: Array<{
+    startYear: number;
+    label: string;
+    count: number;
+  }>;
+}
+
+interface HomePayload {
+  tree: Tree;
+  people: Array<
+    Person & {
+      displayName?: string;
+      birthDateText?: string | null;
+      deathDateText?: string | null;
+    }
+  >;
+  memories: Memory[];
+  heroCandidates: Memory[];
+  inboxCount: number;
+  curationCount: number;
+  currentUserPersonId: string | null;
+  stats: HomeStats;
+  coverage: HomeCoverage;
+}
+
 function extractYear(text?: string | null): number | null {
   if (!text) return null;
   const m = text.match(/\b(\d{4})\b/);
@@ -71,6 +107,24 @@ function getVoiceTranscriptLabel(memory: Memory): string | null {
     return "Transcribing…";
   }
   return null;
+}
+
+function getHeroExcerpt(memory: Memory | null): string | null {
+  if (!memory) return null;
+  if (memory.kind === "voice") return getVoiceTranscriptLabel(memory);
+  if (memory.body?.trim()) return memory.body.trim();
+  return null;
+}
+
+function getCoverageRangeLabel(coverage: HomeCoverage | null): string {
+  if (!coverage || (coverage.earliestYear === null && coverage.latestYear === null)) {
+    return "Dates are still gathering.";
+  }
+  if (coverage.earliestYear !== null && coverage.latestYear !== null) {
+    if (coverage.earliestYear === coverage.latestYear) return `${coverage.earliestYear}`;
+    return `${coverage.earliestYear} to ${coverage.latestYear}`;
+  }
+  return `${coverage.earliestYear ?? coverage.latestYear}`;
 }
 
 function MemoryCard({
@@ -289,11 +343,14 @@ export default function AtriumPage() {
   const params = useParams<{ treeId: string }>();
   const { treeId } = params;
   const { data: session, isPending } = useSession();
-  const [normalizingTreeId, setNormalizingTreeId] = useState(!isCanonicalTreeId(treeId));
+  const needsNormalization = !isCanonicalTreeId(treeId);
 
   const [tree, setTree] = useState<Tree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [heroCandidates, setHeroCandidates] = useState<Memory[]>([]);
+  const [homeStats, setHomeStats] = useState<HomeStats | null>(null);
+  const [coverage, setCoverage] = useState<HomeCoverage | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -302,6 +359,8 @@ export default function AtriumPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
   const [curationCount, setCurationCount] = useState(0);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
 
   // Global ⌘K handler
   useEffect(() => {
@@ -320,8 +379,6 @@ export default function AtriumPage() {
   }, [session, isPending, router]);
 
   useEffect(() => {
-    const needsNormalization = !isCanonicalTreeId(treeId);
-    setNormalizingTreeId(needsNormalization);
     if (!session || !needsNormalization) return;
 
     let cancelled = false;
@@ -336,56 +393,45 @@ export default function AtriumPage() {
         setLoadError("This tree link is invalid or no longer points to an available tree.");
         setLoading(false);
       }
-      setNormalizingTreeId(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [router, session, treeId]);
+  }, [needsNormalization, router, session, treeId]);
 
   useEffect(() => {
     if (!session || !treeId || !isCanonicalTreeId(treeId)) return;
-    const fetchAll = async () => {
+    const fetchHome = async () => {
       setLoading(true);
       setLoadError(null);
       try {
-        const [treeRes, peopleRes, memoriesRes] = await Promise.all([
-          fetch(`${API}/api/trees/${treeId}`, { credentials: "include" }),
-          fetch(`${API}/api/trees/${treeId}/people`, { credentials: "include" }),
-          fetch(`${API}/api/trees/${treeId}/memories`, { credentials: "include" }),
-        ]);
-        if (treeRes.ok) setTree(await treeRes.json());
-        if (peopleRes.ok) {
-          const data = await peopleRes.json();
-          setPeople(
-            (data as Array<Record<string, unknown>>).map((p) => ({
-              id: p.id as string,
-              name: (p.displayName ?? p.name ?? "") as string,
-              portraitUrl: (p.portraitUrl ?? null) as string | null,
-              essenceLine: (p.essenceLine ?? null) as string | null,
-              birthYear: extractYear(p.birthDateText as string | null),
-              deathYear: extractYear(p.deathDateText as string | null),
-              linkedUserId: (p.linkedUserId ?? null) as string | null,
-            }))
-          );
+        const res = await fetch(`${API}/api/trees/${treeId}/home`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load this tree.");
         }
-        if (memoriesRes.ok) {
-          const data = await memoriesRes.json();
-          setMemories(data as Memory[]);
-        }
-        // Fetch inbox count (pending prompts for current user)
-        const inboxRes = await fetch(`${API}/api/trees/${treeId}/prompts/inbox`, { credentials: "include" });
-        if (inboxRes.ok) {
-          const inboxData = await inboxRes.json() as Array<{ status: string }>;
-          setInboxCount(inboxData.filter((p) => p.status === "pending").length);
-        }
-        // Fetch curation queue count
-        const curationRes = await fetch(`${API}/api/trees/${treeId}/curation/queue`, { credentials: "include" });
-        if (curationRes.ok) {
-          const curationData = await curationRes.json() as { distinctCount?: number; needsDate: unknown[]; needsPlace: unknown[]; needsPeople: unknown[] };
-          setCurationCount(curationData.distinctCount ?? (curationData.needsDate.length + curationData.needsPlace.length + curationData.needsPeople.length));
-        }
+        const data = (await res.json()) as HomePayload;
+        setTree(data.tree);
+        setPeople(
+          data.people.map((p) => ({
+            id: p.id,
+            name: p.displayName ?? p.name ?? "",
+            portraitUrl: p.portraitUrl,
+            essenceLine: p.essenceLine,
+            birthYear: extractYear(p.birthDateText ?? null),
+            deathYear: extractYear(p.deathDateText ?? null),
+            linkedUserId: p.linkedUserId,
+          })),
+        );
+        setMemories(data.memories);
+        setHeroIndex(0);
+        setHeroCandidates(data.heroCandidates);
+        setHomeStats(data.stats);
+        setCoverage(data.coverage);
+        setInboxCount(data.inboxCount);
+        setCurationCount(data.curationCount);
       } catch (error) {
         setLoadError(
           error instanceof Error ? error.message : "Failed to load this tree.",
@@ -394,7 +440,7 @@ export default function AtriumPage() {
         setLoading(false);
       }
     };
-    fetchAll();
+    void fetchHome();
   }, [session, treeId]);
 
   const handlePersonClick = useCallback(
@@ -404,11 +450,31 @@ export default function AtriumPage() {
     [router, treeId]
   );
 
-  const refreshMemories = useCallback(async () => {
-    const res = await fetch(`${API}/api/trees/${treeId}/memories`, {
+  const refreshHome = useCallback(async () => {
+    const res = await fetch(`${API}/api/trees/${treeId}/home`, {
       credentials: "include",
     });
-    if (res.ok) setMemories(await res.json());
+    if (!res.ok) return;
+    const data = (await res.json()) as HomePayload;
+    setTree(data.tree);
+    setPeople(
+      data.people.map((p) => ({
+        id: p.id,
+        name: p.displayName ?? p.name ?? "",
+        portraitUrl: p.portraitUrl,
+        essenceLine: p.essenceLine,
+        birthYear: extractYear(p.birthDateText ?? null),
+        deathYear: extractYear(p.deathDateText ?? null),
+        linkedUserId: p.linkedUserId,
+      })),
+    );
+    setMemories(data.memories);
+    setHeroIndex(0);
+    setHeroCandidates(data.heroCandidates);
+    setHomeStats(data.stats);
+    setCoverage(data.coverage);
+    setInboxCount(data.inboxCount);
+    setCurationCount(data.curationCount);
   }, [treeId]);
 
   usePendingVoiceTranscriptionRefresh({
@@ -417,9 +483,17 @@ export default function AtriumPage() {
       kind: memory.kind,
       transcriptStatus: memory.transcriptStatus,
     })),
-    refresh: refreshMemories,
+    refresh: refreshHome,
     enabled: Boolean(session),
   });
+
+  useEffect(() => {
+    if (heroCandidates.length < 2 || heroPaused) return;
+    const interval = window.setInterval(() => {
+      setHeroIndex((current) => (current + 1) % heroCandidates.length);
+    }, 12000);
+    return () => window.clearInterval(interval);
+  }, [heroCandidates.length, heroPaused]);
 
   const apiPeople = people.map((p) => ({
     id: p.id,
@@ -428,15 +502,19 @@ export default function AtriumPage() {
   }));
 
   const featuredMemory =
+    (heroCandidates.length > 0
+      ? heroCandidates[heroIndex % heroCandidates.length]
+      : null) ??
     memories.find((m) => m.kind === "photo" && m.mediaUrl) ??
     memories.find((m) => m.kind === "story") ??
     memories[0] ??
     null;
   const featuredMemoryMediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
+  const heroExcerpt = getHeroExcerpt(featuredMemory);
 
   const recentMemories = memories.slice(0, 20);
 
-  if (isPending || loading || normalizingTreeId) {
+  if (isPending || loading || (needsNormalization && !loadError)) {
     return (
       <main
         style={{
@@ -622,6 +700,7 @@ export default function AtriumPage() {
         )}
 
         <button
+          onClick={() => setSearchOpen(true)}
           style={{
             fontFamily: "var(--font-ui)",
             fontSize: 12,
@@ -675,6 +754,8 @@ export default function AtriumPage() {
 
       {/* Hero section */}
       <section
+        onMouseEnter={() => setHeroPaused(true)}
+        onMouseLeave={() => setHeroPaused(false)}
         style={{
           position: "relative",
           height: "min(60vh, 480px)",
@@ -772,6 +853,24 @@ export default function AtriumPage() {
                 {featuredMemory.personName && featuredMemory.dateOfEventText ? " · " : ""}
                 {featuredMemory.dateOfEventText ?? ""}
               </div>
+              {heroExcerpt && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    maxWidth: "60ch",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 15,
+                    lineHeight: 1.7,
+                    color: "rgba(246,241,231,0.78)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {heroExcerpt}
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -844,6 +943,25 @@ export default function AtriumPage() {
           Begin drifting ›
         </button>
 
+        {featuredMemory && (
+          <a
+            href={`/trees/${treeId}/memories/${featuredMemory.id}`}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+              color: "var(--ink)",
+              background: "var(--paper-deep)",
+              border: "1px solid var(--rule)",
+              borderRadius: 8,
+              padding: "10px 22px",
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            Open memory →
+          </a>
+        )}
+
         <a
           href={`/trees/${treeId}`}
           style={{
@@ -873,8 +991,10 @@ export default function AtriumPage() {
             color: "var(--ink-faded)",
           }}
         >
-          {people.length} {people.length === 1 ? "person" : "people"} · {memories.length}{" "}
-          {memories.length === 1 ? "memory" : "memories"}
+          {homeStats?.peopleCount ?? people.length}{" "}
+          {(homeStats?.peopleCount ?? people.length) === 1 ? "person" : "people"} ·{" "}
+          {homeStats?.memoryCount ?? memories.length}{" "}
+          {(homeStats?.memoryCount ?? memories.length) === 1 ? "memory" : "memories"}
         </div>
       </section>
 
@@ -886,6 +1006,133 @@ export default function AtriumPage() {
           margin: "0 max(24px, 5vw)",
         }}
       />
+
+      {(homeStats || coverage) && (
+        <section
+          style={{
+            padding: "24px max(24px, 5vw) 0",
+            display: "grid",
+            gap: 14,
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          }}
+        >
+          <article
+            style={{
+              border: "1px solid var(--rule)",
+              borderRadius: 10,
+              background: "var(--paper-deep)",
+              padding: "16px 18px",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                color: "var(--ink-faded)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                marginBottom: 8,
+              }}
+            >
+              Archive scale
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 18,
+                color: "var(--ink)",
+              }}
+            >
+              {homeStats?.peopleCount ?? people.length} people
+              {homeStats?.generationCount ? ` across ${homeStats.generationCount} generations` : ""}
+            </div>
+          </article>
+
+          <article
+            style={{
+              border: "1px solid var(--rule)",
+              borderRadius: 10,
+              background: "var(--paper-deep)",
+              padding: "16px 18px",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                color: "var(--ink-faded)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                marginBottom: 8,
+              }}
+            >
+              Historical span
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 18,
+                color: "var(--ink)",
+              }}
+            >
+              {getCoverageRangeLabel(coverage)}
+            </div>
+            {coverage && coverage.decadeBuckets.length > 0 && (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 12,
+                  color: "var(--ink-faded)",
+                }}
+              >
+                {coverage.decadeBuckets.length} dated eras in the archive
+              </div>
+            )}
+          </article>
+
+          <article
+            style={{
+              border: "1px solid var(--rule)",
+              borderRadius: 10,
+              background: "var(--paper-deep)",
+              padding: "16px 18px",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                color: "var(--ink-faded)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                marginBottom: 8,
+              }}
+            >
+              Still unfolding
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 18,
+                color: "var(--ink)",
+              }}
+            >
+              {homeStats?.peopleWithoutDirectMemoriesCount ?? 0} people still need direct memories
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                color: "var(--ink-faded)",
+              }}
+            >
+              {homeStats?.peopleWithoutPortraitCount ?? 0} are still missing portraits
+            </div>
+          </article>
+        </section>
+      )}
 
       {/* Recent memories strip */}
       {recentMemories.length > 0 && (
@@ -937,9 +1184,7 @@ export default function AtriumPage() {
                 key={m.id}
                 memory={m}
                 onClick={() => {
-                  if (m.primaryPersonId) {
-                    router.push(`/trees/${treeId}/people/${m.primaryPersonId}`);
-                  }
+                  router.push(`/trees/${treeId}/memories/${m.id}`);
                 }}
               />
             ))}
@@ -1108,7 +1353,7 @@ export default function AtriumPage() {
           people={apiPeople}
           apiBase={API}
           onClose={() => setWizardOpen(false)}
-          onSuccess={refreshMemories}
+          onSuccess={refreshHome}
         />
       )}
 
