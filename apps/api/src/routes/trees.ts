@@ -71,6 +71,10 @@ function serializeHomeMemory(memory: HomeMemory) {
           },
         ].filter((item) => item.mediaUrl || item.linkedMediaOpenUrl);
   const primaryItem = mediaItems[0] ?? null;
+  const taggedPeople = memory.personTags
+    .map((tag) => tag.person)
+    .filter((person): person is NonNullable<typeof person> => Boolean(person));
+  const fallbackPerson = taggedPeople[0] ?? null;
 
   return {
     id: memory.id,
@@ -84,10 +88,13 @@ function serializeHomeMemory(memory: HomeMemory) {
     dateOfEventText: memory.dateOfEventText ?? null,
     createdAt: memory.createdAt.toISOString(),
     primaryPersonId: memory.primaryPersonId,
-    personName: memory.primaryPerson?.displayName ?? null,
+    personName: memory.primaryPerson?.displayName ?? fallbackPerson?.displayName ?? null,
     personPortraitUrl: memory.primaryPerson?.portraitMedia
       ? mediaUrl(memory.primaryPerson.portraitMedia.objectKey)
+      : fallbackPerson?.portraitMedia
+        ? mediaUrl(fallbackPerson.portraitMedia.objectKey)
       : null,
+    relatedPersonIds: getMemoryRelatedPersonIds(memory),
     mediaUrl: primaryItem?.mediaUrl ?? null,
     mimeType: primaryItem?.mimeType ?? null,
     linkedMediaProvider: primaryItem?.linkedMediaProvider ?? null,
@@ -222,6 +229,19 @@ function buildBranchLabel(person: HomePerson | null | undefined): string | null 
   return label ? `Centered around ${label}'s branch` : null;
 }
 
+function getMemoryRelatedPersonIds(memory: HomeMemory | null | undefined): string[] {
+  if (!memory) return [];
+  return [
+    ...new Set(
+      [memory.primaryPersonId, ...memory.personTags.map((tag) => tag.personId)].filter(Boolean),
+    ),
+  ] as string[];
+}
+
+function getMemoryAnchorPersonId(memory: HomeMemory | null | undefined): string | null {
+  return getMemoryRelatedPersonIds(memory)[0] ?? null;
+}
+
 function getBranchFocusIds(
   personId: string | null,
   relationships: HomeRelationship[],
@@ -269,11 +289,17 @@ function scoreTrailMemory(
   focusIds: Set<string>,
 ) {
   let score = 0;
+  const memoryRelatedIds = getMemoryRelatedPersonIds(memory);
 
   if (featuredMemory) {
+    const featuredRelatedIds = new Set(getMemoryRelatedPersonIds(featuredMemory));
+    const featuredAnchorId = getMemoryAnchorPersonId(featuredMemory);
+    const memoryAnchorId = getMemoryAnchorPersonId(memory);
+
     if (memory.id === featuredMemory.id) score += 120;
-    if (memory.primaryPersonId && memory.primaryPersonId === featuredMemory.primaryPersonId) score += 48;
-    if (memory.primaryPersonId && focusIds.has(memory.primaryPersonId)) score += 28;
+    if (memoryAnchorId && featuredAnchorId && memoryAnchorId === featuredAnchorId) score += 48;
+    if (memoryRelatedIds.some((personId) => featuredRelatedIds.has(personId))) score += 28;
+    if (memoryRelatedIds.some((personId) => focusIds.has(personId))) score += 28;
 
     const year = extractYear(memory.dateOfEventText);
     if (year !== null && featuredYear !== null) {
@@ -340,6 +366,7 @@ function buildAtriumTrailSections({
   const sections: AtriumTrailSection[] = [];
 
   const beginHere: HomeMemory[] = [];
+  const featuredRelatedIds = new Set(getMemoryRelatedPersonIds(featuredMemory));
   if (featuredMemory) {
     beginHere.push(featuredMemory);
     usedIds.add(featuredMemory.id);
@@ -350,8 +377,7 @@ function buildAtriumTrailSections({
         memories.filter(
           (memory) =>
             !usedIds.has(memory.id) &&
-            Boolean(featuredMemory?.primaryPersonId) &&
-            memory.primaryPersonId === featuredMemory?.primaryPersonId,
+            getMemoryRelatedPersonIds(memory).some((personId) => featuredRelatedIds.has(personId)),
         ),
         featuredMemory,
         focusIds,
@@ -379,8 +405,7 @@ function buildAtriumTrailSections({
       memories.filter(
         (memory) =>
           !usedIds.has(memory.id) &&
-          Boolean(memory.primaryPersonId) &&
-          focusIds.has(memory.primaryPersonId),
+          getMemoryRelatedPersonIds(memory).some((personId) => focusIds.has(personId)),
       ),
       featuredMemory,
       focusIds,
@@ -712,7 +737,7 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
     const heroCandidates = selectHeroCandidates(memories);
     const featuredMemory = selectFeaturedMemory(memories, heroCandidates);
     const focusPersonId =
-      featuredMemory?.primaryPersonId ?? currentUserPersonId ?? people[0]?.id ?? null;
+      getMemoryAnchorPersonId(featuredMemory) ?? currentUserPersonId ?? people[0]?.id ?? null;
     const focusPerson = people.find((person) => person.id === focusPersonId) ?? null;
     const focusIds = getBranchFocusIds(focusPersonId, relationships);
     const relatedPersonIds = focusPersonId

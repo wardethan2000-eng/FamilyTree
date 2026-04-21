@@ -188,10 +188,7 @@ export function AtriumStage({
             )}
 
             {branchHref && (
-              <Link
-                href={branchHref}
-                style={secondaryLinkStyle}
-              >
+              <Link href={branchHref} style={secondaryLinkStyle}>
                 Follow this branch
               </Link>
             )}
@@ -199,24 +196,25 @@ export function AtriumStage({
             <Link href={fullTreeHref} style={secondaryLinkStyle}>
               Open full tree
             </Link>
-
-            <button
-              type="button"
-              onClick={onDrift}
-              style={{
-                border: "none",
-                background: "none",
-                padding: "8px 0",
-                cursor: "pointer",
-                fontFamily: "var(--font-display)",
-                fontSize: 16,
-                fontStyle: "italic",
-                color: "rgba(246,241,231,0.82)",
-              }}
-            >
-              Drift through the archive
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={onDrift}
+            style={{
+              marginTop: 16,
+              border: "none",
+              background: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: "var(--font-display)",
+              fontSize: 16,
+              fontStyle: "italic",
+              color: "rgba(246,241,231,0.76)",
+            }}
+          >
+            Drift through the archive
+          </button>
 
           {resurfacingCount > 1 && (
             <div

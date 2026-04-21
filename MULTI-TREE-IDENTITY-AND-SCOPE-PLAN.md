@@ -1,6 +1,7 @@
 # Multi-Tree Identity And Scope Plan
 
-**Status:** Planning constraint for upcoming cross-tree work
+**Status:** Core decisions implemented — this document now serves as ongoing
+product guardrails for cross-tree work.
 **Purpose:** Clarify how account identity, person overlap, and tree boundaries
 should behave in product terms before more cross-tree UI is built.
 

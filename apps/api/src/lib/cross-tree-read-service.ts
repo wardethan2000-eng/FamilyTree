@@ -238,7 +238,11 @@ export async function getTreeMemories(
       primaryPerson: { with: { portraitMedia: true } },
       personTags: {
         with: {
-          person: true,
+          person: {
+            with: {
+              portraitMedia: true,
+            },
+          },
         },
       },
       reachRules: true,

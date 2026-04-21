@@ -13,14 +13,23 @@ import { AtriumStartState } from "@/components/home/AtriumStartState";
 import type {
   TreeHomeArchiveSummary,
   TreeHomeCoverage,
+  TreeHomeFeaturedBranch,
   TreeHomeFamilyPresence,
   TreeHomeMemory,
   TreeHomeMemoryTrailSection,
   TreeHomePayload,
   TreeHomePersonRecord,
+  TreeHomeRelationship,
   TreeHomeStats,
 } from "@/components/home/homeTypes";
-import { memoryMatchesDecade } from "@/components/home/homeUtils";
+import {
+  buildAtriumFamilyPresenceGroups,
+  buildAtriumMemoryTrail,
+  getAtriumBranchFocusIds,
+  getMemoryAnchorPersonId,
+  memoryMatchesDecade,
+  selectAtriumFeaturedMemory,
+} from "@/components/home/homeUtils";
 import { useSession } from "@/lib/auth-client";
 import { writeLastOpenedTreeId } from "@/lib/last-opened-tree";
 import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
@@ -81,11 +90,13 @@ export default function AtriumPage() {
   const [memories, setMemories] = useState<TreeHomeMemory[]>([]);
   const [heroCandidates, setHeroCandidates] = useState<TreeHomeMemory[]>([]);
   const [featuredMemory, setFeaturedMemory] = useState<TreeHomeMemory | null>(null);
+  const [featuredBranch, setFeaturedBranch] = useState<TreeHomeFeaturedBranch | null>(null);
   const [relatedMemoryTrail, setRelatedMemoryTrail] = useState<TreeHomeMemoryTrailSection[]>([]);
   const [familyPresence, setFamilyPresence] = useState<TreeHomeFamilyPresence | null>(null);
   const [archiveSummary, setArchiveSummary] = useState<TreeHomeArchiveSummary | null>(null);
   const [homeStats, setHomeStats] = useState<TreeHomeStats | null>(null);
   const [coverage, setCoverage] = useState<TreeHomeCoverage | null>(null);
+  const [relationships, setRelationships] = useState<TreeHomeRelationship[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -114,11 +125,13 @@ export default function AtriumPage() {
     setMemories(data.memories);
     setHeroCandidates(data.heroCandidates);
     setFeaturedMemory(data.featuredMemory);
+    setFeaturedBranch(data.featuredBranch);
     setRelatedMemoryTrail(data.relatedMemoryTrail);
     setFamilyPresence(data.familyPresence);
     setArchiveSummary(data.archiveSummary);
     setHomeStats(data.stats);
     setCoverage(data.coverage);
+    setRelationships(data.relationships);
     setSelectedEra((current) =>
       current === "all" || data.coverage.decadeBuckets.some((bucket) => bucket.startYear === current)
         ? current
@@ -218,27 +231,131 @@ export default function AtriumPage() {
     [people],
   );
 
-  const focusPersonId =
-    familyPresence?.focusPersonId ?? featuredMemory?.primaryPersonId ?? currentUserPersonId ?? people[0]?.id ?? null;
-  const focusPerson = people.find((person) => person.id === focusPersonId) ?? null;
-  const branchCue =
-    archiveSummary?.branchLabel ??
-    (focusPerson ? `Centered around ${focusPerson.name}'s branch` : "Centered around the branch taking shape here");
-
   const selectedEraLabel =
     selectedEra === "all"
       ? "All eras"
       : coverage?.decadeBuckets.find((bucket) => bucket.startYear === selectedEra)?.label ??
         `${selectedEra}s`;
 
+  const activeMemories = useMemo(
+    () =>
+      selectedEra === "all"
+        ? memories
+        : memories.filter((memory) => memoryMatchesDecade(memory, selectedEra)),
+    [memories, selectedEra],
+  );
+
+  const activeHeroCandidates = useMemo(
+    () =>
+      selectedEra === "all"
+        ? heroCandidates
+        : heroCandidates.filter((memory) => memoryMatchesDecade(memory, selectedEra)),
+    [heroCandidates, selectedEra],
+  );
+
+  const activeFeaturedMemory = useMemo(
+    () =>
+      selectedEra === "all"
+        ? featuredMemory
+        : selectAtriumFeaturedMemory(activeMemories, activeHeroCandidates),
+    [activeHeroCandidates, activeMemories, featuredMemory, selectedEra],
+  );
+
+  const activeFocusPersonId = useMemo(
+    () =>
+      selectedEra === "all"
+        ? featuredBranch?.focusPersonId ??
+          familyPresence?.focusPersonId ??
+          getMemoryAnchorPersonId(activeFeaturedMemory) ??
+          currentUserPersonId ??
+          people[0]?.id ??
+          null
+        : getMemoryAnchorPersonId(activeFeaturedMemory) ??
+          featuredBranch?.focusPersonId ??
+          currentUserPersonId ??
+          people[0]?.id ??
+          null,
+    [
+      activeFeaturedMemory,
+      currentUserPersonId,
+      familyPresence?.focusPersonId,
+      featuredBranch?.focusPersonId,
+      people,
+      selectedEra,
+    ],
+  );
+
+  const activeFocusIds = useMemo(
+    () => getAtriumBranchFocusIds(activeFocusPersonId, relationships),
+    [activeFocusPersonId, relationships],
+  );
+
+  const focusPerson = people.find((person) => person.id === activeFocusPersonId) ?? null;
+  const branchCue =
+    selectedEra === "all"
+      ? featuredBranch?.branchLabel ??
+        archiveSummary?.branchLabel ??
+        (focusPerson
+          ? `Centered around ${focusPerson.name}'s branch`
+          : "Centered around the branch taking shape here")
+      : focusPerson
+        ? `Centered around ${focusPerson.name}'s branch`
+        : "Centered around the branch that surfaces in this era";
+
   const trailSections = useMemo(
-    () => filterTrailSectionsByEra(relatedMemoryTrail, selectedEra),
-    [relatedMemoryTrail, selectedEra],
+    () =>
+      selectedEra === "all"
+        ? relatedMemoryTrail
+        : buildAtriumMemoryTrail({
+            featuredMemory: activeFeaturedMemory,
+            memories: activeMemories,
+            focusIds: activeFocusIds,
+            focusPersonName: focusPerson?.name ?? null,
+          }),
+    [activeFeaturedMemory, activeFocusIds, activeMemories, focusPerson?.name, relatedMemoryTrail, selectedEra],
   );
 
   const familyPresenceGroups = useMemo(
-    () => mapFamilyPresenceGroups(familyPresence, people),
-    [familyPresence, people],
+    () =>
+      mapFamilyPresenceGroups(
+        selectedEra === "all"
+          ? familyPresence
+          : {
+              focusPersonId: activeFocusPersonId,
+              groups: buildAtriumFamilyPresenceGroups({
+                focusPersonId: activeFocusPersonId,
+                focusIds: activeFocusIds,
+                people: people.map((person) => ({
+                  id: person.id,
+                  displayName: person.name,
+                  portraitUrl: person.portraitUrl,
+                  essenceLine: person.essenceLine,
+                  birthDateText: person.birthYear ? String(person.birthYear) : null,
+                  deathDateText: person.deathYear ? String(person.deathYear) : null,
+                  linkedUserId: person.linkedUserId,
+                })),
+                relationships,
+              }),
+            },
+        people,
+      ),
+    [activeFocusIds, activeFocusPersonId, familyPresence, people, relationships, selectedEra],
+  );
+
+  const nearbyPeople = useMemo(
+    () => {
+      const peopleById = new Map(people.map((person) => [person.id, person]));
+      const relatedIds =
+        selectedEra === "all" && featuredBranch?.relatedPersonIds?.length
+          ? featuredBranch.relatedPersonIds
+          : [activeFocusPersonId, ...activeFocusIds];
+      return [...new Set(relatedIds.filter(Boolean))]
+        .filter((personId): personId is string => Boolean(personId) && personId !== activeFocusPersonId)
+        .map((personId) => peopleById.get(personId))
+        .filter((person): person is Person => Boolean(person))
+        .slice(0, 8);
+    },
+    [activeFocusIds, activeFocusPersonId, featuredBranch?.relatedPersonIds, people, selectedEra],
   );
 
   if (isPending || loading || (needsNormalization && !loadError)) {
@@ -306,13 +423,14 @@ export default function AtriumPage() {
           position: "sticky",
           top: 0,
           zIndex: 30,
-          height: 52,
+          minHeight: 52,
           background: "rgba(246,241,231,0.92)",
           backdropFilter: "blur(8px)",
           borderBottom: "1px solid var(--rule)",
           display: "flex",
           alignItems: "center",
-          padding: "0 24px",
+          flexWrap: "wrap",
+          padding: "8px 16px",
           gap: 12,
         }}
       >
@@ -441,17 +559,21 @@ export default function AtriumPage() {
       ) : (
         <AtriumStage
           treeName={tree?.name ?? "Family Archive"}
-          featuredMemory={featuredMemory}
+          featuredMemory={activeFeaturedMemory}
           branchCue={branchCue}
-          memoryHref={featuredMemory ? `/trees/${treeId}/memories/${featuredMemory.id}` : null}
-          branchHref={focusPersonId ? `/trees/${treeId}/people/${focusPersonId}` : null}
+          memoryHref={activeFeaturedMemory ? `/trees/${treeId}/memories/${activeFeaturedMemory.id}` : null}
+          branchHref={activeFocusPersonId ? `/trees/${treeId}/people/${activeFocusPersonId}` : null}
           fullTreeHref={`/trees/${treeId}`}
-          resurfacingCount={heroCandidates.length}
+          resurfacingCount={activeHeroCandidates.length}
           onDrift={() => setDriftOpen(true)}
         />
       )}
 
-      <AtriumContextStrip stats={homeStats} coverage={coverage} branchCue={branchCue} />
+      <AtriumContextStrip
+        scaleLabel={formatArchiveScaleLabel(archiveSummary, homeStats, people.length)}
+        historicalLabel={formatArchiveHistoricalLabel(archiveSummary, coverage)}
+        branchCue={branchCue}
+      />
 
       {memories.length > 0 && (
         <AtriumMemoryTrail
@@ -469,10 +591,10 @@ export default function AtriumPage() {
 
       <AtriumFamilyPresence
         focusPerson={focusPerson}
-        focusPersonName={featuredMemory?.personName ?? focusPerson?.name ?? null}
+        focusPersonName={activeFeaturedMemory?.personName ?? focusPerson?.name ?? null}
+        branchCue={branchCue}
+        nearbyPeople={nearbyPeople}
         groups={familyPresenceGroups}
-        scaleLabel={formatArchiveScaleLabel(archiveSummary, homeStats, people.length)}
-        historicalLabel={formatArchiveHistoricalLabel(archiveSummary, coverage)}
         fullTreeHref={`/trees/${treeId}`}
         addPersonHref={`/trees/${treeId}/people/new`}
         onPersonClick={handlePersonClick}
@@ -566,22 +688,14 @@ const headerButtonStyle = {
   gap: 6,
 } as const;
 
-function filterTrailSectionsByEra(
-  sections: TreeHomeMemoryTrailSection[],
-  selectedEra: EraValue,
-) {
-  if (selectedEra === "all") return sections;
-
-  return sections
-    .map((section) => ({
-      ...section,
-      memories: section.memories.filter((memory) => memoryMatchesDecade(memory, selectedEra)),
-    }))
-    .filter((section) => section.memories.length > 0);
-}
-
 function mapFamilyPresenceGroups(
-  familyPresence: TreeHomeFamilyPresence | null,
+  familyPresence:
+    | {
+        focusPersonId: string | null;
+        groups: Array<{ id: string; label: string; personIds: string[] }>;
+      }
+    | TreeHomeFamilyPresence
+    | null,
   people: Person[],
 ): FamilyPresenceGroup[] {
   if (!familyPresence) return [];

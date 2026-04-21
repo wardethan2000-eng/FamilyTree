@@ -33,6 +33,7 @@ export interface TreeHomeMemory {
   personName?: string | null;
   primaryPersonId?: string | null;
   personPortraitUrl?: string | null;
+  relatedPersonIds?: string[];
   createdAt?: string;
 }
 

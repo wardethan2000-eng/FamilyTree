@@ -1,5 +1,7 @@
 # Memory Sharing Plan
 
+> **Reviewed:** 2026-04-21
+
 ## Goal
 
 Memories should belong to the family graph, not to a page. The product should avoid a "pages and posts" model where contributors have to decide the one correct page or manually tag every possibly relevant person.
@@ -98,29 +100,33 @@ The order should be:
 
 ### Phase 1: Backend Foundation
 
-1. Add stored reach rules to the schema.
-2. Expand memory creation APIs to accept:
-   - `taggedPersonIds`
-   - `reach`
-3. Resolve reach at read time so person views can surface contextual memories.
-4. Keep the existing UI working while the backend contract expands.
+**Status: Completed**
+
+1. [x] Add stored reach rules to the schema (`memory_reach_rules` table).
+2. [x] Expand memory creation APIs to accept `taggedPersonIds` and `reach`.
+3. [x] Resolve reach at read time so person views can surface contextual memories (`memory-reach-service.ts`).
+4. [x] Keep the existing UI working while the backend contract expands.
 
 ### Phase 2: Composer Changes
+
+**Status: Partially completed**
 
 Replace the current "upload to this person" mental model with:
 
 - Who is this directly about?
 - Where else should it appear?
 
-The composer should support:
+The composer currently supports:
 
-- tagging specific people
-- sharing to immediate family
-- sharing to an ancestor line
-- sharing to a descendant line
-- sharing to the whole current tree
+- [x] tagging specific people
+- [ ] sharing to immediate family (backend ready, UI not fully productized)
+- [ ] sharing to an ancestor line (backend ready, UI not fully productized)
+- [ ] sharing to a descendant line (backend ready, UI not fully productized)
+- [ ] sharing to the whole current tree (backend ready, UI not fully productized)
 
 ### Phase 3: Person View Restructure
+
+**Status: Not started**
 
 The person view should stop behaving like a mini social profile and instead behave like a chapter in a shared archive.
 
@@ -133,18 +139,22 @@ with quiet attribution for why they are present.
 
 ### Phase 4: Permissions Hardening
 
+**Status: Partially completed**
+
 Add:
 
-- subject-level hide/contest flows for direct subjects
-- per-person suppression for "not relevant here"
-- richer `family_circle` semantics derived from graph relationships rather than steward-only placeholder behavior
+- [x] subject-level hide/contest flows for direct subjects (`memory_person_suppressions` table exists)
+- [ ] per-person suppression UI for "not relevant here"
+- [ ] richer `family_circle` semantics derived from graph relationships rather than steward-only placeholder behavior
 
 ## This Implementation Slice
 
-This repo change begins Phase 1:
+This repo change implements Phase 1 and begins Phase 2:
 
-- additive schema changes for memory reach rules
-- create-path support for explicit direct-subject tags and reach rules
-- read-time resolution so memories can surface across family contexts without page ownership
+- [x] additive schema changes for memory reach rules
+- [x] create-path support for explicit direct-subject tags and reach rules
+- [x] read-time resolution so memories can surface across family contexts without page ownership
 
 This is intentionally backend-first so later UI work can build against a stable model.
+
+**Current status:** Backend foundation is stable. Composer UI needs to expose reach-rule controls to users.

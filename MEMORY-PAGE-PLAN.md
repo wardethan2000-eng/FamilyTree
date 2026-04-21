@@ -1,5 +1,7 @@
 # Memory Page Plan
 
+> **Reviewed:** 2026-04-21
+
 ## Direction
 
 Memories should become first-class destinations instead of staying as small utility cards with a lightbox. A person page should feel like a calm, editorial chapter. A memory should have enough room for narrative, media, voice, context, and multiple perspectives.
@@ -100,20 +102,26 @@ Suggested full memory page sections:
 
 ### Phase 1
 
-- add dedicated memory route and page shell
-- keep current person-page previews but route clicks to the memory page
-- move current lightbox usage behind the memory page media gallery
+**Status: Completed**
+
+- [x] add dedicated memory route and page shell (`/trees/[treeId]/memories/[memoryId]`)
+- [x] keep current person-page previews but route clicks to the memory page
+- [x] move current lightbox usage behind the memory page media gallery
 
 ### Phase 2
 
-- expand memory model to support multiple media items
-- support multiple contributions/perspectives on one memory
-- improve preview design on person pages
+**Status: Partially completed**
+
+- [x] expand memory model to support multiple media items (`memory_media` table)
+- [x] support multiple contributions/perspectives on one memory (`memory_perspectives` table)
+- [ ] improve preview design on person pages (still uses older card style)
 
 ### Phase 3
 
-- add editorial curation tools for featured memories and ordering
-- add related-memory and cross-person context modules
+**Status: Not started**
+
+- [ ] add editorial curation tools for featured memories and ordering
+- [ ] add related-memory and cross-person context modules
 
 ## Immediate Build Recommendation
 

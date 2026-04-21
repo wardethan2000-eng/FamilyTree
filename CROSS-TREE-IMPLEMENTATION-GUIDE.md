@@ -3,13 +3,17 @@
 **Companion to:** `SPEC-AMENDMENT-CROSS-TREE.md`
 **Purpose:** Step-by-step instructions for implementing the cross-tree data architecture across multiple development sessions.
 
-> **Implementation Status (Updated):**
-> All phases below have been **completed and deployed**. The legacy connection
+> **Implementation Status (Updated 2026-04-21):**
+> Core phases below have been **completed and deployed**. The legacy connection
 > model (`tree_connections`, `cross_tree_person_links`, `tree_connection_status`)
 > has been fully retired — dropped from the Drizzle schema and live database via
 > migration `0008_retire_tree_connections.sql`. Code examples in this guide
 > reflect the design-time intent; refer to the actual source files for the
 > canonical, current implementation.
+>
+> **Remaining cleanup:** Legacy `tree_id` columns still exist on `people`,
+> `relationships`, `memories`, and `media` pending full query migration away from
+> tree-scoped reads. See the checklist at the bottom of this document for details.
 
 ---
 
@@ -1252,30 +1256,30 @@ ALTER TABLE relationships
 
 For each session, reference this checklist to track progress:
 
-- [ ] **Schema: New tables** — `tree_person_scope`, `tree_relationship_visibility`, `memory_person_tags`, `memory_tree_visibility`, `person_merge_audit`
-- [ ] **Schema: Altered tables** — `people` (+`home_tree_id`), `relationships` (+`created_in_tree_id`), `memories` (rename `tree_id`→`contributing_tree_id`), `media` (rename `tree_id`→`contributing_tree_id`), `trees` (+`tier`, +`subscription_status`, +`subscription_expires_at`)
-- [ ] **Schema: Removed tables** — `tree_connections`, `cross_tree_person_links`
-- [ ] **Schema: Relations** — New Drizzle relation definitions for all new tables
-- [ ] **Schema: Unique constraints** — Relationship uniqueness updated to global
-- [ ] **API: Query migration** — All `WHERE tree_id = ?` queries on people/relationships/memories migrated to scope joins
-- [ ] **API: New endpoints** — Scope management, person linking, merge, visibility
-- [ ] **API: Person creation** — Creates global record + scope entry
-- [ ] **API: Person removal** — Removes from scope; only deletes if orphaned
-- [ ] **API: Relationship creation** — Checks for existing global relationship
-- [ ] **Permissions: Memory visibility** — Four-level resolution engine
-- [ ] **Permissions: Person edit** — Subject > home steward > any steward
-- [ ] **Frontend: Tree context** — Global tree context provider
-- [ ] **Frontend: Data fetching** — Scope-based queries
-- [ ] **Frontend: In-law toggle** — Contextual external node rendering
-- [ ] **Frontend: Multi-tree indicator** — Person card shows all trees
-- [ ] **Frontend: Person search** — Cross-tree search when adding people
-- [ ] **Linking: Duplicate detection** — Background job + on-demand check
-- [ ] **Linking: Merge flow** — UI + backend for steward-approved merge
-- [ ] **Billing: Storage attribution** — contributing_tree_id tracking
-- [ ] **Billing: Tier enforcement** — Middleware for scope/storage/seat limits
-- [ ] **Billing: Subscription columns** — tier, status, expiry on trees table
-- [ ] **Testing: Permission unit tests** — Memory visibility, person edit
-- [ ] **Testing: Query helper tests** — Scoped people, relationships, memories
-- [ ] **Testing: Integration tests** — Cross-tree scenarios
-- [ ] **Migration: Data script** — One-time migration of existing data
-- [ ] **Migration: Cleanup** — Drop old columns and tables
+- [x] **Schema: New tables** — `tree_person_scope`, `tree_relationship_visibility`, `memory_person_tags`, `memory_tree_visibility`, `person_merge_audit`, `memory_person_suppressions`, `memory_perspectives`, `memory_media`, `memory_reach_rules`, `person_memory_curation`
+- [x] **Schema: Altered tables** — `people` (+`home_tree_id`), `relationships` (+`created_in_tree_id`), `memories` (+`contributing_tree_id`), `media` (+`contributing_tree_id`), `trees` (+`tier`, +`subscription_status`, +`subscription_expires_at`)
+- [x] **Schema: Removed tables** — `tree_connections`, `cross_tree_person_links` (dropped in migration `0008_retire_tree_connections.sql`)
+- [x] **Schema: Relations** — New Drizzle relation definitions for all new tables
+- [ ] **Schema: Unique constraints** — Relationship uniqueness updated, but legacy `tree_id` unique constraints still remain pending full cleanup
+- [x] **API: Query migration** — Core queries migrated to scope joins via `cross-tree-read-service.ts`
+- [x] **API: New endpoints** — Scope management, person linking, merge, visibility
+- [x] **API: Person creation** — Creates global record + scope entry
+- [x] **API: Person removal** — Removes from scope; only deletes if orphaned
+- [x] **API: Relationship creation** — Checks for existing global relationship
+- [x] **Permissions: Memory visibility** — Four-level resolution engine in `cross-tree-permission-service.ts`
+- [x] **Permissions: Person edit** — Subject > home steward > any steward
+- [x] **Frontend: Tree context** — Tree-scoped navigation and routing
+- [x] **Frontend: Data fetching** — Scope-based queries via `cross-tree-read-service.ts`
+- [ ] **Frontend: In-law toggle** — Not yet implemented
+- [ ] **Frontend: Multi-tree indicator** — Partial (person pages may show tree scope, but not fully productized)
+- [ ] **Frontend: Person search** — Cross-tree search when adding people not yet implemented
+- [x] **Linking: Duplicate detection** — Audit service + on-demand check in `account-identity-audit-service.ts`
+- [x] **Linking: Merge flow** — Backend merge service with tests in `cross-tree-merge-service.ts`
+- [x] **Billing: Storage attribution** — `contributing_tree_id` tracking
+- [x] **Billing: Tier enforcement** — `tree-usage-service.ts` for scope/storage/seat limits
+- [x] **Billing: Subscription columns** — tier, status, expiry on trees table
+- [x] **Testing: Permission unit tests** — Memory reach service, merge service tests
+- [x] **Testing: Query helper tests** — Scoped people, relationships, memories
+- [ ] **Testing: Integration tests** — Cross-tree integration tests not yet comprehensive
+- [x] **Migration: Data script** — One-time migration of existing data (migrations `0005` through `0015`)
+- [ ] **Migration: Cleanup** — Legacy `tree_id` columns on `people`, `relationships`, `memories`, `media` still exist and must be dropped in a future migration once all queries are fully migrated

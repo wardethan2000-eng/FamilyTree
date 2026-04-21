@@ -1,51 +1,40 @@
 "use client";
 
-import type { TreeHomeCoverage, TreeHomeStats } from "./homeTypes";
-
 export function AtriumContextStrip({
-  stats,
-  coverage,
+  scaleLabel,
+  historicalLabel,
   branchCue,
 }: {
-  stats: TreeHomeStats | null;
-  coverage: TreeHomeCoverage | null;
+  scaleLabel: string;
+  historicalLabel: string;
   branchCue: string;
 }) {
   return (
     <section style={{ padding: "24px max(20px, 5vw) 0" }}>
       <div
         style={{
-          border: "1px solid rgba(122,108,88,0.2)",
-          borderRadius: 22,
+          border: "1px solid rgba(122,108,88,0.14)",
+          borderRadius: 18,
           background:
-            "linear-gradient(180deg, rgba(255,250,244,0.96) 0%, rgba(244,237,226,0.9) 100%)",
-          padding: "18px clamp(18px, 3vw, 28px)",
-          display: "grid",
+            "linear-gradient(180deg, rgba(255,251,246,0.94) 0%, rgba(247,241,232,0.9) 100%)",
+          padding: "18px clamp(18px, 3vw, 26px)",
+          display: "flex",
+          alignItems: "center",
           gap: 16,
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          boxShadow: "0 10px 26px rgba(40,30,18,0.04)",
+          flexWrap: "wrap",
         }}
       >
-        <ContextBlock
-          label="Family scale"
-          value={formatScaleValue(stats)}
-        />
-        <ContextBlock
-          label="Historical span"
-          value={formatHistoricalValue(coverage)}
-        />
-        <ContextBlock
-          label="Branch focus"
-          value={branchCue}
-        />
+        <ContextRun label="Family scale" value={scaleLabel} />
+        <ContextRun label="Historical span" value={historicalLabel} />
+        <ContextRun label="Branch focus" value={branchCue} />
       </div>
     </section>
   );
 }
 
-function ContextBlock({ label, value }: { label: string; value: string }) {
+function ContextRun({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div style={{ minWidth: "min(220px, 100%)", flex: "1 1 220px" }}>
       <div
         style={{
           fontFamily: "var(--font-ui)",
@@ -60,39 +49,14 @@ function ContextBlock({ label, value }: { label: string; value: string }) {
       </div>
       <div
         style={{
-          fontFamily: "var(--font-display)",
-          fontSize: 18,
-          lineHeight: 1.35,
-          color: "var(--ink)",
+          fontFamily: "var(--font-body)",
+          fontSize: 15,
+          lineHeight: 1.7,
+          color: "var(--ink-soft)",
         }}
       >
         {value}
       </div>
     </div>
   );
-}
-
-function formatScaleValue(stats: TreeHomeStats | null) {
-  const peopleCount = stats?.peopleCount ?? 0;
-  const generationCount = stats?.generationCount ?? 0;
-
-  if (peopleCount === 0) return "No one has been added yet.";
-  if (generationCount > 0) {
-    return `${peopleCount} ${peopleCount === 1 ? "person" : "people"} across ${generationCount} ${generationCount === 1 ? "generation" : "generations"}`;
-  }
-  return `${peopleCount} ${peopleCount === 1 ? "person" : "people"} gathering here`;
-}
-
-function formatHistoricalValue(coverage: TreeHomeCoverage | null) {
-  if (!coverage || (coverage.earliestYear === null && coverage.latestYear === null)) {
-    return "Dates are still gathering around the archive.";
-  }
-  if (coverage.earliestYear !== null && coverage.latestYear !== null) {
-    if (coverage.earliestYear === coverage.latestYear) {
-      return `Memories centered on ${coverage.earliestYear}`;
-    }
-    return `Memories from ${coverage.earliestYear} to ${coverage.latestYear}`;
-  }
-  const knownYear = coverage.earliestYear ?? coverage.latestYear;
-  return `Memories gathering around ${knownYear}`;
 }

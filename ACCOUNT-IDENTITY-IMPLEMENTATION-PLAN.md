@@ -1,6 +1,6 @@
 # Account Identity Implementation Plan
 
-**Status:** Planning
+**Status:** Phases 1–5, 9–10 completed. Phases 6–8 partially completed.
 **Scope:** Technical plan for implementing account-linked identity across trees
 without turning multiple trees into one combined canvas
 
@@ -105,6 +105,8 @@ legacy duplicates are understood.
 
 ## Phase 1: Identity Service And API Contract
 
+**Status: Completed**
+
 Create a dedicated backend layer for account identity.
 
 ### New Backend Concept
@@ -145,6 +147,8 @@ Without a central service, implementation will drift and duplicate bugs will
 continue appearing in each flow.
 
 ## Phase 2: Data Audit And Migration Safety
+
+**Status: Completed**
 
 Before enforcing any uniqueness rule, audit existing data.
 
@@ -187,6 +191,8 @@ The audit and cleanup path must land first.
 
 ## Phase 3: Fix Founder Onboarding
 
+**Status: Completed**
+
 Founder onboarding is currently the biggest guaranteed source of duplicate self
 people.
 
@@ -227,6 +233,8 @@ Where bootstrap:
 - new identity service file
 
 ## Phase 4: Fix Invitation Acceptance
+
+**Status: Completed**
 
 Invitation acceptance must become the main safe path for cross-tree identity.
 
@@ -270,6 +278,8 @@ Claiming a person must never silently overwrite another user's claim.
 
 ## Phase 5: Introduce Explicit Identity Status Endpoints
 
+**Status: Completed**
+
 The frontend needs a stable identity contract instead of inferring identity from
 tree people lists.
 
@@ -307,6 +317,8 @@ That is brittle and not a real identity model.
 
 ## Phase 6: Tighten Person Creation Semantics
 
+**Status: Partially completed**
+
 Person creation needs better rules once account identity is authoritative.
 
 ### Required Rule
@@ -335,6 +347,8 @@ That likely means:
 The current generic `linkToUser` flag is too easy to misuse from future UI code.
 
 ## Phase 7: Permission And Access Fixes
+
+**Status: Partially completed**
 
 Once one claimed person spans multiple trees, some currently hidden assumptions
 become correctness bugs.
@@ -400,6 +414,8 @@ but they must at least be audited and classified as:
 
 ## Phase 8: UI Surfaces For Conflict And Reuse
 
+**Status: Partially completed**
+
 Identity only works if users and stewards understand what the system is doing.
 
 ### Required UI States
@@ -437,6 +453,8 @@ Show:
 
 ## Phase 9: Merge Workflow Hardening For Claimed Duplicates
 
+**Status: Completed**
+
 The merge service already exists, but account identity makes some flows much
 more common and much more important.
 
@@ -455,6 +473,8 @@ more common and much more important.
 - `apps/api/src/lib/cross-tree-merge-service.test.ts`
 
 ## Phase 10: Capacity And Billing Checks
+
+**Status: Completed**
 
 Identity reuse changes people-count semantics.
 
@@ -475,30 +495,15 @@ scope slot in that tree, not zero. That already mostly matches current
 
 ### Migration 1: Data Audit Support
 
-Optional but useful:
-
-- add an index for `people.linked_user_id` if not already sufficient for audit
-  and lookup
+**Status: Completed** — `people_linked_user_idx` exists.
 
 ### Migration 2: Unique Claimed Identity
 
-After cleanup:
-
-- add partial unique index on `people(linked_user_id)` where not null
+**Status: Not yet completed** — The partial unique index on `people(linked_user_id)` where not null has not been added yet. Legacy duplicate claimed users should be cleaned up via the audit/remediation services first.
 
 ### Migration 3: Optional Identity Events Table
 
-Not required for first implementation, but consider later if debugging becomes
-hard:
-
-- `person_identity_events`
-  - user_id
-  - person_id
-  - tree_id
-  - event_type (`claimed`, `claim_conflict`, `merged`, `scope_added`)
-  - created_at
-
-This is useful for operations, but not necessary to begin.
+**Status: Not yet completed** — Consider adding if debugging cross-tree identity issues becomes difficult.
 
 ## API And Code Areas To Change
 
@@ -636,16 +641,16 @@ Mitigation:
 
 ## Recommended Implementation Order
 
-1. Add the identity service and `GET /api/me/identity`.
-2. Add audit tooling for duplicate claimed users.
-3. Fix founder onboarding to reuse claimed person.
-4. Fix invitation acceptance to use identity service and return conflict states.
-5. Add explicit tree bootstrap/claim endpoints.
-6. Update frontend identity-dependent surfaces.
-7. Fix portrait/media access for shared claimed people.
-8. Expand tests.
-9. Clean existing duplicate claimed users.
-10. Add DB uniqueness constraint on `linked_user_id`.
+1. [x] Add the identity service and `GET /api/me/identity`.
+2. [x] Add audit tooling for duplicate claimed users.
+3. [x] Fix founder onboarding to reuse claimed person.
+4. [x] Fix invitation acceptance to use identity service and return conflict states.
+5. [x] Add explicit tree bootstrap/claim endpoints.
+6. [x] Update frontend identity-dependent surfaces.
+7. [ ] Fix portrait/media access for shared claimed people.
+8. [x] Expand tests.
+9. [ ] Clean existing duplicate claimed users.
+10. [ ] Add DB uniqueness constraint on `linked_user_id`.
 
 ## Recommended First Slice
 

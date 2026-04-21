@@ -1,5 +1,7 @@
 # Atrium Revision Plan
 
+> **Reviewed:** 2026-04-21 — Phases 0–6 completed; Phase 7 polish ongoing.
+
 ## Purpose
 
 This document is the implementation handoff plan for revising `/trees/[treeId]/atrium`.
@@ -524,6 +526,8 @@ Those can still remain elsewhere in the API response if needed for the header, b
 
 ## Phase 0 - Lock The Direction
 
+**Status: Completed**
+
 Before coding:
 
 - treat this document as the source of truth
@@ -538,13 +542,15 @@ Before coding:
 
 ## Phase 1 - Remove The Wrong Structure
 
+**Status: Completed**
+
 ### Tasks
 
-1. Remove the standalone CTA row from below the hero.
-2. Remove `HomeSummaryBand` from the top-level atrium flow.
-3. Remove the standalone `EraRibbon` from the top-level atrium flow.
-4. Remove the separate `Voices in the archive` lane.
-5. Replace the bottom `The family` framing with a placeholder `AtriumFamilyPresence` shell.
+1. [x] Remove the standalone CTA row from below the hero.
+2. [x] Remove `HomeSummaryBand` from the top-level atrium flow.
+3. [x] Remove the standalone `EraRibbon` from the top-level atrium flow.
+4. [x] Remove the separate `Voices in the archive` lane.
+5. [x] Replace the bottom `The family` framing with a placeholder `AtriumFamilyPresence` shell.
 
 ### Notes
 
@@ -558,12 +564,14 @@ This phase is about deleting the wrong page shape first.
 
 ## Phase 2 - Build `AtriumStage`
 
+**Status: Completed**
+
 ### Tasks
 
-1. Create `AtriumStage.tsx`.
-2. Move the opening memory title, excerpt, attribution, and primary actions into it.
-3. Keep the stage responsible for the full opening experience.
-4. Move the current top CTA intent inside the stage:
+1. [x] Create `AtriumStage.tsx`.
+2. [x] Move the opening memory title, excerpt, attribution, and primary actions into it.
+3. [x] Keep the stage responsible for the full opening experience.
+4. [x] Move the current top CTA intent inside the stage:
    - drifting
    - continue memory
    - open full tree
@@ -578,11 +586,13 @@ This phase is about deleting the wrong page shape first.
 
 ## Phase 3 - Build `AtriumContextStrip`
 
+**Status: Completed**
+
 ### Tasks
 
-1. Create `AtriumContextStrip.tsx`.
-2. Replace the current boxed summary band with lighter narrative context.
-3. Use human language rather than stewardship language.
+1. [x] Create `AtriumContextStrip.tsx`.
+2. [x] Replace the current boxed summary band with lighter narrative context.
+3. [x] Use human language rather than stewardship language.
 
 ### Context-strip acceptance criteria
 
@@ -594,12 +604,14 @@ This phase is about deleting the wrong page shape first.
 
 ## Phase 4 - Build `AtriumMemoryTrail`
 
+**Status: Completed**
+
 ### Tasks
 
-1. Create `AtriumMemoryTrail.tsx`.
-2. Replace `Resurfacing now` and `Voices in the archive`.
-3. Build one guided trail from the featured memory outward.
-4. If era filtering remains, move it inside this section as a secondary control.
+1. [x] Create `AtriumMemoryTrail.tsx`.
+2. [x] Replace `Resurfacing now` and `Voices in the archive`.
+3. [x] Build one guided trail from the featured memory outward.
+4. [x] If era filtering remains, move it inside this section as a secondary control.
 
 ### Trail acceptance criteria
 
@@ -611,12 +623,14 @@ This phase is about deleting the wrong page shape first.
 
 ## Phase 5 - Build `AtriumFamilyPresence`
 
+**Status: Completed**
+
 ### Tasks
 
-1. Create `AtriumFamilyPresence.tsx`.
-2. Replace the current people-directory framing.
-3. Reuse layout/relationship truth where helpful, but change the presentation goal from “preview tool” to “show family presence”.
-4. Keep the full constellation link, but demote it to a handoff, not the purpose of the section.
+1. [x] Create `AtriumFamilyPresence.tsx`.
+2. [x] Replace the current people-directory framing.
+3. [x] Reuse layout/relationship truth where helpful, but change the presentation goal from "preview tool" to "show family presence".
+4. [x] Keep the full constellation link, but demote it to a handoff, not the purpose of the section.
 
 ### Family-presence acceptance criteria
 
@@ -628,11 +642,13 @@ This phase is about deleting the wrong page shape first.
 
 ## Phase 6 - Data Contract Cleanup
 
+**Status: Completed**
+
 ### Tasks
 
-1. Review whether current client-side derivation is still acceptable.
-2. If too much homepage curation remains client-side, extend `GET /api/trees/:treeId/home`.
-3. Move featured-memory and related-trail selection server-side if possible.
+1. [x] Review whether current client-side derivation is still acceptable.
+2. [x] Extend `GET /api/trees/:treeId/home` to return atrium-oriented fields.
+3. [x] Move featured-memory and related-trail selection server-side.
 
 ### Acceptance criteria
 
@@ -643,13 +659,15 @@ This phase is about deleting the wrong page shape first.
 
 ## Phase 7 - Polish Only After Structure Is Correct
 
+**Status: In progress**
+
 Allowed polish after the structural rewrite:
 
-- transitions
-- spacing
-- hover/focus states
-- skeletons
-- responsive tuning
+- [x] transitions
+- [x] spacing
+- [ ] hover/focus states (ongoing refinement)
+- [x] skeletons
+- [x] responsive tuning
 
 Forbidden polish before structural rewrite:
 

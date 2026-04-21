@@ -1,5 +1,10 @@
 # Product Roadmap
 
+> **Reviewed:** 2026-04-21  
+> Items marked `[x]` are implemented or substantially complete. Items marked
+> with a completion note are partially implemented. Items marked `[ ]` are not
+> yet started.
+
 This document is the long-term product reference for Heirloom / FamilyTree.
 
 It is organized by phases rather than dates. The intent is to preserve product
@@ -85,7 +90,8 @@ Why this phase comes first:
 
 Features to implement:
 
-- [ ] Linked media memories
+- [x] Linked media memories (partial — schema supports Google Drive and generic
+  external URLs; deep OAuth integrations and Drive Picker not yet built)
   - Allow a memory to reference media that already lives elsewhere.
   - Initial targets can be share links or stable URLs rather than deep OAuth
     integrations.
@@ -135,10 +141,10 @@ Features to implement:
 
 Definition of done for this phase:
 
-- A new family can start from existing files or links.
-- A user can create an archive without reuploading or re-curating everything up
-  front.
-- The product becomes easier to start than the main competitor, not harder.
+- [x] A new family can start from existing files or links (GEDCOM import + linked media).
+- [ ] A user can create an archive without reuploading or re-curating everything up
+  front (batch import still missing).
+- [ ] The product becomes easier to start than the main competitor, not harder.
 
 ## Phase 2: Prompted Capture Engine
 
@@ -164,7 +170,8 @@ Features to implement:
   - The system should recommend prompt sequences rather than random prompts.
   - Prompt copy should be treated as product design, not filler text.
 
-- [ ] One-tap reply flow
+- [x] One-tap reply flow (partial — prompt reply links exist and work, but the
+  full lightweight elder reply page experience is not yet the canonical flow)
   - The current lightweight reply flow should become the canonical experience
     for low-tech contributors.
   - The page should optimize for:
@@ -205,9 +212,9 @@ Features to implement:
 
 Definition of done for this phase:
 
-- A steward can actively gather memories from relatives who would never browse
+- [ ] A steward can actively gather memories from relatives who would never browse
   the full app.
-- Prompting becomes a central loop of the product, not a side feature.
+- [ ] Prompting becomes a central loop of the product, not a side feature.
 
 ## Phase 3: Graph-Native Memory Model
 
@@ -220,11 +227,15 @@ Why this phase matters:
 
 Features to implement:
 
-- [ ] Full direct-subject tagging UX
+- [x] Full direct-subject tagging UX (partial — backend supports `memory_person_tags`
+  and the composer allows tagging people, but the UX does not yet fully expose
+  the "who is this directly about?" mental model as the primary flow)
   - Expose the current backend direction in the main composer.
   - Users should be able to say who a memory is directly about.
 
-- [ ] Reach rules in product UX
+- [x] Reach rules in product UX (partial — `memory_reach_rules` and
+  `memory-reach-service.ts` exist, but reach controls are not yet exposed in
+  the main composer UI)
   - Surface immediate-family, ancestor, descendant, and whole-tree sharing in
     an understandable way.
   - Users should not need to understand internal graph terminology.
@@ -235,12 +246,15 @@ Features to implement:
     - who is this directly about
     - what tree or family context surfaced it
 
-- [ ] Subject sovereignty flows
+- [x] Subject sovereignty flows (partial — `memory_person_suppressions` table
+  exists and the permission engine supports subject-level overrides, but the
+  full hide/contest UI flow is not yet built)
   - Living subjects should be able to hide, contest, or correct memories about
     themselves.
   - These controls should be specific and careful, not destructive by default.
 
-- [ ] Cross-tree identity management
+- [x] Cross-tree identity management (completed — account identity service,
+  duplicate detection, merge flows, and cross-tree scope are all implemented)
   - Strengthen duplicate detection, merge review, and shared identity across
     trees.
   - Marriage, remarriage, blended families, and multiple family contexts should
@@ -248,8 +262,9 @@ Features to implement:
 
 Definition of done for this phase:
 
-- The memory model clearly exceeds a page-owned archive.
-- Users can understand both direct memory ownership and contextual visibility.
+- [ ] The memory model clearly exceeds a page-owned archive (backend does; UI
+  needs composer and person-view changes to fully realize it).
+- [ ] Users can understand both direct memory ownership and contextual visibility.
 
 ## Phase 4: Curated Viewing and Discovery
 
@@ -264,7 +279,8 @@ Why this phase matters:
 
 Features to implement:
 
-- [ ] Atrium intelligence
+- [x] Atrium intelligence (partial — featured memory rotation, resurfacing, and
+  era filtering exist; anniversaries and birthdays are not yet surfaced)
   - Improve the atrium so it quietly surfaces:
     - recent contributions
     - unanswered prompts
@@ -272,7 +288,9 @@ Features to implement:
     - least-seen memories
     - relevant seasonal or historical moments
 
-- [ ] Guided drift modes
+- [x] Guided drift modes (partial — `DriftMode` component exists and provides
+  passive playback; guided modes by person, decade, branch, place, event, or
+  remembrance are not yet built)
   - Extend drift beyond random playback.
   - Possible modes:
     - one person
@@ -291,18 +309,23 @@ Features to implement:
     - holidays and rituals
   - These can begin as system-generated drafts that users refine.
 
-- [ ] Multi-perspective event views
+- [x] Multi-perspective event views (partial — `memory_perspectives` table
+  exists and the memory page supports multiple contributions, but event-level
+  grouping and multi-perspective assembly are not yet built)
   - A single event should be able to collect many memories from multiple people.
   - Example: a wedding, funeral, reunion, migration, or holiday.
 
-- [ ] Place journeys
+- [x] Place journeys (partial — family map view exists with pinned places, but
+  narrative place-based storytelling is not yet built)
   - Build on the map view to tell place-based stories:
     - where someone lived
     - migration paths
     - important family places
     - memories tied to one house or city
 
-- [ ] Discovery tools
+- [x] Discovery tools (partial — search overlay exists with person and memory
+  search; filtered discovery by contributor, voice-only, or year range is not
+  yet built)
   - Quietly support finding:
     - everything about this person
     - every memory mentioning this place
@@ -312,8 +335,8 @@ Features to implement:
 
 Definition of done for this phase:
 
-- The archive feels curated by default.
-- Revisiting the archive becomes a meaningful act, not just administration.
+- [ ] The archive feels curated by default.
+- [ ] Revisiting the archive becomes a meaningful act, not just administration.
 
 ## Phase 5: Portable Micro-Archives and Exhibits
 
@@ -344,7 +367,8 @@ Features to implement:
     shaping the narrative.
   - The builder should support both manual curation and system-generated drafts.
 
-- [ ] Output targets
+- [x] Output targets (partial — full-tree ZIP export with static HTML viewer
+  exists; curated subset exports and additional output formats are not yet built)
   - Downloadable ZIP
   - standalone HTML mini-site
   - private share link
@@ -365,9 +389,9 @@ Features to implement:
 
 Definition of done for this phase:
 
-- Users can spin out meaningful, curated outputs without exporting the entire
+- [ ] Users can spin out meaningful, curated outputs without exporting the entire
   archive.
-- Heirloom becomes useful not only as a repository, but as a publishing system
+- [ ] Heirloom becomes useful not only as a repository, but as a publishing system
   for family memory.
 
 ## Phase 6: Mobile Capture Surface
@@ -402,8 +426,8 @@ Features to implement:
 
 Definition of done for this phase:
 
-- Mobile meaningfully increases contribution volume from non-technical users.
-- The app is capture-centric rather than a compromised clone of the web app.
+- [ ] Mobile meaningfully increases contribution volume from non-technical users.
+- [ ] The app is capture-centric rather than a compromised clone of the web app.
 
 ## Phase 7: Ambient Surfaces
 
@@ -435,8 +459,8 @@ Features to implement:
 
 Definition of done for this phase:
 
-- The archive can be experienced passively and communally.
-- Heirloom begins to feel like infrastructure for remembrance, not just a web
+- [ ] The archive can be experienced passively and communally.
+- [ ] Heirloom begins to feel like infrastructure for remembrance, not just a web
   app.
 
 ## Phase 8: Trust, Hosting, and Ownership Modes
@@ -451,7 +475,7 @@ Why this matters:
 
 Features to implement:
 
-- [ ] Hosted mode
+- [x] Hosted mode (completed — this is the current default deployment model)
   - You host the application and the default media storage.
   - This should remain the easiest option.
 
@@ -460,7 +484,8 @@ Features to implement:
     storage.
   - This reduces migration friction and increases trust for some families.
 
-- [ ] Self-host package
+- [x] Self-host package (completed — Docker Compose files and Proxmox VM
+  deployment documentation exist in `infra/`)
   - A deployable package for private family installs on VPS, NAS, or home
     server environments.
   - This should be productized only after the hosted product is strong.
@@ -471,8 +496,8 @@ Features to implement:
 
 Definition of done for this phase:
 
-- Families can choose their preferred trust model without leaving the product.
-- Ownership becomes a concrete product promise rather than just product copy.
+- [ ] Families can choose their preferred trust model without leaving the product.
+- [ ] Ownership becomes a concrete product promise rather than just product copy.
 
 ## Ongoing Product Rules
 

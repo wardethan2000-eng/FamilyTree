@@ -142,11 +142,13 @@ export function AtriumMemoryTrail({
           </p>
         </div>
       ) : (
-        <div style={{ display: "grid", gap: 22 }}>
+        <div style={{ display: "grid", gap: 22, minWidth: 0 }}>
           {sections.map((section) => (
             <article
               key={section.id}
               style={{
+                width: "100%",
+                minWidth: 0,
                 border: "1px solid rgba(122,108,88,0.18)",
                 borderRadius: 20,
                 background:
@@ -156,6 +158,7 @@ export function AtriumMemoryTrail({
             >
               <div
                 style={{
+                  minWidth: 0,
                   padding: "0 clamp(18px, 3vw, 28px)",
                   marginBottom: 14,
                 }}
@@ -189,9 +192,12 @@ export function AtriumMemoryTrail({
                 style={{
                   display: "flex",
                   gap: 14,
+                  minWidth: 0,
+                  maxWidth: "100%",
                   overflowX: "auto",
                   padding: "0 clamp(18px, 3vw, 28px)",
                   paddingBottom: 4,
+                  scrollSnapType: "x proximity",
                   scrollbarWidth: "none",
                 }}
               >

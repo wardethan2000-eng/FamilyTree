@@ -1,5 +1,7 @@
 # Dashboard / Home Redesign Plan
 
+> **Reviewed:** 2026-04-21 — Phases 0–6 completed; Phases 7–8 pending.
+
 ## Purpose
 
 Redesign the signed-in landing experience so it feels like entering a living family archive rather than opening a utility dashboard. The product should communicate memory, lineage, historical scale, and invitation to explore within seconds.
@@ -360,25 +362,27 @@ This should enhance the system, not be required to make the homepage work.
 
 ## Phase 0 - Product decisions and scope lock
 
+**Status: Completed**
+
 ### Goal
 
 Resolve the architectural ambiguity before design and coding spread across multiple surfaces.
 
-### Decisions to make
+### Decisions made
 
-- confirm that the tree atrium is the primary home surface for this cycle
-- confirm `/dashboard` as cross-tree foyer, not the emotional homepage
-- confirm decade-based era navigation for v1
-- confirm that branch bias means:
+- [x] confirm that the tree atrium is the primary home surface for this cycle
+- [x] confirm `/dashboard` as cross-tree foyer, not the emotional homepage
+- [x] confirm decade-based era navigation for v1
+- [x] confirm that branch bias means:
   - constellation preview centers on the user's branch when possible
   - hero and discovery remain tree-wide unless filtered
-- confirm that manual curation is not required for MVP
+- [x] confirm that manual curation is not required for MVP
 
 ### Additional output
 
-- define home-page non-goals
-- define success metrics
-- define sparse-archive behavior
+- [x] define home-page non-goals
+- [x] define success metrics
+- [x] define sparse-archive behavior
 
 ### Exit criteria
 
@@ -389,6 +393,8 @@ Resolve the architectural ambiguity before design and coding spread across multi
 ---
 
 ## Phase 1 - Home data contract and ranking logic
+
+**Status: Completed**
 
 ### Goal
 
@@ -456,6 +462,8 @@ Do not block this phase on a perfect recommendation engine. The first pass shoul
 
 ## Phase 2 - Frontend foundation and component extraction
 
+**Status: Completed**
+
 ### Goal
 
 Stop treating the atrium as one growing page file and create reusable home components.
@@ -500,6 +508,8 @@ This does not require a full design system rewrite.
 
 ## Phase 3 - Rotating hero implementation
 
+**Status: Completed**
+
 ### Goal
 
 Turn the current atrium hero into the emotional center of the archive.
@@ -533,9 +543,17 @@ Turn the current atrium hero into the emotional center of the archive.
 
 ## Phase 4 - Scale band, era ribbon, and constellation preview
 
+**Status: Partially completed**
+
 ### Goal
 
 Give the user immediate historical and structural context after the hero.
+
+### Notes
+
+- Scale band is implemented via `AtriumContextStrip`.
+- Era ribbon exists as a component but is demoted to a secondary control inside `AtriumMemoryTrail` rather than a standalone top-level section.
+- Constellation preview is implemented via `AtriumFamilyPresence` but still needs visual refinement to feel less like a mini-map.
 
 ### Work
 
@@ -563,6 +581,8 @@ The preview should reuse the same relationship and layout truth as the main cons
 ---
 
 ## Phase 5 - Discovery lanes and contribution prompts
+
+**Status: Completed**
 
 ### Goal
 
@@ -601,6 +621,8 @@ Bad:
 
 ## Phase 6 - Dashboard redesign
 
+**Status: Completed**
+
 ### Goal
 
 Make `/dashboard` feel like a calm archive foyer for multi-tree users.
@@ -629,6 +651,8 @@ Persist last-opened tree and use it to improve both:
 
 ## Phase 7 - Editorial controls and personalization
 
+**Status: Not started**
+
 ### Goal
 
 Add optional control only after the automated experience already works.
@@ -647,6 +671,8 @@ Add optional control only after the automated experience already works.
 ---
 
 ## Phase 8 - Performance, accessibility, and rollout
+
+**Status: In progress**
 
 ### Goal
 
