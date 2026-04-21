@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { AnimatePresence } from "framer-motion";
+import { EraRibbon } from "@/components/home/EraRibbon";
 import { HomeSummaryBand } from "@/components/home/HomeSummaryBand";
 import { MemoryLane } from "@/components/home/MemoryLane";
 import { TreeHomeHero } from "@/components/home/TreeHomeHero";
@@ -13,6 +14,7 @@ import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
 import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
+import { extractYearFromText, memoryMatchesDecade } from "@/components/home/homeUtils";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -89,9 +91,7 @@ interface HomePayload {
 }
 
 function extractYear(text?: string | null): number | null {
-  if (!text) return null;
-  const m = text.match(/\b(\d{4})\b/);
-  return m ? parseInt(m[1]!, 10) : null;
+  return extractYearFromText(text);
 }
 
 function PersonCard({ person, onClick }: { person: Person; onClick: () => void }) {
@@ -199,6 +199,7 @@ export default function AtriumPage() {
   const [curationCount, setCurationCount] = useState(0);
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroPaused, setHeroPaused] = useState(false);
+  const [selectedEra, setSelectedEra] = useState<"all" | number>("all");
 
   // Global ⌘K handler
   useEffect(() => {
@@ -268,6 +269,11 @@ export default function AtriumPage() {
         setHeroCandidates(data.heroCandidates);
         setHomeStats(data.stats);
         setCoverage(data.coverage);
+        setSelectedEra((current) =>
+          current === "all" || data.coverage.decadeBuckets.some((bucket) => bucket.startYear === current)
+            ? current
+            : "all",
+        );
         setInboxCount(data.inboxCount);
         setCurationCount(data.curationCount);
       } catch (error) {
@@ -311,6 +317,11 @@ export default function AtriumPage() {
     setHeroCandidates(data.heroCandidates);
     setHomeStats(data.stats);
     setCoverage(data.coverage);
+    setSelectedEra((current) =>
+      current === "all" || data.coverage.decadeBuckets.some((bucket) => bucket.startYear === current)
+        ? current
+        : "all",
+    );
     setInboxCount(data.inboxCount);
     setCurationCount(data.curationCount);
   }, [treeId]);
@@ -339,16 +350,30 @@ export default function AtriumPage() {
     portraitUrl: p.portraitUrl,
   }));
 
+  const eraFilteredMemories =
+    selectedEra === "all"
+      ? memories
+      : memories.filter((memory) => memoryMatchesDecade(memory, selectedEra));
+  const eraFilteredHeroCandidates =
+    selectedEra === "all"
+      ? heroCandidates
+      : heroCandidates.filter((memory) => memoryMatchesDecade(memory, selectedEra));
+
   const featuredMemory =
-    (heroCandidates.length > 0
-      ? heroCandidates[heroIndex % heroCandidates.length]
+    (eraFilteredHeroCandidates.length > 0
+      ? eraFilteredHeroCandidates[heroIndex % eraFilteredHeroCandidates.length]
       : null) ??
-    memories.find((m) => m.kind === "photo" && m.mediaUrl) ??
-    memories.find((m) => m.kind === "story") ??
-    memories[0] ??
+    eraFilteredMemories.find((m) => m.kind === "photo" && m.mediaUrl) ??
+    eraFilteredMemories.find((m) => m.kind === "story") ??
+    eraFilteredMemories[0] ??
     null;
-  const recentMemories = memories.slice(0, 12);
-  const voiceMemories = memories.filter((memory) => memory.kind === "voice").slice(0, 8);
+  const recentMemories = eraFilteredMemories.slice(0, 12);
+  const voiceMemories = eraFilteredMemories.filter((memory) => memory.kind === "voice").slice(0, 8);
+  const selectedEraLabel =
+    selectedEra === "all"
+      ? "All eras"
+      : coverage?.decadeBuckets.find((bucket) => bucket.startYear === selectedEra)?.label ??
+        `${selectedEra}s`;
 
   if (isPending || loading || (needsNormalization && !loadError)) {
     return (
@@ -591,8 +616,10 @@ export default function AtriumPage() {
       <TreeHomeHero
         treeName={tree?.name ?? "Family Archive"}
         featuredMemory={featuredMemory}
-        heroIndex={heroCandidates.length > 0 ? heroIndex % heroCandidates.length : 0}
-        heroCount={heroCandidates.length}
+        heroIndex={
+          eraFilteredHeroCandidates.length > 0 ? heroIndex % eraFilteredHeroCandidates.length : 0
+        }
+        heroCount={eraFilteredHeroCandidates.length}
         onPauseChange={setHeroPaused}
         onSelectHero={setHeroIndex}
       />
@@ -694,9 +721,56 @@ export default function AtriumPage() {
 
       <HomeSummaryBand stats={homeStats} coverage={coverage} />
 
+      <EraRibbon
+        coverage={coverage}
+        selectedEra={selectedEra}
+        onSelectEra={(value) => {
+          setSelectedEra(value);
+          setHeroIndex(0);
+        }}
+      />
+
+      {selectedEra !== "all" && eraFilteredMemories.length === 0 && (
+        <section
+          style={{
+            padding: "24px max(24px, 5vw) 0",
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid var(--rule)",
+              borderRadius: 12,
+              background: "var(--paper-deep)",
+              padding: "22px 20px",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 20,
+                color: "var(--ink)",
+                marginBottom: 6,
+              }}
+            >
+              Nothing surfaced for {selectedEraLabel} yet
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 15,
+                lineHeight: 1.7,
+                color: "var(--ink-faded)",
+              }}
+            >
+              Try another decade or return to all eras while the archive fills in more dated memories.
+            </div>
+          </div>
+        </section>
+      )}
+
       <MemoryLane
         title="Resurfacing now"
-        countLabel={`${recentMemories.length} memories`}
+        countLabel={`${recentMemories.length} memories${selectedEra === "all" ? "" : ` from ${selectedEraLabel}`}`}
         memories={recentMemories}
         onMemoryClick={(memory) => {
           router.push(`/trees/${treeId}/memories/${memory.id}`);
@@ -724,7 +798,7 @@ export default function AtriumPage() {
         <>
           <MemoryLane
             title="Voices in the archive"
-            countLabel={`${voiceMemories.length} voice memories`}
+            countLabel={`${voiceMemories.length} voice memories${selectedEra === "all" ? "" : ` from ${selectedEraLabel}`}`}
             memories={voiceMemories}
             onMemoryClick={(memory) => {
               router.push(`/trees/${treeId}/memories/${memory.id}`);

@@ -2,6 +2,18 @@ import type { TreeHomeCoverage, TreeHomeMemory } from "./homeTypes";
 
 export const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 
+export function extractYearFromText(text?: string | null): number | null {
+  if (!text) return null;
+  const match = text.match(/\b(\d{4})\b/);
+  return match ? Number.parseInt(match[1]!, 10) : null;
+}
+
+export function memoryMatchesDecade(memory: TreeHomeMemory, decadeStart: number) {
+  const year = extractYearFromText(memory.dateOfEventText);
+  if (year === null) return false;
+  return Math.floor(year / 10) * 10 === decadeStart;
+}
+
 export function getVoiceTranscriptLabel(memory: TreeHomeMemory): string | null {
   if (memory.kind !== "voice") return null;
   if (memory.transcriptStatus === "completed" && memory.transcriptText) {
