@@ -15,6 +15,7 @@ interface Person {
   displayName: string;
   essenceLine?: string | null;
   portraitUrl?: string | null;
+  linkedUserId?: string | null;
 }
 
 interface Reply {
@@ -109,11 +110,12 @@ export default function InboxPage() {
       if (peopleRes.ok) {
         const pData = await peopleRes.json();
         setPeople(
-          pData.map((p: { id: string; displayName: string; essenceLine?: string | null; portraitMediaId?: string | null; portraitUrl?: string | null }) => ({
+          pData.map((p: { id: string; displayName: string; essenceLine?: string | null; portraitMediaId?: string | null; portraitUrl?: string | null; linkedUserId?: string | null }) => ({
             id: p.id,
             displayName: p.displayName,
             essenceLine: p.essenceLine,
             portraitUrl: p.portraitUrl ?? null,
+            linkedUserId: p.linkedUserId ?? null,
           })),
         );
         // Check membership role (founder/steward can see all prompts)
@@ -278,7 +280,7 @@ export default function InboxPage() {
             fontWeight: 500,
           }}
         >
-          + Ask someone
+          + Request a memory
         </button>
       </div>
 

@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { VoiceRecorderField } from "@/components/tree/VoiceRecorderField";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -240,6 +241,7 @@ function PromptReplyContent() {
 
   if (submitted) {
     const transcriptLabel = getVoiceTranscriptLabel(submittedMemory);
+    const submittedMemoryMediaUrl = getProxiedMediaUrl(submittedMemory?.mediaUrl);
     return (
       <main style={pageStyle}>
         <div style={cardStyle}>
@@ -249,8 +251,8 @@ function PromptReplyContent() {
           </p>
           {submittedMemory?.kind === "voice" && (
             <div style={submissionDetailStyle}>
-              {submittedMemory.mediaUrl && (
-                <audio controls src={submittedMemory.mediaUrl} style={{ width: "100%" }}>
+              {submittedMemoryMediaUrl && (
+                <audio controls src={submittedMemoryMediaUrl} style={{ width: "100%" }}>
                   Your browser does not support audio playback.
                 </audio>
               )}

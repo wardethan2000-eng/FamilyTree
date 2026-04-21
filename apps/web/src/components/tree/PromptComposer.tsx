@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-
-interface Person {
-  id: string;
-  displayName: string;
-  essenceLine?: string | null;
-  portraitUrl?: string | null;
-}
+import { useState, useEffect, useCallback, useMemo } from "react";
+import type { ApiRelationship } from "@/components/tree/treeTypes";
+import {
+  resolveRequestRecipients,
+  type RequestPersonOption,
+  type RequestTargetMode,
+} from "@/lib/request-memory";
 
 interface PromptComposerProps {
   open: boolean;
   onClose: () => void;
   treeId: string;
-  people: Person[];
+  people: RequestPersonOption[];
   apiBase?: string;
   defaultPersonId?: string;
+  relationships?: ApiRelationship[];
   onPromptSent?: () => void;
 }
 
@@ -32,6 +32,12 @@ const SUGGESTED_TEMPLATES = [
   "Is there a family story you've always wanted to tell?",
 ];
 
+const TARGET_MODE_LABELS: Record<RequestTargetMode, string> = {
+  person: "One person",
+  people: "Several people",
+  family: "Immediate family",
+};
+
 export function PromptComposer({
   open,
   onClose,
@@ -39,23 +45,33 @@ export function PromptComposer({
   people,
   apiBase,
   defaultPersonId,
+  relationships = [],
   onPromptSent,
 }: PromptComposerProps) {
+  const [targetMode, setTargetMode] = useState<RequestTargetMode>("person");
   const [selectedPersonId, setSelectedPersonId] = useState(defaultPersonId ?? "");
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
+  const [familyAnchorPersonId, setFamilyAnchorPersonId] = useState(defaultPersonId ?? "");
   const [questionText, setQuestionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const apiBase_ = apiBase ?? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
 
+  const canUseFamilyTarget = relationships.length > 0 && people.length > 0;
+
   useEffect(() => {
-    if (open) {
-      setSelectedPersonId(defaultPersonId ?? "");
-      setQuestionText("");
-      setError(null);
-      setShowTemplates(false);
-    }
-  }, [open, defaultPersonId]);
+    if (!open) return;
+
+    const fallbackPersonId = defaultPersonId ?? people[0]?.id ?? "";
+    setTargetMode(canUseFamilyTarget && defaultPersonId ? "family" : "person");
+    setSelectedPersonId(fallbackPersonId);
+    setSelectedPersonIds(fallbackPersonId ? [fallbackPersonId] : []);
+    setFamilyAnchorPersonId(fallbackPersonId);
+    setQuestionText("");
+    setError(null);
+    setShowTemplates(false);
+  }, [canUseFamilyTarget, defaultPersonId, open, people]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -69,27 +85,63 @@ export function PromptComposer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  const recipientResolution = useMemo(
+    () =>
+      resolveRequestRecipients({
+        mode: targetMode,
+        people,
+        relationships,
+        selectedPersonId,
+        selectedPersonIds,
+        familyAnchorPersonId,
+      }),
+    [familyAnchorPersonId, people, relationships, selectedPersonId, selectedPersonIds, targetMode],
+  );
+
+  const activeAnchorPerson =
+    people.find((person) => person.id === familyAnchorPersonId) ?? null;
+
+  const togglePersonSelection = (personId: string) => {
+    setSelectedPersonIds((current) =>
+      current.includes(personId)
+        ? current.filter((id) => id !== personId)
+        : [...current, personId],
+    );
+  };
+
   const handleSubmit = async () => {
-    if (!selectedPersonId) {
-      setError("Please choose who you're asking.");
+    if (recipientResolution.recipientIds.length === 0) {
+      setError("Choose at least one recipient with a linked account.");
       return;
     }
     if (!questionText.trim()) {
-      setError("Please write your question.");
+      setError("Please write your request.");
       return;
     }
+
     setSubmitting(true);
     setError(null);
     try {
+      const body =
+        recipientResolution.recipientIds.length === 1
+          ? {
+              toPersonId: recipientResolution.recipientIds[0],
+              questionText: questionText.trim(),
+            }
+          : {
+              recipientPersonIds: recipientResolution.recipientIds,
+              questionText: questionText.trim(),
+            };
+
       const res = await fetch(`${apiBase_}/api/trees/${treeId}/prompts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toPersonId: selectedPersonId, questionText: questionText.trim() }),
+        body: JSON.stringify(body),
         credentials: "include",
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error ?? "Failed to send prompt");
+        throw new Error((data as { error?: string }).error ?? "Failed to send request");
       }
       onPromptSent?.();
       onClose();
@@ -101,8 +153,6 @@ export function PromptComposer({
   };
 
   if (!open) return null;
-
-  const selectedPerson = people.find((p) => p.id === selectedPersonId);
 
   return (
     <div
@@ -122,15 +172,15 @@ export function PromptComposer({
     >
       <div
         style={{
-          width: "min(540px, 95vw)",
+          width: "min(680px, 95vw)",
+          maxHeight: "92vh",
+          overflowY: "auto",
           background: "var(--paper)",
           borderRadius: 16,
           boxShadow: "0 24px 64px rgba(28,25,21,0.22)",
-          overflow: "hidden",
           animation: "promptSlideIn 350ms cubic-bezier(0.22, 0.61, 0.36, 1) both",
         }}
       >
-        {/* Header */}
         <div
           style={{
             padding: "24px 28px 0",
@@ -150,7 +200,7 @@ export function PromptComposer({
                 lineHeight: 1.2,
               }}
             >
-              Ask a question
+              Request a memory
             </h2>
             <p
               style={{
@@ -160,7 +210,7 @@ export function PromptComposer({
                 margin: "4px 0 0",
               }}
             >
-              Invite someone to share a memory or story.
+              Send a memory request to one person, several people, or an immediate family group.
             </p>
           </div>
           <button
@@ -181,145 +231,193 @@ export function PromptComposer({
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ padding: "20px 28px 28px" }}>
-          {/* Person selector */}
-          <label
-            style={{
-              display: "block",
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              fontWeight: 500,
-              color: "var(--ink-soft)",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            Who are you asking?
-          </label>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
-              gap: 8,
-              marginBottom: 20,
-              maxHeight: 180,
-              overflowY: "auto",
-            }}
-          >
-            {people.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSelectedPersonId(p.id)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "10px 8px",
-                  borderRadius: 10,
-                  border: `1.5px solid ${selectedPersonId === p.id ? "var(--moss)" : "var(--rule)"}`,
-                  background: selectedPersonId === p.id ? "rgba(78,93,66,0.07)" : "var(--paper)",
-                  cursor: "pointer",
-                  transition: "all 200ms",
-                }}
-              >
-                <div
+          <label style={sectionLabelStyle}>Target</label>
+          <div style={toggleGroupStyle}>
+            {(["person", "people", "family"] as RequestTargetMode[])
+              .filter((mode) => mode !== "family" || canUseFamilyTarget)
+              .map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setTargetMode(mode)}
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    background: "var(--paper-deep)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
+                    ...toggleButtonStyle,
+                    ...(targetMode === mode ? toggleButtonActiveStyle : null),
                   }}
                 >
-                  {p.portraitUrl ? (
-                    <img
-                      src={p.portraitUrl}
-                      alt={p.displayName}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <span
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: 18,
-                        color: "var(--ink-faded)",
-                      }}
-                    >
-                      {p.displayName.charAt(0)}
-                    </span>
-                  )}
-                </div>
-                <span
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 11,
-                    color: selectedPersonId === p.id ? "var(--moss)" : "var(--ink)",
-                    textAlign: "center",
-                    lineHeight: 1.3,
-                    fontWeight: selectedPersonId === p.id ? 500 : 400,
-                  }}
-                >
-                  {p.displayName.split(" ")[0]}
-                </span>
-              </button>
-            ))}
+                  {TARGET_MODE_LABELS[mode]}
+                </button>
+              ))}
           </div>
 
-          {/* Question */}
-          <label
-            style={{
-              display: "block",
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              fontWeight: 500,
-              color: "var(--ink-soft)",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            Your question
-            {selectedPerson && (
-              <span
-                style={{ color: "var(--moss)", textTransform: "none", fontWeight: 400, marginLeft: 4 }}
-              >
-                for {selectedPerson.displayName}
-              </span>
+          <div style={{ marginTop: 18 }}>
+            <label style={sectionLabelStyle}>
+              {targetMode === "family" ? "Whose family?" : "Who should receive this request?"}
+            </label>
+
+            {targetMode === "family" && (
+              <p style={hintTextStyle}>
+                Immediate family includes the selected person plus their parents, children, and spouses.
+              </p>
             )}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                gap: 8,
+                marginTop: 8,
+                maxHeight: 220,
+                overflowY: "auto",
+              }}
+            >
+              {people.map((person) => {
+                const selected =
+                  targetMode === "person"
+                    ? selectedPersonId === person.id
+                    : targetMode === "people"
+                    ? selectedPersonIds.includes(person.id)
+                    : familyAnchorPersonId === person.id;
+
+                return (
+                  <button
+                    key={person.id}
+                    type="button"
+                    onClick={() => {
+                      if (targetMode === "person") {
+                        setSelectedPersonId(person.id);
+                        return;
+                      }
+                      if (targetMode === "people") {
+                        togglePersonSelection(person.id);
+                        return;
+                      }
+                      setFamilyAnchorPersonId(person.id);
+                    }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "10px 8px",
+                      borderRadius: 10,
+                      border: `1.5px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
+                      background: selected ? "rgba(78,93,66,0.07)" : "var(--paper)",
+                      cursor: "pointer",
+                      transition: "all 200ms",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: "50%",
+                        overflow: "hidden",
+                        background: "var(--paper-deep)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {person.portraitUrl ? (
+                        <img
+                          src={person.portraitUrl}
+                          alt={person.displayName}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            fontSize: 18,
+                            color: "var(--ink-faded)",
+                          }}
+                        >
+                          {person.displayName.charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 11,
+                        color: selected ? "var(--moss)" : "var(--ink)",
+                        textAlign: "center",
+                        lineHeight: 1.3,
+                        fontWeight: selected ? 500 : 400,
+                      }}
+                    >
+                      {person.displayName.split(" ")[0]}
+                    </span>
+                    {!person.linkedUserId && (
+                      <span
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 10,
+                          color: "var(--ink-faded)",
+                        }}
+                      >
+                        no account
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={recipientPreviewStyle}>
+            <div style={recipientColumnStyle}>
+              <div style={recipientHeadingStyle}>
+                Will receive the request
+                {targetMode === "family" && activeAnchorPerson
+                  ? ` for ${activeAnchorPerson.displayName}`
+                  : ""}
+              </div>
+              {recipientResolution.recipients.length === 0 ? (
+                <p style={emptyRecipientStyle}>No linked-account recipients selected yet.</p>
+              ) : (
+                <div style={recipientChipWrapStyle}>
+                  {recipientResolution.recipients.map((person) => (
+                    <span key={person.id} style={recipientChipStyle}>
+                      {person.displayName}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            {recipientResolution.excludedUnlinked.length > 0 && (
+              <div style={recipientColumnStyle}>
+                <div style={recipientHeadingStyle}>Excluded without linked accounts</div>
+                <div style={recipientChipWrapStyle}>
+                  {recipientResolution.excludedUnlinked.map((person) => (
+                    <span key={person.id} style={excludedChipStyle}>
+                      {person.displayName}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <label style={{ ...sectionLabelStyle, marginTop: 18 }}>
+            Your request
           </label>
           <textarea
             value={questionText}
             onChange={(e) => setQuestionText(e.target.value)}
-            placeholder="Write your question here…"
+            placeholder="What memory would you like them to share?"
             rows={3}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: "1.5px solid var(--rule)",
-              background: "var(--paper)",
-              fontFamily: "var(--font-body)",
-              fontSize: 15,
-              color: "var(--ink)",
-              resize: "vertical",
-              outline: "none",
-              transition: "border-color 200ms",
-              boxSizing: "border-box",
-            }}
+            style={textAreaStyle}
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--moss)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "var(--rule)")}
           />
 
-          {/* Suggested prompts */}
           <div style={{ marginTop: 10 }}>
             <button
+              type="button"
               onClick={() => setShowTemplates((v) => !v)}
               style={{
                 background: "none",
@@ -335,7 +433,7 @@ export function PromptComposer({
               }}
             >
               <span style={{ fontSize: 14 }}>{showTemplates ? "▾" : "▸"}</span>
-              Suggested questions
+              Suggested requests
             </button>
             {showTemplates && (
               <div
@@ -349,11 +447,12 @@ export function PromptComposer({
                   padding: "4px 0",
                 }}
               >
-                {SUGGESTED_TEMPLATES.map((t) => (
+                {SUGGESTED_TEMPLATES.map((template) => (
                   <button
-                    key={t}
+                    key={template}
+                    type="button"
                     onClick={() => {
-                      setQuestionText(t);
+                      setQuestionText(template);
                       setShowTemplates(false);
                     }}
                     style={{
@@ -366,14 +465,9 @@ export function PromptComposer({
                       fontFamily: "var(--font-body)",
                       fontSize: 13,
                       color: "var(--ink-soft)",
-                      transition: "background 150ms",
                     }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "rgba(78,93,66,0.06)")
-                    }
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                   >
-                    {t}
+                    {template}
                   </button>
                 ))}
               </div>
@@ -394,7 +488,6 @@ export function PromptComposer({
             </p>
           )}
 
-          {/* Actions */}
           <div
             style={{
               display: "flex",
@@ -420,30 +513,29 @@ export function PromptComposer({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={submitting || !selectedPersonId || !questionText.trim()}
+              disabled={submitting || recipientResolution.recipientIds.length === 0 || !questionText.trim()}
               style={{
                 padding: "9px 22px",
                 borderRadius: 8,
                 border: "none",
                 background:
-                  submitting || !selectedPersonId || !questionText.trim()
+                  submitting || recipientResolution.recipientIds.length === 0 || !questionText.trim()
                     ? "var(--rule)"
                     : "var(--moss)",
                 fontFamily: "var(--font-ui)",
                 fontSize: 14,
                 fontWeight: 500,
                 color:
-                  submitting || !selectedPersonId || !questionText.trim()
+                  submitting || recipientResolution.recipientIds.length === 0 || !questionText.trim()
                     ? "var(--ink-faded)"
                     : "#fff",
                 cursor:
-                  submitting || !selectedPersonId || !questionText.trim()
+                  submitting || recipientResolution.recipientIds.length === 0 || !questionText.trim()
                     ? "not-allowed"
                     : "pointer",
-                transition: "background 200ms",
               }}
             >
-              {submitting ? "Sending…" : "Send question"}
+              {submitting ? "Sending…" : `Send to ${recipientResolution.recipientIds.length || 0}`}
             </button>
           </div>
         </div>
@@ -458,3 +550,117 @@ export function PromptComposer({
     </div>
   );
 }
+
+const sectionLabelStyle = {
+  display: "block",
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  fontWeight: 500,
+  color: "var(--ink-soft)",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase" as const,
+  marginBottom: 8,
+};
+
+const hintTextStyle = {
+  margin: "0 0 8px",
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  color: "var(--ink-faded)",
+};
+
+const toggleGroupStyle = {
+  display: "flex",
+  gap: 8,
+  padding: 4,
+  borderRadius: 10,
+  border: "1px solid var(--rule)",
+  background: "var(--paper-deep)",
+};
+
+const toggleButtonStyle = {
+  flex: 1,
+  border: "none",
+  borderRadius: 8,
+  padding: "9px 12px",
+  background: "transparent",
+  color: "var(--ink-faded)",
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  cursor: "pointer",
+};
+
+const toggleButtonActiveStyle = {
+  background: "var(--paper)",
+  color: "var(--ink)",
+};
+
+const recipientPreviewStyle = {
+  marginTop: 18,
+  border: "1px solid var(--rule)",
+  borderRadius: 12,
+  background: "var(--paper-deep)",
+  padding: "14px 16px",
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 12,
+};
+
+const recipientColumnStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 8,
+};
+
+const recipientHeadingStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 11,
+  color: "var(--ink-faded)",
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.08em",
+};
+
+const recipientChipWrapStyle = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: 6,
+};
+
+const recipientChipStyle = {
+  padding: "5px 10px",
+  borderRadius: 999,
+  background: "rgba(78,93,66,0.08)",
+  border: "1px solid rgba(78,93,66,0.18)",
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  color: "var(--ink)",
+};
+
+const excludedChipStyle = {
+  ...recipientChipStyle,
+  background: "rgba(177,165,145,0.12)",
+  border: "1px solid var(--rule)",
+  color: "var(--ink-faded)",
+};
+
+const emptyRecipientStyle = {
+  margin: 0,
+  fontFamily: "var(--font-body)",
+  fontSize: 14,
+  color: "var(--ink-faded)",
+};
+
+const textAreaStyle = {
+  width: "100%",
+  padding: "12px 14px",
+  borderRadius: 10,
+  border: "1.5px solid var(--rule)",
+  background: "var(--paper)",
+  fontFamily: "var(--font-body)",
+  fontSize: 15,
+  color: "var(--ink)",
+  resize: "vertical" as const,
+  outline: "none",
+  transition: "border-color 200ms",
+  boxSizing: "border-box" as const,
+};

@@ -7,6 +7,7 @@ import { AnimatePresence } from "framer-motion";
 import { TreeCanvas } from "@/components/tree/TreeCanvas";
 import { DriftMode } from "@/components/tree/DriftMode";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
+import { PromptComposer } from "@/components/tree/PromptComposer";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
@@ -52,7 +53,9 @@ export default function TreePage() {
   const [loading, setLoading] = useState(true);
   const [driftOpen, setDriftOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedPromptPersonId, setSelectedPromptPersonId] = useState<string | null>(null);
 
   const mapPeoplePayload = useCallback((data: Array<Record<string, unknown>>) => {
     return data.map((p) => ({
@@ -167,6 +170,14 @@ export default function TreePage() {
     portraitUrl: p.portraitUrl,
   }));
 
+  const promptPeople = people.map((p) => ({
+    id: p.id,
+    displayName: p.name,
+    portraitUrl: p.portraitUrl,
+    essenceLine: p.essenceLine,
+    linkedUserId: p.linkedUserId ?? null,
+  }));
+
   if (isPending || loading) {
     return (
       <main
@@ -219,8 +230,10 @@ export default function TreePage() {
         onDriftClick={() => setDriftOpen(true)}
         onPersonDetailClick={handlePersonDetail}
         onAddMemoryClick={() => setWizardOpen(true)}
+        onRequestMemoryClick={() => setRequestOpen(true)}
         onSearchClick={() => setSearchOpen(true)}
         onConstellationChanged={refreshConstellation}
+        onSelectedPersonChange={setSelectedPromptPersonId}
       />
 
       <AnimatePresence>
@@ -244,6 +257,15 @@ export default function TreePage() {
           onSuccess={refreshMemories}
         />
       )}
+
+      <PromptComposer
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        treeId={treeId}
+        people={promptPeople}
+        relationships={relationships}
+        defaultPersonId={selectedPromptPersonId ?? undefined}
+      />
 
       <SearchOverlay
         treeId={treeId}

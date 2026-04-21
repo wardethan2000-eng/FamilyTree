@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 
 type MemoryKind = "story" | "photo" | "voice" | "document" | "other";
 
@@ -456,10 +457,10 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
                           justifyContent: "center",
                         }}
                       >
-                        {m.mediaUrl && m.kind === "photo" ? (
+                        {getProxiedMediaUrl(m.mediaUrl) && m.kind === "photo" ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={m.mediaUrl}
+                            src={getProxiedMediaUrl(m.mediaUrl) ?? undefined}
                             alt={m.title}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />

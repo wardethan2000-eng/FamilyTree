@@ -5,6 +5,7 @@ import {
   MemoryVisibilityControl,
   type TreeVisibilityLevel,
 } from "@/components/tree/MemoryVisibilityControl";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 
 type MemoryKind = "story" | "photo" | "voice" | "document" | "other";
 
@@ -93,6 +94,7 @@ export function MemoryLightbox({
   if (!memory) return null;
 
   const mime = memory.mimeType?.toLowerCase() ?? "";
+  const resolvedMediaUrl = getProxiedMediaUrl(memory.mediaUrl);
   const isPhoto = memory.kind === "photo" || mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
   const isPdf = mime === "application/pdf";
@@ -232,10 +234,10 @@ export function MemoryLightbox({
         <NavArrow direction="left" disabled={index === 0} onClick={prev} />
 
         {/* Content */}
-        {isPhoto && memory.mediaUrl && (
+        {isPhoto && resolvedMediaUrl && (
           <img
             key={memory.id}
-            src={memory.mediaUrl}
+            src={resolvedMediaUrl}
             alt={memory.title}
             style={{
               maxWidth: "calc(100vw - 160px)",
@@ -247,11 +249,11 @@ export function MemoryLightbox({
           />
         )}
 
-        {isVideo && memory.mediaUrl && (
+        {isVideo && resolvedMediaUrl && (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
             key={memory.id}
-            src={memory.mediaUrl}
+            src={resolvedMediaUrl}
             controls
             style={{
               maxWidth: "calc(100vw - 160px)",
@@ -262,7 +264,7 @@ export function MemoryLightbox({
           />
         )}
 
-        {isPdf && memory.mediaUrl && (
+        {isPdf && resolvedMediaUrl && (
           <div
             key={memory.id}
             style={{
@@ -274,7 +276,7 @@ export function MemoryLightbox({
             }}
           >
             <iframe
-              src={memory.mediaUrl}
+              src={resolvedMediaUrl}
               title={memory.title}
               style={{
                 width: "min(760px, calc(100vw - 160px))",
@@ -285,7 +287,7 @@ export function MemoryLightbox({
               }}
             />
             <a
-              href={memory.mediaUrl}
+              href={resolvedMediaUrl}
               download={memory.title}
               style={{
                 fontFamily: "var(--font-ui)",
@@ -357,10 +359,10 @@ export function MemoryLightbox({
               {playing ? "⏸" : "▶"}
             </button>
 
-            {memory.mediaUrl && (
+            {resolvedMediaUrl && (
               <audio
                 ref={audioRef}
-                src={memory.mediaUrl}
+                src={resolvedMediaUrl}
                 onEnded={() => setPlaying(false)}
               />
             )}
@@ -532,9 +534,9 @@ export function MemoryLightbox({
                 justifyContent: "center",
               }}
             >
-              {m.kind === "photo" && m.mediaUrl ? (
+              {m.kind === "photo" && getProxiedMediaUrl(m.mediaUrl) ? (
                 <img
-                  src={m.mediaUrl}
+                  src={getProxiedMediaUrl(m.mediaUrl) ?? undefined}
                   alt={m.title}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />

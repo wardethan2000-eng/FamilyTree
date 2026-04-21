@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import type { ApiMemory, ApiPerson } from "./treeTypes";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 
 interface MemoryOverlayProps {
   memory: ApiMemory | null;
@@ -19,6 +20,7 @@ export function MemoryOverlay({
   onPersonDetail,
 }: MemoryOverlayProps) {
   const isOpen = memory !== null;
+  const resolvedMediaUrl = getProxiedMediaUrl(memory?.mediaUrl);
 
   return (
     <AnimatePresence>
@@ -76,9 +78,9 @@ export function MemoryOverlay({
             </button>
 
             {/* Photo */}
-            {memory.kind === "photo" && memory.mediaUrl && (
+            {memory.kind === "photo" && resolvedMediaUrl && (
               <img
-                src={memory.mediaUrl}
+                src={resolvedMediaUrl}
                 alt={memory.title}
                 style={{
                   width: "100%",

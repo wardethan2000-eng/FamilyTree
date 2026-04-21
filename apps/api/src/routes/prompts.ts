@@ -30,7 +30,8 @@ const mailer = createTransport({
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
 const CreatePromptBody = z.object({
-  toPersonId: z.string().uuid(),
+  toPersonId: z.string().uuid().optional(),
+  recipientPersonIds: z.array(z.string().uuid()).min(1).max(24).optional(),
   questionText: z.string().min(1).max(1000),
 });
 
@@ -135,26 +136,74 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
     const parsed = CreatePromptBody.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid request body" });
 
-    const { toPersonId, questionText } = parsed.data;
+    const recipientIds = [
+      ...(parsed.data.toPersonId ? [parsed.data.toPersonId] : []),
+      ...(parsed.data.recipientPersonIds ?? []),
+    ];
+    const uniqueRecipientIds = [...new Set(recipientIds)];
 
-    const person = await getTreeScopedPerson(treeId, toPersonId);
-    if (!person) return reply.status(404).send({ error: "Person not found in this tree" });
+    if (uniqueRecipientIds.length === 0) {
+      return reply.status(400).send({ error: "Choose at least one recipient" });
+    }
 
-    const [prompt] = await db
+    const recipientCandidates = await Promise.all(
+      uniqueRecipientIds.map((personId) => getTreeScopedPerson(treeId, personId)),
+    );
+    if (recipientCandidates.some((person) => !person)) {
+      return reply.status(400).send({
+        error: "One or more selected people are not in this tree",
+      });
+    }
+    const recipients = recipientCandidates.filter(
+      (person): person is NonNullable<(typeof recipientCandidates)[number]> =>
+        Boolean(person),
+    );
+
+    const unlinkedRecipients = recipients.filter((person) => !person.linkedUserId);
+    if (unlinkedRecipients.length > 0) {
+      return reply.status(400).send({
+        error: `Some selected people do not have linked accounts: ${unlinkedRecipients.map((person) => person.displayName).join(", ")}`,
+      });
+    }
+
+    const insertedPrompts = await db
       .insert(schema.prompts)
-      .values({ treeId, fromUserId: session.user.id, toPersonId, questionText })
+      .values(
+        uniqueRecipientIds.map((recipientPersonId) => ({
+          treeId,
+          fromUserId: session.user.id,
+          toPersonId: recipientPersonId,
+          questionText: parsed.data.questionText.trim(),
+        })),
+      )
       .returning();
-    if (!prompt) return reply.status(500).send({ error: "Failed to create prompt" });
 
-    const full = await db.query.prompts.findFirst({
-      where: (p, { eq }) => eq(p.id, prompt.id),
-      with: {
-        fromUser: true,
-        toPerson: { with: { portraitMedia: true } },
-      },
+    if (insertedPrompts.length !== uniqueRecipientIds.length) {
+      return reply.status(500).send({ error: "Failed to create prompts" });
+    }
+
+    const prompts = await Promise.all(
+      insertedPrompts.map(async (prompt) => {
+        const full = await db.query.prompts.findFirst({
+          where: (p, { eq }) => eq(p.id, prompt.id),
+          with: {
+            fromUser: true,
+            toPerson: { with: { portraitMedia: true } },
+          },
+        });
+
+        return enrichPrompt(full as PromptWithRelations);
+      }),
+    );
+
+    if (prompts.length === 1) {
+      return reply.status(201).send(prompts[0]);
+    }
+
+    return reply.status(201).send({
+      createdCount: prompts.length,
+      prompts,
     });
-
-    return reply.status(201).send(enrichPrompt(full as PromptWithRelations));
   });
 
   /** GET /api/trees/:treeId/prompts — all prompts in tree (founder/steward/contributor) */

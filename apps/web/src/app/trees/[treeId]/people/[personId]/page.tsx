@@ -11,6 +11,7 @@ import {
   type TreeVisibilityLevel,
 } from "@/components/tree/MemoryVisibilityControl";
 import { PlacePicker } from "@/components/tree/PlacePicker";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -769,7 +770,7 @@ export default function PersonPage({
           onClick={() => setPromptComposerOpen(true)}
           style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 999, padding: "8px 14px", cursor: "pointer", marginLeft: 8 }}
         >
-          Ask a question
+          Request a memory
         </button>
       </header>
 
@@ -1349,25 +1350,25 @@ export default function PersonPage({
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 28 }}>
               <div>
                 <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>
-                  Family prompts
+                  Memory requests
                 </p>
                 <h2 style={{ fontFamily: "var(--font-display)", fontSize: 38, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
-                  Questions for {person.displayName.split(" ")[0]}
+                  Requests for {person.displayName.split(" ")[0]}
                 </h2>
               </div>
               <button
                 onClick={() => setPromptComposerOpen(true)}
                 style={{ padding: "10px 18px", borderRadius: 999, border: "none", background: "var(--moss)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 500, color: "#fff", cursor: "pointer" }}
               >
-                + Ask a question
+                + Request a memory
               </button>
             </div>
             {personPrompts.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "48px 0", color: "var(--ink-faded)", fontFamily: "var(--font-body)" }}>
-                <p style={{ fontSize: 28, marginBottom: 10 }}>✦</p>
-                <p style={{ fontSize: 19 }}>No questions yet.</p>
-                <p style={{ fontSize: 15 }}>Ask {person.displayName.split(" ")[0]} something about their life.</p>
-              </div>
+                <div style={{ textAlign: "center", padding: "48px 0", color: "var(--ink-faded)", fontFamily: "var(--font-body)" }}>
+                  <p style={{ fontSize: 28, marginBottom: 10 }}>✦</p>
+                  <p style={{ fontSize: 19 }}>No requests yet.</p>
+                  <p style={{ fontSize: 15 }}>Request a memory from {person.displayName.split(" ")[0]}.</p>
+                </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {personPrompts.map((p) => (
@@ -1437,7 +1438,7 @@ export default function PersonPage({
         open={promptComposerOpen}
         onClose={() => setPromptComposerOpen(false)}
         treeId={treeId}
-        people={[{ id: person.id, displayName: person.displayName, essenceLine: person.essenceLine, portraitUrl: person.portraitUrl }]}
+        people={[{ id: person.id, displayName: person.displayName, essenceLine: person.essenceLine, portraitUrl: person.portraitUrl, linkedUserId: person.linkedUserId }]}
         defaultPersonId={person.id}
         onPromptSent={loadPersonPrompts}
       />
@@ -1557,6 +1558,7 @@ function MemoryCard({
 }) {
   const mime = memory.mimeType?.toLowerCase() ?? "";
   const isVideo = mime.startsWith("video/");
+  const resolvedMediaUrl = getProxiedMediaUrl(memory.mediaUrl);
   const kindIcon: Record<MemoryKind, string> = {
     photo: "◻",
     story: "✦",
@@ -1579,12 +1581,12 @@ function MemoryCard({
       onMouseEnter={(e) => { if (onClick) e.currentTarget.style.boxShadow = "0 4px 16px rgba(28,25,21,0.1)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
     >
-      {memory.mediaUrl && memory.kind === "photo" && !isVideo && (
-        <img src={memory.mediaUrl} alt={memory.title} style={{ width: "100%", height: 188, objectFit: "cover", display: "block" }} />
+      {resolvedMediaUrl && memory.kind === "photo" && !isVideo && (
+        <img src={resolvedMediaUrl} alt={memory.title} style={{ width: "100%", height: 188, objectFit: "cover", display: "block" }} />
       )}
-      {memory.mediaUrl && isVideo && (
+      {resolvedMediaUrl && isVideo && (
         <video
-          src={memory.mediaUrl}
+          src={resolvedMediaUrl}
           style={{ width: "100%", height: 188, objectFit: "cover", display: "block", background: "var(--ink)" }}
           muted
           playsInline

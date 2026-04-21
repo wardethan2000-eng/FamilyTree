@@ -6,12 +6,9 @@ import { useSession } from "@/lib/auth-client";
 import { AnimatePresence } from "framer-motion";
 import { DriftMode } from "@/components/tree/DriftMode";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
-import {
-  MemoryVisibilityControl,
-  type TreeVisibilityLevel,
-} from "@/components/tree/MemoryVisibilityControl";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -50,8 +47,6 @@ interface Memory {
   primaryPersonId?: string | null;
   personPortraitUrl?: string | null;
   createdAt?: string;
-  treeVisibilityLevel?: TreeVisibilityLevel;
-  treeVisibilityIsOverride?: boolean;
 }
 
 function extractYear(text?: string | null): number | null {
@@ -87,6 +82,8 @@ function MemoryCard({
   extraControls?: React.ReactNode;
 }) {
   const [hovered, setHovered] = useState(false);
+  const resolvedMediaUrl = getProxiedMediaUrl(memory.mediaUrl);
+
   return (
     <article
       onMouseEnter={() => setHovered(true)}
@@ -119,11 +116,11 @@ function MemoryCard({
           textAlign: "left",
         }}
       >
-        {memory.kind === "photo" && memory.mediaUrl ? (
+        {memory.kind === "photo" && resolvedMediaUrl ? (
           <div style={{ height: 110, overflow: "hidden", position: "relative" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={memory.mediaUrl}
+              src={resolvedMediaUrl}
               alt={memory.title}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
@@ -302,7 +299,6 @@ export default function AtriumPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
   const [curationCount, setCurationCount] = useState(0);
-  const [updatingMemoryVisibilityId, setUpdatingMemoryVisibilityId] = useState<string | null>(null);
 
   // Global ⌘K handler
   useEffect(() => {
@@ -392,23 +388,6 @@ export default function AtriumPage() {
     enabled: Boolean(session),
   });
 
-  const setMemoryTreeVisibility = useCallback(
-    async (memoryId: string, visibility: TreeVisibilityLevel | null) => {
-      setUpdatingMemoryVisibilityId(memoryId);
-      const res = await fetch(`${API}/api/trees/${treeId}/memories/${memoryId}/visibility`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ visibilityOverride: visibility }),
-      });
-      if (res.ok) {
-        await refreshMemories();
-      }
-      setUpdatingMemoryVisibilityId(null);
-    },
-    [refreshMemories, treeId],
-  );
-
   const apiPeople = people.map((p) => ({
     id: p.id,
     name: p.name,
@@ -420,8 +399,7 @@ export default function AtriumPage() {
     memories.find((m) => m.kind === "story") ??
     memories[0] ??
     null;
-  const canManageTreeVisibility =
-    tree?.role === "founder" || tree?.role === "steward";
+  const featuredMemoryMediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
 
   const recentMemories = memories.slice(0, 20);
 
@@ -623,11 +601,11 @@ export default function AtriumPage() {
           background: "var(--ink)",
         }}
       >
-        {featuredMemory?.kind === "photo" && featuredMemory.mediaUrl ? (
+        {featuredMemory?.kind === "photo" && featuredMemoryMediaUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={featuredMemory.mediaUrl}
+              src={featuredMemoryMediaUrl}
               alt={featuredMemory.title}
               style={{
                 position: "absolute",
@@ -713,17 +691,6 @@ export default function AtriumPage() {
                 {featuredMemory.personName && featuredMemory.dateOfEventText ? " · " : ""}
                 {featuredMemory.dateOfEventText ?? ""}
               </div>
-              {canManageTreeVisibility && (
-                <div style={{ marginTop: 16, maxWidth: 240 }}>
-                  <MemoryVisibilityControl
-                    memory={featuredMemory}
-                    disabled={updatingMemoryVisibilityId === featuredMemory.id}
-                    onChange={(visibility) => {
-                      void setMemoryTreeVisibility(featuredMemory.id, visibility);
-                    }}
-                  />
-                </div>
-              )}
             </>
           ) : (
             <>
@@ -888,17 +855,6 @@ export default function AtriumPage() {
               <MemoryCard
                 key={m.id}
                 memory={m}
-                extraControls={
-                  canManageTreeVisibility ? (
-                    <MemoryVisibilityControl
-                      memory={m}
-                      disabled={updatingMemoryVisibilityId === m.id}
-                      onChange={(visibility) => {
-                        void setMemoryTreeVisibility(m.id, visibility);
-                      }}
-                    />
-                  ) : undefined
-                }
                 onClick={() => {
                   if (m.primaryPersonId) {
                     router.push(`/trees/${treeId}/people/${m.primaryPersonId}`);

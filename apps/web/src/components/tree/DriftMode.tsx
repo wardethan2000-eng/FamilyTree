@@ -8,6 +8,7 @@ import {
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ApiMemory, ApiPerson } from "./treeTypes";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 
 interface DriftEntry {
   memory: ApiMemory;
@@ -121,6 +122,7 @@ export function DriftMode({
   }, [advance, stepBack, onClose]);
 
   const current = entries[currentIndex];
+  const resolvedCurrentMediaUrl = getProxiedMediaUrl(current?.memory.mediaUrl);
 
   return (
     <motion.div
@@ -274,9 +276,9 @@ export function DriftMode({
             }}
           >
             {/* Photo */}
-            {current.memory.kind === "photo" && current.memory.mediaUrl && (
+            {current.memory.kind === "photo" && resolvedCurrentMediaUrl && (
               <img
-                src={current.memory.mediaUrl}
+                src={resolvedCurrentMediaUrl}
                 alt={current.memory.title}
                 style={{
                   maxHeight: "55vh",

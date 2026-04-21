@@ -75,8 +75,10 @@ interface TreeCanvasProps {
   onDriftClick: () => void;
   onPersonDetailClick: (personId: string) => void;
   onAddMemoryClick?: () => void;
+  onRequestMemoryClick?: () => void;
   onSearchClick?: () => void;
   onConstellationChanged?: () => Promise<void> | void;
+  onSelectedPersonChange?: (personId: string | null) => void;
 }
 
 type EditRelationKind = "parent" | "child" | "sibling" | "spouse";
@@ -113,8 +115,10 @@ function TreeCanvasInner({
   onDriftClick,
   onPersonDetailClick,
   onAddMemoryClick,
+  onRequestMemoryClick,
   onSearchClick,
   onConstellationChanged,
+  onSelectedPersonChange,
 }: TreeCanvasProps) {
   const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const reactFlow = useReactFlow();
@@ -203,6 +207,10 @@ function TreeCanvasInner({
     setSelectedPersonId(currentUserPersonId);
     setLineageMode("birth");
   }, [currentUserPersonId, people]);
+
+  useEffect(() => {
+    onSelectedPersonChange?.(selectedPersonId);
+  }, [onSelectedPersonChange, selectedPersonId]);
 
   // Rebuild nodes whenever people/layout/selected changes
   useEffect(() => {
@@ -1175,6 +1183,25 @@ function TreeCanvasInner({
               }}
             >
               + Add
+            </button>
+          )}
+
+          {onRequestMemoryClick && (
+            <button
+              onClick={onRequestMemoryClick}
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                fontWeight: 500,
+                color: "var(--ink)",
+                background: "rgba(255,255,255,0.34)",
+                border: `1px solid ${CONTROL_BORDER}`,
+                cursor: "pointer",
+                padding: "6px 14px",
+                borderRadius: 999,
+              }}
+            >
+              Request a memory
             </button>
           )}
 
