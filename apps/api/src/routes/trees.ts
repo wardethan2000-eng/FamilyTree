@@ -23,6 +23,12 @@ const CreateTreeBody = z.object({
 type HomePerson = Awaited<ReturnType<typeof getTreeScopedPeople>>[number];
 type HomeMemory = Awaited<ReturnType<typeof getTreeMemories>>[number];
 type HomeRelationship = Awaited<ReturnType<typeof getTreeRelationships>>[number];
+type AtriumTrailSection = {
+  id: string;
+  title: string;
+  description: string;
+  memories: HomeMemory[];
+};
 
 function extractYear(text?: string | null): number | null {
   if (!text) return null;
@@ -206,6 +212,333 @@ function computeGenerationCount(
   return Math.max(...people.map((person) => visit(person.id, new Set())));
 }
 
+function labelForPerson(person: HomePerson | null | undefined): string | null {
+  if (!person) return null;
+  return person.displayName ?? null;
+}
+
+function buildBranchLabel(person: HomePerson | null | undefined): string | null {
+  const label = labelForPerson(person);
+  return label ? `Centered around ${label}'s branch` : null;
+}
+
+function getBranchFocusIds(
+  personId: string | null,
+  relationships: HomeRelationship[],
+): Set<string> {
+  if (!personId) return new Set();
+
+  const focused = new Set<string>([personId]);
+  const queue = [{ id: personId, depth: 0 }];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    for (const relationship of relationships) {
+      let neighborId: string | null = null;
+      if (relationship.fromPersonId === current.id) neighborId = relationship.toPersonId;
+      if (relationship.toPersonId === current.id) neighborId = relationship.fromPersonId;
+      if (!neighborId || focused.has(neighborId)) continue;
+
+      const maxDepth = relationship.type === "parent_child" ? 2 : 1;
+      if (current.depth >= maxDepth) continue;
+
+      focused.add(neighborId);
+      queue.push({ id: neighborId, depth: current.depth + 1 });
+    }
+  }
+
+  return focused;
+}
+
+function selectFeaturedMemory(memories: HomeMemory[], heroCandidates: HomeMemory[]): HomeMemory | null {
+  return (
+    heroCandidates[0] ??
+    memories.find((memory) => memory.kind === "photo" && (memory.media || memory.mediaItems.length > 0)) ??
+    memories.find((memory) => memory.kind === "story") ??
+    memories[0] ??
+    null
+  );
+}
+
+function scoreTrailMemory(
+  memory: HomeMemory,
+  featuredMemory: HomeMemory | null,
+  featuredYear: number | null,
+  focusIds: Set<string>,
+) {
+  let score = 0;
+
+  if (featuredMemory) {
+    if (memory.id === featuredMemory.id) score += 120;
+    if (memory.primaryPersonId && memory.primaryPersonId === featuredMemory.primaryPersonId) score += 48;
+    if (memory.primaryPersonId && focusIds.has(memory.primaryPersonId)) score += 28;
+
+    const year = extractYear(memory.dateOfEventText);
+    if (year !== null && featuredYear !== null) {
+      score += Math.max(0, 20 - Math.min(20, Math.floor(Math.abs(year - featuredYear) / 5)));
+    } else if (year !== null || featuredYear !== null) {
+      score += 4;
+    }
+
+    if (memory.kind !== featuredMemory.kind) score += 6;
+  }
+
+  if (memory.kind === "voice") score += 5;
+  if (memory.media || memory.mediaItems.length > 0 || memory.linkedMediaPreviewUrl) score += 4;
+  if (memory.body?.trim()) score += Math.min(6, Math.floor(memory.body.trim().length / 180));
+  if (memory.transcriptText?.trim()) score += 4;
+  if (memory.dateOfEventText) score += 3;
+
+  return score;
+}
+
+function rankTrailMemories(
+  memories: HomeMemory[],
+  featuredMemory: HomeMemory | null,
+  focusIds: Set<string>,
+) {
+  const featuredYear = extractYear(featuredMemory?.dateOfEventText);
+
+  return [...memories].sort((left, right) => {
+    const scoreDiff =
+      scoreTrailMemory(right, featuredMemory, featuredYear, focusIds) -
+      scoreTrailMemory(left, featuredMemory, featuredYear, focusIds);
+    if (scoreDiff !== 0) return scoreDiff;
+    return right.createdAt.getTime() - left.createdAt.getTime();
+  });
+}
+
+function takeMemories(memories: HomeMemory[], limit: number, usedIds: Set<string>) {
+  const selected: HomeMemory[] = [];
+
+  for (const memory of memories) {
+    if (selected.length >= limit) break;
+    if (usedIds.has(memory.id)) continue;
+    usedIds.add(memory.id);
+    selected.push(memory);
+  }
+
+  return selected;
+}
+
+function buildAtriumTrailSections({
+  featuredMemory,
+  memories,
+  focusIds,
+  focusPerson,
+}: {
+  featuredMemory: HomeMemory | null;
+  memories: HomeMemory[];
+  focusIds: Set<string>;
+  focusPerson: HomePerson | null;
+}): AtriumTrailSection[] {
+  if (memories.length === 0) return [];
+
+  const usedIds = new Set<string>();
+  const sections: AtriumTrailSection[] = [];
+
+  const beginHere: HomeMemory[] = [];
+  if (featuredMemory) {
+    beginHere.push(featuredMemory);
+    usedIds.add(featuredMemory.id);
+  }
+  beginHere.push(
+    ...takeMemories(
+      rankTrailMemories(
+        memories.filter(
+          (memory) =>
+            !usedIds.has(memory.id) &&
+            Boolean(featuredMemory?.primaryPersonId) &&
+            memory.primaryPersonId === featuredMemory?.primaryPersonId,
+        ),
+        featuredMemory,
+        focusIds,
+      ),
+      2,
+      usedIds,
+    ),
+  );
+  if (beginHere.length === 0) {
+    beginHere.push(
+      ...takeMemories(rankTrailMemories(memories, featuredMemory, focusIds), 3, usedIds),
+    );
+  }
+  if (beginHere.length > 0) {
+    sections.push({
+      id: "begin-here",
+      title: "Begin here",
+      description: "Stay with the opening memory, then step into the first nearby stories.",
+      memories: beginHere,
+    });
+  }
+
+  const branchMemories = takeMemories(
+    rankTrailMemories(
+      memories.filter(
+        (memory) =>
+          !usedIds.has(memory.id) &&
+          Boolean(memory.primaryPersonId) &&
+          focusIds.has(memory.primaryPersonId),
+      ),
+      featuredMemory,
+      focusIds,
+    ),
+    4,
+    usedIds,
+  );
+  if (branchMemories.length > 0) {
+    sections.push({
+      id: "from-this-branch",
+      title: "From this branch",
+      description: focusPerson
+        ? `Stories and artifacts that stay close to ${labelForPerson(focusPerson) ?? "this branch"}.`
+        : "Stories that stay close to the branch around the featured memory.",
+      memories: branchMemories,
+    });
+  }
+
+  const crossGenerations = takeMemories(
+    rankTrailMemories(
+      memories.filter((memory) => !usedIds.has(memory.id)),
+      featuredMemory,
+      focusIds,
+    ),
+    4,
+    usedIds,
+  );
+  if (crossGenerations.length > 0) {
+    sections.push({
+      id: "across-generations",
+      title: "Across generations",
+      description: "Let the trail widen beyond the immediate branch and across the family timeline.",
+      memories: crossGenerations,
+    });
+  }
+
+  return sections;
+}
+
+function buildFamilyPresenceGroups({
+  focusPersonId,
+  focusIds,
+  people,
+  relationships,
+}: {
+  focusPersonId: string | null;
+  focusIds: Set<string>;
+  people: HomePerson[];
+  relationships: HomeRelationship[];
+}) {
+  if (!focusPersonId) return [];
+
+  const peopleIds = new Set(people.map((person) => person.id));
+  const directIds = new Set<string>();
+  const groups: Array<{ id: string; label: string; personIds: string[] }> = [];
+
+  const collectGroup = (id: string, label: string, personIds: string[]) => {
+    const uniqueIds = [...new Set(personIds)].filter(
+      (personId) => personId !== focusPersonId && peopleIds.has(personId),
+    );
+    if (uniqueIds.length === 0) return;
+    uniqueIds.forEach((personId) => directIds.add(personId));
+    groups.push({ id, label, personIds: uniqueIds.slice(0, 8) });
+  };
+
+  collectGroup(
+    "partnered-with",
+    "Partnered with",
+    relationships
+      .filter(
+        (relationship) =>
+          relationship.type === "spouse" &&
+          (relationship.fromPersonId === focusPersonId || relationship.toPersonId === focusPersonId),
+      )
+      .map((relationship) =>
+        relationship.fromPersonId === focusPersonId
+          ? relationship.toPersonId
+          : relationship.fromPersonId,
+      ),
+  );
+
+  collectGroup(
+    "raised-by",
+    "Raised by",
+    relationships
+      .filter(
+        (relationship) =>
+          relationship.type === "parent_child" && relationship.toPersonId === focusPersonId,
+      )
+      .map((relationship) => relationship.fromPersonId),
+  );
+
+  collectGroup(
+    "alongside",
+    "Alongside",
+    relationships
+      .filter(
+        (relationship) =>
+          relationship.type === "sibling" &&
+          (relationship.fromPersonId === focusPersonId || relationship.toPersonId === focusPersonId),
+      )
+      .map((relationship) =>
+        relationship.fromPersonId === focusPersonId
+          ? relationship.toPersonId
+          : relationship.fromPersonId,
+      ),
+  );
+
+  collectGroup(
+    "carried-forward",
+    "Carried forward by",
+    relationships
+      .filter(
+        (relationship) =>
+          relationship.type === "parent_child" && relationship.fromPersonId === focusPersonId,
+      )
+      .map((relationship) => relationship.toPersonId),
+  );
+
+  collectGroup(
+    "nearby-in-branch",
+    "Nearby in this branch",
+    [...focusIds].filter((personId) => personId !== focusPersonId && !directIds.has(personId)),
+  );
+
+  if (groups.length > 0) return groups;
+
+  const fallbackIds = people
+    .map((person) => person.id)
+    .filter((personId) => personId !== focusPersonId)
+    .slice(0, 8);
+  return fallbackIds.length > 0
+    ? [{ id: "family", label: "Elsewhere in this family", personIds: fallbackIds }]
+    : [];
+}
+
+function buildArchiveSummary({
+  people,
+  relationships,
+  earliestYear,
+  latestYear,
+  focusPerson,
+}: {
+  people: HomePerson[];
+  relationships: HomeRelationship[];
+  earliestYear: number | null;
+  latestYear: number | null;
+  focusPerson: HomePerson | null;
+}) {
+  return {
+    peopleCount: people.length,
+    generationCount: computeGenerationCount(people, relationships),
+    earliestYear,
+    latestYear,
+    branchLabel: buildBranchLabel(focusPerson),
+  };
+}
+
 async function getCurationCount(treeId: string): Promise<number> {
   const baseWhere = eq(schema.memories.treeId, treeId);
 
@@ -376,6 +709,35 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
     const earliestYear = years.length > 0 ? Math.min(...years) : null;
     const latestYear = years.length > 0 ? Math.max(...years) : null;
 
+    const heroCandidates = selectHeroCandidates(memories);
+    const featuredMemory = selectFeaturedMemory(memories, heroCandidates);
+    const focusPersonId =
+      featuredMemory?.primaryPersonId ?? currentUserPersonId ?? people[0]?.id ?? null;
+    const focusPerson = people.find((person) => person.id === focusPersonId) ?? null;
+    const focusIds = getBranchFocusIds(focusPersonId, relationships);
+    const relatedPersonIds = focusPersonId
+      ? [focusPersonId, ...[...focusIds].filter((personId) => personId !== focusPersonId)]
+      : [...focusIds];
+    const relatedMemoryTrail = buildAtriumTrailSections({
+      featuredMemory,
+      memories,
+      focusIds,
+      focusPerson,
+    });
+    const familyPresenceGroups = buildFamilyPresenceGroups({
+      focusPersonId,
+      focusIds,
+      people,
+      relationships,
+    });
+    const archiveSummary = buildArchiveSummary({
+      people,
+      relationships,
+      earliestYear,
+      latestYear,
+      focusPerson,
+    });
+
     return reply.send({
       tree: {
         ...membership.tree,
@@ -384,6 +746,21 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
       currentUserPersonId,
       inboxCount,
       curationCount,
+      featuredMemory: featuredMemory ? serializeHomeMemory(featuredMemory) : null,
+      featuredBranch: {
+        focusPersonId,
+        relatedPersonIds,
+        branchLabel: buildBranchLabel(focusPerson),
+      },
+      relatedMemoryTrail: relatedMemoryTrail.map((section) => ({
+        ...section,
+        memories: section.memories.map(serializeHomeMemory),
+      })),
+      familyPresence: {
+        focusPersonId,
+        groups: familyPresenceGroups,
+      },
+      archiveSummary,
       stats: {
         peopleCount: people.length,
         memoryCount: memories.length,
@@ -399,7 +776,7 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
         decadeBuckets: buildDecadeBuckets(memories),
       },
       relationships: relationships.map(serializeHomeRelationship),
-      heroCandidates: selectHeroCandidates(memories).map(serializeHomeMemory),
+      heroCandidates: heroCandidates.map(serializeHomeMemory),
       people: people.map(serializeHomePerson),
       memories: memories.map(serializeHomeMemory),
     });

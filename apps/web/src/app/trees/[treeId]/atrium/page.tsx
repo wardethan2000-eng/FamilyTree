@@ -1,33 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
+import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
-import { ConstellationPreview } from "@/components/home/ConstellationPreview";
-import { EraRibbon } from "@/components/home/EraRibbon";
-import { HomeSummaryBand } from "@/components/home/HomeSummaryBand";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { AtriumContextStrip } from "@/components/home/AtriumContextStrip";
+import { AtriumFamilyPresence } from "@/components/home/AtriumFamilyPresence";
+import { AtriumMemoryTrail } from "@/components/home/AtriumMemoryTrail";
 import { AtriumSkeleton } from "@/components/home/HomeSurfaceSkeletons";
-import { MemoryLane } from "@/components/home/MemoryLane";
-import { TreeHomeHero } from "@/components/home/TreeHomeHero";
+import { AtriumStage } from "@/components/home/AtriumStage";
+import { AtriumStartState } from "@/components/home/AtriumStartState";
 import type {
+  TreeHomeArchiveSummary,
   TreeHomeCoverage,
+  TreeHomeFamilyPresence,
+  TreeHomeMemory,
+  TreeHomeMemoryTrailSection,
   TreeHomePayload,
   TreeHomePersonRecord,
-  TreeHomeRelationship,
   TreeHomeStats,
 } from "@/components/home/homeTypes";
-import { DriftMode } from "@/components/tree/DriftMode";
-import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
-import { SearchOverlay } from "@/components/tree/SearchOverlay";
+import { memoryMatchesDecade } from "@/components/home/homeUtils";
+import { useSession } from "@/lib/auth-client";
 import { writeLastOpenedTreeId } from "@/lib/last-opened-tree";
 import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
-import { extractYearFromText, memoryMatchesDecade } from "@/components/home/homeUtils";
+import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
+import { DriftMode } from "@/components/tree/DriftMode";
+import { SearchOverlay } from "@/components/tree/SearchOverlay";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+type EraValue = "all" | number;
+type Tree = TreeHomePayload["tree"];
 
 interface Person {
   id: string;
@@ -39,28 +44,16 @@ interface Person {
   linkedUserId: string | null;
 }
 
-interface Memory {
+interface FamilyPresenceGroup {
   id: string;
-  kind: "story" | "photo" | "voice" | "document" | "other";
-  title: string;
-  body?: string | null;
-  transcriptText?: string | null;
-  transcriptLanguage?: string | null;
-  transcriptStatus?: "none" | "queued" | "processing" | "completed" | "failed";
-  transcriptError?: string | null;
-  dateOfEventText?: string | null;
-  mediaUrl?: string | null;
-  mimeType?: string | null;
-  personName?: string | null;
-  primaryPersonId?: string | null;
-  personPortraitUrl?: string | null;
-  createdAt?: string;
+  label: string;
+  people: Person[];
 }
 
-type Tree = TreeHomePayload["tree"];
-
 function extractYear(text?: string | null): number | null {
-  return extractYearFromText(text);
+  if (!text) return null;
+  const match = text.match(/\b(\d{4})\b/);
+  return match ? Number.parseInt(match[1]!, 10) : null;
 }
 
 function mapHomePerson(person: TreeHomePersonRecord): Person {
@@ -75,95 +68,6 @@ function mapHomePerson(person: TreeHomePersonRecord): Person {
   };
 }
 
-function PersonCard({ person, onClick }: { person: Person; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const active = hovered || focused;
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={{
-        border: "none",
-        cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 12px",
-        borderRadius: 8,
-        background: active ? "var(--paper-deep)" : "none",
-        transform: active ? "translateY(-1px)" : "none",
-        outline: "none",
-        transition: `background 150ms ${EASE}, transform 150ms ${EASE}`,
-      } as React.CSSProperties}
-    >
-      <div
-        style={{
-          width: 60,
-          height: 60,
-          borderRadius: "50%",
-          overflow: "hidden",
-          border: "1.5px solid var(--rule)",
-          background: "var(--paper-deep)",
-          flexShrink: 0,
-        }}
-      >
-        {person.portraitUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={person.portraitUrl}
-            alt={person.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "var(--font-display)",
-              fontSize: 22,
-              color: "var(--ink-faded)",
-            }}
-          >
-            {person.name.charAt(0)}
-          </div>
-        )}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: 13,
-          color: "var(--ink)",
-          textAlign: "center",
-          lineHeight: 1.3,
-          maxWidth: 80,
-          transition: `color 150ms ${EASE}`,
-        }}
-      >
-        {person.name.split(" ")[0]}
-      </div>
-      {(person.birthYear ?? person.deathYear) && (
-        <div
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 10,
-            color: "var(--ink-faded)",
-          }}
-        >
-          {[person.birthYear, person.deathYear].filter(Boolean).join("–")}
-        </div>
-      )}
-    </button>
-  );
-}
-
 export default function AtriumPage() {
   const router = useRouter();
   const params = useParams<{ treeId: string }>();
@@ -172,12 +76,16 @@ export default function AtriumPage() {
   const needsNormalization = !isCanonicalTreeId(treeId);
 
   const [tree, setTree] = useState<Tree | null>(null);
+  const [currentUserPersonId, setCurrentUserPersonId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [heroCandidates, setHeroCandidates] = useState<Memory[]>([]);
+  const [memories, setMemories] = useState<TreeHomeMemory[]>([]);
+  const [heroCandidates, setHeroCandidates] = useState<TreeHomeMemory[]>([]);
+  const [featuredMemory, setFeaturedMemory] = useState<TreeHomeMemory | null>(null);
+  const [relatedMemoryTrail, setRelatedMemoryTrail] = useState<TreeHomeMemoryTrailSection[]>([]);
+  const [familyPresence, setFamilyPresence] = useState<TreeHomeFamilyPresence | null>(null);
+  const [archiveSummary, setArchiveSummary] = useState<TreeHomeArchiveSummary | null>(null);
   const [homeStats, setHomeStats] = useState<TreeHomeStats | null>(null);
   const [coverage, setCoverage] = useState<TreeHomeCoverage | null>(null);
-  const [relationships, setRelationships] = useState<TreeHomeRelationship[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -186,15 +94,12 @@ export default function AtriumPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
   const [curationCount, setCurationCount] = useState(0);
-  const [heroIndex, setHeroIndex] = useState(0);
-  const [heroPaused, setHeroPaused] = useState(false);
-  const [selectedEra, setSelectedEra] = useState<"all" | number>("all");
+  const [selectedEra, setSelectedEra] = useState<EraValue>("all");
 
-  // Global ⌘K handler
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "k") {
+        event.preventDefault();
         setSearchOpen(true);
       }
     };
@@ -204,13 +109,16 @@ export default function AtriumPage() {
 
   const applyHomePayload = useCallback((data: TreeHomePayload) => {
     setTree(data.tree);
+    setCurrentUserPersonId(data.currentUserPersonId);
     setPeople(data.people.map(mapHomePerson));
     setMemories(data.memories);
-    setHeroIndex(0);
     setHeroCandidates(data.heroCandidates);
+    setFeaturedMemory(data.featuredMemory);
+    setRelatedMemoryTrail(data.relatedMemoryTrail);
+    setFamilyPresence(data.familyPresence);
+    setArchiveSummary(data.archiveSummary);
     setHomeStats(data.stats);
     setCoverage(data.coverage);
-    setRelationships(data.relationships);
     setSelectedEra((current) =>
       current === "all" || data.coverage.decadeBuckets.some((bucket) => bucket.startYear === current)
         ? current
@@ -252,18 +160,16 @@ export default function AtriumPage() {
       setLoading(true);
       setLoadError(null);
       try {
-        const res = await fetch(`${API}/api/trees/${treeId}/home`, {
+        const response = await fetch(`${API}/api/trees/${treeId}/home`, {
           credentials: "include",
         });
-        if (!res.ok) {
+        if (!response.ok) {
           throw new Error("Failed to load this tree.");
         }
-        const data = (await res.json()) as TreeHomePayload;
+        const data = (await response.json()) as TreeHomePayload;
         applyHomePayload(data);
       } catch (error) {
-        setLoadError(
-          error instanceof Error ? error.message : "Failed to load this tree.",
-        );
+        setLoadError(error instanceof Error ? error.message : "Failed to load this tree.");
       } finally {
         setLoading(false);
       }
@@ -280,15 +186,15 @@ export default function AtriumPage() {
     (personId: string) => {
       router.push(`/trees/${treeId}/people/${personId}`);
     },
-    [router, treeId]
+    [router, treeId],
   );
 
   const refreshHome = useCallback(async () => {
-    const res = await fetch(`${API}/api/trees/${treeId}/home`, {
+    const response = await fetch(`${API}/api/trees/${treeId}/home`, {
       credentials: "include",
     });
-    if (!res.ok) return;
-    const data = (await res.json()) as TreeHomePayload;
+    if (!response.ok) return;
+    const data = (await response.json()) as TreeHomePayload;
     applyHomePayload(data);
   }, [applyHomePayload, treeId]);
 
@@ -302,54 +208,38 @@ export default function AtriumPage() {
     enabled: Boolean(session),
   });
 
-  useEffect(() => {
-    if (heroCandidates.length < 2 || heroPaused) return;
-    const interval = window.setInterval(() => {
-      setHeroIndex((current) => (current + 1) % heroCandidates.length);
-    }, 12000);
-    return () => window.clearInterval(interval);
-  }, [heroCandidates.length, heroPaused]);
+  const apiPeople = useMemo(
+    () =>
+      people.map((person) => ({
+        id: person.id,
+        name: person.name,
+        portraitUrl: person.portraitUrl,
+      })),
+    [people],
+  );
 
-  const apiPeople = people.map((p) => ({
-    id: p.id,
-    name: p.name,
-    portraitUrl: p.portraitUrl,
-  }));
-  const previewPeople = people.map((p) => ({
-    id: p.id,
-    name: p.name,
-    birthYear: p.birthYear,
-    deathYear: p.deathYear,
-    essenceLine: p.essenceLine,
-    portraitUrl: p.portraitUrl,
-    linkedUserId: p.linkedUserId,
-  }));
+  const focusPersonId =
+    familyPresence?.focusPersonId ?? featuredMemory?.primaryPersonId ?? currentUserPersonId ?? people[0]?.id ?? null;
+  const focusPerson = people.find((person) => person.id === focusPersonId) ?? null;
+  const branchCue =
+    archiveSummary?.branchLabel ??
+    (focusPerson ? `Centered around ${focusPerson.name}'s branch` : "Centered around the branch taking shape here");
 
-  const eraFilteredMemories =
-    selectedEra === "all"
-      ? memories
-      : memories.filter((memory) => memoryMatchesDecade(memory, selectedEra));
-  const eraFilteredHeroCandidates =
-    selectedEra === "all"
-      ? heroCandidates
-      : heroCandidates.filter((memory) => memoryMatchesDecade(memory, selectedEra));
-
-  const featuredMemory =
-    (eraFilteredHeroCandidates.length > 0
-      ? eraFilteredHeroCandidates[heroIndex % eraFilteredHeroCandidates.length]
-      : null) ??
-    eraFilteredMemories.find((m) => m.kind === "photo" && m.mediaUrl) ??
-    eraFilteredMemories.find((m) => m.kind === "story") ??
-    eraFilteredMemories[0] ??
-    null;
-  const recentMemories = eraFilteredMemories.slice(0, 12);
-  const voiceMemories = eraFilteredMemories.filter((memory) => memory.kind === "voice").slice(0, 8);
   const selectedEraLabel =
     selectedEra === "all"
       ? "All eras"
       : coverage?.decadeBuckets.find((bucket) => bucket.startYear === selectedEra)?.label ??
         `${selectedEra}s`;
-  const previewFocusPersonId = currentUserPersonIdFromPeople(people, session?.user.id) ?? featuredMemory?.primaryPersonId ?? people[0]?.id ?? null;
+
+  const trailSections = useMemo(
+    () => filterTrailSectionsByEra(relatedMemoryTrail, selectedEra),
+    [relatedMemoryTrail, selectedEra],
+  );
+
+  const familyPresenceGroups = useMemo(
+    () => mapFamilyPresenceGroups(familyPresence, people),
+    [familyPresence, people],
+  );
 
   if (isPending || loading || (needsNormalization && !loadError)) {
     return <AtriumSkeleton />;
@@ -411,7 +301,6 @@ export default function AtriumPage() {
         color: "var(--ink)",
       }}
     >
-      {/* Header */}
       <header
         style={{
           position: "sticky",
@@ -427,7 +316,7 @@ export default function AtriumPage() {
           gap: 12,
         }}
       >
-        <a
+        <Link
           href="/dashboard"
           style={{
             fontFamily: "var(--font-ui)",
@@ -438,7 +327,7 @@ export default function AtriumPage() {
           }}
         >
           ← Home
-        </a>
+        </Link>
         <span style={{ color: "var(--rule)", fontSize: 12 }}>·</span>
         <span
           style={{
@@ -452,91 +341,59 @@ export default function AtriumPage() {
 
         <div style={{ flex: 1 }} />
 
-        <a
-          href={`/trees/${treeId}/map`}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 12,
-            color: "var(--ink-faded)",
-            background: "var(--paper-deep)",
-            border: "1px solid var(--rule)",
-            borderRadius: 6,
-            padding: "5px 12px",
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
+        <Link href={`/trees/${treeId}/map`} style={headerLinkStyle}>
           Map
-        </a>
+        </Link>
 
-        {/* Inbox bell */}
-        <a
+        <Link
           href={`/trees/${treeId}/inbox`}
           style={{
+            ...headerIconStyle,
             position: "relative",
-            fontFamily: "var(--font-ui)",
-            fontSize: 18,
-            color: "var(--ink-faded)",
-            background: "var(--paper-deep)",
-            border: "1px solid var(--rule)",
-            borderRadius: 6,
-            padding: "5px 10px",
-            cursor: "pointer",
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
           }}
           title="Inbox"
         >
           ✉
           {inboxCount > 0 && (
-            <span style={{ position: "absolute", top: -4, right: -4, width: 16, height: 16, borderRadius: "50%", background: "var(--rose)", color: "#fff", fontFamily: "var(--font-ui)", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span
+              style={{
+                position: "absolute",
+                top: -4,
+                right: -4,
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "var(--rose)",
+                color: "#fff",
+                fontFamily: "var(--font-ui)",
+                fontSize: 9,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               {inboxCount > 9 ? "9+" : inboxCount}
             </span>
           )}
-        </a>
+        </Link>
 
-        {/* Curation nudge */}
         {curationCount > 0 && (
-          <a
+          <Link
             href={`/trees/${treeId}/curation`}
             style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
+              ...headerLinkStyle,
               color: "var(--amber, #c97d1a)",
-              background: "var(--paper-deep)",
               border: "1px solid var(--amber, #c97d1a)",
-              borderRadius: 6,
-              padding: "5px 12px",
-              cursor: "pointer",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
               gap: 4,
             }}
             title="Curation queue"
           >
             ✎ {curationCount} need{curationCount === 1 ? "s" : ""} attention
-          </a>
+          </Link>
         )}
 
-        <button
-          onClick={() => setSearchOpen(true)}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 12,
-            color: "var(--ink-faded)",
-            background: "var(--paper-deep)",
-            border: "1px solid var(--rule)",
-            borderRadius: 6,
-            padding: "5px 12px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
+        <button type="button" onClick={() => setSearchOpen(true)} style={headerButtonStyle}>
           <span>⌕</span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
             Search
@@ -557,6 +414,7 @@ export default function AtriumPage() {
         </button>
 
         <button
+          type="button"
           onClick={() => setWizardOpen(true)}
           style={{
             fontFamily: "var(--font-ui)",
@@ -574,408 +432,64 @@ export default function AtriumPage() {
         </button>
       </header>
 
-      <TreeHomeHero
-        treeName={tree?.name ?? "Family Archive"}
-        featuredMemory={featuredMemory}
-        transitionKey={`${selectedEra}-${featuredMemory?.id ?? "empty"}`}
-        heroIndex={
-          eraFilteredHeroCandidates.length > 0 ? heroIndex % eraFilteredHeroCandidates.length : 0
-        }
-        heroCount={eraFilteredHeroCandidates.length}
-        onPauseChange={setHeroPaused}
-        onSelectHero={setHeroIndex}
-      />
-
-      {/* CTA row */}
-      <section
-        style={{
-          padding: "30px max(20px, 5vw)",
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          onClick={() => setDriftOpen(true)}
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 16,
-            fontStyle: "italic",
-            color: "var(--paper)",
-            background: "var(--ink)",
-            border: "none",
-            borderRadius: 8,
-            padding: "11px 24px",
-            cursor: "pointer",
-            letterSpacing: "0.01em",
-            transition: `opacity 200ms ${EASE}`,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
-        >
-          Begin drifting ›
-        </button>
-
-        {featuredMemory && (
-          <a
-            href={`/trees/${treeId}/memories/${featuredMemory.id}`}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 14,
-              color: "var(--ink)",
-              background: "var(--paper-deep)",
-              border: "1px solid var(--rule)",
-              borderRadius: 8,
-              padding: "10px 22px",
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            Open memory →
-          </a>
-        )}
-
-        <a
-          href={`/trees/${treeId}`}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 14,
-            color: "var(--moss)",
-            background: "none",
-            border: "1.5px solid var(--moss)",
-            borderRadius: 8,
-            padding: "10px 22px",
-            textDecoration: "none",
-            transition: `background 200ms ${EASE}`,
-            display: "inline-block",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(78,93,66,0.08)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-        >
-          Enter the constellation →
-        </a>
-
-        <div
-          style={{
-            marginLeft: "auto",
-            fontFamily: "var(--font-ui)",
-            fontSize: 12,
-            color: "var(--ink-faded)",
-            background: "rgba(255,250,244,0.72)",
-            border: "1px solid var(--rule)",
-            borderRadius: 999,
-            padding: "8px 12px",
-          }}
-        >
-          {homeStats?.peopleCount ?? people.length}{" "}
-          {(homeStats?.peopleCount ?? people.length) === 1 ? "person" : "people"} ·{" "}
-          {homeStats?.memoryCount ?? memories.length}{" "}
-          {(homeStats?.memoryCount ?? memories.length) === 1 ? "memory" : "memories"}
-        </div>
-      </section>
-
-      {/* Divider */}
-      <hr
-        style={{
-          border: "none",
-          borderTop: "1px solid var(--rule)",
-          margin: "0 max(20px, 5vw)",
-        }}
-      />
-
-      <HomeSummaryBand stats={homeStats} coverage={coverage} />
-
-      <EraRibbon
-        coverage={coverage}
-        selectedEra={selectedEra}
-        onSelectEra={(value) => {
-          setSelectedEra(value);
-          setHeroIndex(0);
-        }}
-      />
-
-      <ConstellationPreview
-        people={previewPeople}
-        relationships={relationships}
-        focusPersonId={previewFocusPersonId}
-        href={`/trees/${treeId}`}
-      />
-
-      {selectedEra !== "all" && eraFilteredMemories.length === 0 && (
-        <section
-          style={{
-            padding: "24px max(20px, 5vw) 0",
-          }}
-        >
-          <div
-            style={{
-              border: "1px solid var(--rule)",
-              borderRadius: 12,
-              background: "var(--paper-deep)",
-              padding: "22px 20px",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 20,
-                color: "var(--ink)",
-                marginBottom: 6,
-              }}
-            >
-              Nothing surfaced for {selectedEraLabel} yet
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: 15,
-                lineHeight: 1.7,
-                color: "var(--ink-faded)",
-              }}
-            >
-              Try another decade or return to all eras while the archive fills in more dated memories.
-            </div>
-          </div>
-        </section>
+      {memories.length === 0 ? (
+        <AtriumStartState
+          treeName={tree?.name ?? "Family Archive"}
+          addPersonHref={`/trees/${treeId}/people/new`}
+          onAddMemory={() => setWizardOpen(true)}
+        />
+      ) : (
+        <AtriumStage
+          treeName={tree?.name ?? "Family Archive"}
+          featuredMemory={featuredMemory}
+          branchCue={branchCue}
+          memoryHref={featuredMemory ? `/trees/${treeId}/memories/${featuredMemory.id}` : null}
+          branchHref={focusPersonId ? `/trees/${treeId}/people/${focusPersonId}` : null}
+          fullTreeHref={`/trees/${treeId}`}
+          resurfacingCount={heroCandidates.length}
+          onDrift={() => setDriftOpen(true)}
+        />
       )}
 
-      {memories.length === 0 ? (
-        <section
-          style={{
-            padding: "30px max(20px, 5vw) 0",
-          }}
-        >
-          <div
-            style={{
-              border: "1px solid var(--rule)",
-              borderRadius: 18,
-              background:
-                "linear-gradient(180deg, rgba(255,250,244,0.98) 0%, rgba(242,235,224,0.98) 100%)",
-              padding: "28px clamp(20px, 3vw, 34px)",
-              boxShadow: "0 12px 28px rgba(40,30,18,0.05)",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: "var(--ink-faded)",
-                marginBottom: 10,
-              }}
-            >
-              First chapter
-            </div>
-            <h2
-              style={{
-                margin: "0 0 10px",
-                fontFamily: "var(--font-display)",
-                fontSize: "clamp(26px, 3vw, 34px)",
-                fontWeight: 400,
-                lineHeight: 1.08,
-                color: "var(--ink)",
-                maxWidth: "16ch",
-              }}
-            >
-              This atrium is ready for its first memory.
-            </h2>
-            <p
-              style={{
-                margin: 0,
-                maxWidth: 620,
-                fontFamily: "var(--font-body)",
-                fontSize: 16,
-                lineHeight: 1.75,
-                color: "var(--ink-soft)",
-              }}
-            >
-              Add a story, photo, or voice note to give this archive something to surface. If the
-              tree is still taking shape, add a person first so memories have someone to gather
-              around.
-            </p>
-            <div
-              style={{
-                marginTop: 18,
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                onClick={() => setWizardOpen(true)}
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 13,
-                  color: "white",
-                  background: "var(--ink)",
-                  border: "none",
-                  borderRadius: 999,
-                  padding: "10px 16px",
-                  cursor: "pointer",
-                }}
-              >
-                Add the first memory
-              </button>
-              <a
-                href={`/trees/${treeId}/people/new`}
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 13,
-                  color: "var(--moss)",
-                  textDecoration: "none",
-                }}
-              >
-                Add the first person →
-              </a>
-            </div>
-          </div>
-        </section>
-      ) : (
-        <MemoryLane
-          title="Resurfacing now"
-          countLabel={`${recentMemories.length} memories${selectedEra === "all" ? "" : ` from ${selectedEraLabel}`}`}
-          memories={recentMemories}
+      <AtriumContextStrip stats={homeStats} coverage={coverage} branchCue={branchCue} />
+
+      {memories.length > 0 && (
+        <AtriumMemoryTrail
+          coverage={coverage}
+          sections={trailSections}
+          selectedEra={selectedEra}
+          selectedEraLabel={selectedEraLabel}
+          onSelectEra={setSelectedEra}
           onMemoryClick={(memory) => {
             router.push(`/trees/${treeId}/memories/${memory.id}`);
           }}
-          viewAllHref={`/trees/${treeId}`}
-          viewAllLabel={
-            memories.length > recentMemories.length
-              ? `+${memories.length - recentMemories.length} more in the constellation`
-              : undefined
-          }
+          openArchiveHref={`/trees/${treeId}`}
         />
       )}
 
-      {/* Divider */}
-      {recentMemories.length > 0 && (
-        <hr
-          style={{
-            border: "none",
-            borderTop: "1px solid var(--rule)",
-            margin: "24px max(20px, 5vw) 0",
-          }}
-        />
-      )}
+      <AtriumFamilyPresence
+        focusPerson={focusPerson}
+        focusPersonName={featuredMemory?.personName ?? focusPerson?.name ?? null}
+        groups={familyPresenceGroups}
+        scaleLabel={formatArchiveScaleLabel(archiveSummary, homeStats, people.length)}
+        historicalLabel={formatArchiveHistoricalLabel(archiveSummary, coverage)}
+        fullTreeHref={`/trees/${treeId}`}
+        addPersonHref={`/trees/${treeId}/people/new`}
+        onPersonClick={handlePersonClick}
+      />
 
-      {voiceMemories.length > 0 && (
-        <>
-          <MemoryLane
-            title="Voices in the archive"
-            countLabel={`${voiceMemories.length} voice memories${selectedEra === "all" ? "" : ` from ${selectedEraLabel}`}`}
-            memories={voiceMemories}
-            onMemoryClick={(memory) => {
-              router.push(`/trees/${treeId}/memories/${memory.id}`);
-            }}
-          />
-          <hr
-            style={{
-              border: "none",
-              borderTop: "1px solid var(--rule)",
-              margin: "24px max(20px, 5vw) 0",
-            }}
-          />
-        </>
-      )}
-
-      {/* The family */}
-      <section style={{ padding: "32px max(20px, 5vw) 64px" }}>
-        <div
-          style={{
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "baseline",
-            gap: 12,
-          }}
-        >
-          <h2
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 20,
-              color: "var(--ink)",
-              margin: 0,
-              fontWeight: 400,
-            }}
-          >
-            The family
-          </h2>
-          <span
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              color: "var(--ink-faded)",
-            }}
-          >
-            {people.length} {people.length === 1 ? "person" : "people"}
-          </span>
-          <div style={{ flex: 1 }} />
-          <a
-            href={`/trees/${treeId}/people/new`}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              color: "var(--moss)",
-              textDecoration: "none",
-            }}
-          >
-            + Add person
-          </a>
-        </div>
-
-        {people.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "48px 24px",
-              fontFamily: "var(--font-body)",
-              fontStyle: "italic",
-              fontSize: 15,
-              color: "var(--ink-faded)",
-            }}
-          >
-            No one in the archive yet.{" "}
-            <a
-              href={`/trees/${treeId}/people/new`}
-              style={{ color: "var(--moss)", textDecoration: "underline" }}
-            >
-              Add the first person
-            </a>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 4,
-            }}
-          >
-            {people.map((p) => (
-              <PersonCard
-                key={p.id}
-                person={p}
-                onClick={() => handlePersonClick(p.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* DriftMode */}
       <AnimatePresence>
         {driftOpen && (
           <DriftMode
             treeId={treeId}
-            people={people.map((p) => ({
-              id: p.id,
-              name: p.name,
-              birthYear: p.birthYear,
-              deathYear: p.deathYear,
-              essenceLine: p.essenceLine,
-              portraitUrl: p.portraitUrl,
-              linkedUserId: p.linkedUserId,
+            people={people.map((person) => ({
+              id: person.id,
+              name: person.name,
+              birthYear: person.birthYear,
+              deathYear: person.deathYear,
+              essenceLine: person.essenceLine,
+              portraitUrl: person.portraitUrl,
+              linkedUserId: person.linkedUserId,
             }))}
             onClose={() => setDriftOpen(false)}
             onPersonDetail={handlePersonClick}
@@ -984,7 +498,6 @@ export default function AtriumPage() {
         )}
       </AnimatePresence>
 
-      {/* Add Memory wizard */}
       {wizardOpen && (
         <AddMemoryWizard
           treeId={treeId}
@@ -995,16 +508,15 @@ export default function AtriumPage() {
         />
       )}
 
-      {/* Search overlay */}
       <SearchOverlay
         treeId={treeId}
-        people={people.map((p) => ({
-          id: p.id,
-          name: p.name,
-          portraitUrl: p.portraitUrl,
-          essenceLine: p.essenceLine,
-          birthYear: p.birthYear,
-          deathYear: p.deathYear,
+        people={people.map((person) => ({
+          id: person.id,
+          name: person.name,
+          portraitUrl: person.portraitUrl,
+          essenceLine: person.essenceLine,
+          birthYear: person.birthYear,
+          deathYear: person.deathYear,
         }))}
         memories={memories}
         open={searchOpen}
@@ -1014,7 +526,109 @@ export default function AtriumPage() {
   );
 }
 
-function currentUserPersonIdFromPeople(people: Person[], userId: string | undefined) {
-  if (!userId) return null;
-  return people.find((person) => person.linkedUserId === userId)?.id ?? null;
+const headerLinkStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  color: "var(--ink-faded)",
+  background: "var(--paper-deep)",
+  border: "1px solid var(--rule)",
+  borderRadius: 6,
+  padding: "5px 12px",
+  textDecoration: "none",
+  display: "flex",
+  alignItems: "center",
+} as const;
+
+const headerIconStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 18,
+  color: "var(--ink-faded)",
+  background: "var(--paper-deep)",
+  border: "1px solid var(--rule)",
+  borderRadius: 6,
+  padding: "5px 10px",
+  textDecoration: "none",
+  display: "flex",
+  alignItems: "center",
+} as const;
+
+const headerButtonStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  color: "var(--ink-faded)",
+  background: "var(--paper-deep)",
+  border: "1px solid var(--rule)",
+  borderRadius: 6,
+  padding: "5px 12px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+} as const;
+
+function filterTrailSectionsByEra(
+  sections: TreeHomeMemoryTrailSection[],
+  selectedEra: EraValue,
+) {
+  if (selectedEra === "all") return sections;
+
+  return sections
+    .map((section) => ({
+      ...section,
+      memories: section.memories.filter((memory) => memoryMatchesDecade(memory, selectedEra)),
+    }))
+    .filter((section) => section.memories.length > 0);
+}
+
+function mapFamilyPresenceGroups(
+  familyPresence: TreeHomeFamilyPresence | null,
+  people: Person[],
+): FamilyPresenceGroup[] {
+  if (!familyPresence) return [];
+
+  const peopleById = new Map(people.map((person) => [person.id, person]));
+  return familyPresence.groups
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      people: group.personIds
+        .map((personId) => peopleById.get(personId))
+        .filter((person): person is Person => Boolean(person)),
+    }))
+    .filter((group) => group.people.length > 0);
+}
+
+function formatArchiveScaleLabel(
+  archiveSummary: TreeHomeArchiveSummary | null,
+  stats: TreeHomeStats | null,
+  peopleCount: number,
+) {
+  const resolvedPeopleCount = archiveSummary?.peopleCount ?? stats?.peopleCount ?? peopleCount;
+  const generationCount = archiveSummary?.generationCount ?? stats?.generationCount ?? 0;
+
+  if (resolvedPeopleCount === 0) return "No people have been added yet.";
+  if (generationCount > 0) {
+    return `${resolvedPeopleCount} ${resolvedPeopleCount === 1 ? "person" : "people"} across ${generationCount} ${generationCount === 1 ? "generation" : "generations"}`;
+  }
+  return `${resolvedPeopleCount} ${resolvedPeopleCount === 1 ? "person" : "people"} taking shape`;
+}
+
+function formatArchiveHistoricalLabel(
+  archiveSummary: TreeHomeArchiveSummary | null,
+  coverage: TreeHomeCoverage | null,
+) {
+  const earliestYear = archiveSummary?.earliestYear ?? coverage?.earliestYear ?? null;
+  const latestYear = archiveSummary?.latestYear ?? coverage?.latestYear ?? null;
+
+  if (earliestYear === null && latestYear === null) {
+    return "Dates are still gathering around the archive.";
+  }
+  if (earliestYear !== null && latestYear !== null) {
+    if (earliestYear === latestYear) {
+      return `Memories are currently centered on ${earliestYear}.`;
+    }
+    return `Memories stretch from ${earliestYear} to ${latestYear}.`;
+  }
+  const knownYear = earliestYear ?? latestYear;
+  return `Memories are currently anchored around ${knownYear}.`;
 }

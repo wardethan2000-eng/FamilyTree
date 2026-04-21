@@ -64,11 +64,48 @@ export interface TreeHomeRelationship {
   endDateText?: string | null;
 }
 
+export interface TreeHomeArchiveSummary {
+  peopleCount: number;
+  generationCount: number;
+  earliestYear: number | null;
+  latestYear: number | null;
+  branchLabel: string | null;
+}
+
+export interface TreeHomeFeaturedBranch {
+  focusPersonId: string | null;
+  relatedPersonIds: string[];
+  branchLabel: string | null;
+}
+
+export interface TreeHomeMemoryTrailSection {
+  id: string;
+  title: string;
+  description: string;
+  memories: TreeHomeMemory[];
+}
+
+export interface TreeHomeFamilyPresenceGroup {
+  id: string;
+  label: string;
+  personIds: string[];
+}
+
+export interface TreeHomeFamilyPresence {
+  focusPersonId: string | null;
+  groups: TreeHomeFamilyPresenceGroup[];
+}
+
 export interface TreeHomePayload {
   tree: TreeHomeTree;
   people: TreeHomePersonRecord[];
   memories: TreeHomeMemory[];
   heroCandidates: TreeHomeMemory[];
+  featuredMemory: TreeHomeMemory | null;
+  featuredBranch: TreeHomeFeaturedBranch;
+  relatedMemoryTrail: TreeHomeMemoryTrailSection[];
+  familyPresence: TreeHomeFamilyPresence;
+  archiveSummary: TreeHomeArchiveSummary;
   inboxCount: number;
   curationCount: number;
   currentUserPersonId: string | null;
