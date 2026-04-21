@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { AnimatePresence } from "framer-motion";
+import { HomeSummaryBand } from "@/components/home/HomeSummaryBand";
+import { MemoryLane } from "@/components/home/MemoryLane";
+import { TreeHomeHero } from "@/components/home/TreeHomeHero";
 import { DriftMode } from "@/components/tree/DriftMode";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
-import { getProxiedMediaUrl } from "@/lib/media-url";
 import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 
@@ -90,170 +92,6 @@ function extractYear(text?: string | null): number | null {
   if (!text) return null;
   const m = text.match(/\b(\d{4})\b/);
   return m ? parseInt(m[1]!, 10) : null;
-}
-
-function getVoiceTranscriptLabel(memory: Memory): string | null {
-  if (memory.kind !== "voice") return null;
-  if (memory.transcriptStatus === "completed" && memory.transcriptText) {
-    return memory.transcriptText;
-  }
-  if (memory.transcriptStatus === "completed") {
-    return "Transcript unavailable.";
-  }
-  if (memory.transcriptStatus === "failed") {
-    return memory.transcriptError ? `Transcription failed: ${memory.transcriptError}` : "Transcription failed.";
-  }
-  if (memory.transcriptStatus === "queued" || memory.transcriptStatus === "processing") {
-    return "Transcribing…";
-  }
-  return null;
-}
-
-function getHeroExcerpt(memory: Memory | null): string | null {
-  if (!memory) return null;
-  if (memory.kind === "voice") return getVoiceTranscriptLabel(memory);
-  if (memory.body?.trim()) return memory.body.trim();
-  return null;
-}
-
-function getCoverageRangeLabel(coverage: HomeCoverage | null): string {
-  if (!coverage || (coverage.earliestYear === null && coverage.latestYear === null)) {
-    return "Dates are still gathering.";
-  }
-  if (coverage.earliestYear !== null && coverage.latestYear !== null) {
-    if (coverage.earliestYear === coverage.latestYear) return `${coverage.earliestYear}`;
-    return `${coverage.earliestYear} to ${coverage.latestYear}`;
-  }
-  return `${coverage.earliestYear ?? coverage.latestYear}`;
-}
-
-function MemoryCard({
-  memory,
-  onClick,
-  extraControls,
-}: {
-  memory: Memory;
-  onClick: () => void;
-  extraControls?: React.ReactNode;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const resolvedMediaUrl = getProxiedMediaUrl(memory.mediaUrl);
-
-  return (
-    <article
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: "var(--paper)",
-        border: "1px solid var(--rule)",
-        borderRadius: 8,
-        padding: 0,
-        textAlign: "left",
-        flexShrink: 0,
-        width: 200,
-        overflow: "hidden",
-        boxShadow: hovered
-          ? "0 4px 20px rgba(28,25,21,0.12)"
-          : "0 1px 4px rgba(28,25,21,0.06)",
-        transform: hovered ? "translateY(-2px)" : "none",
-        transition: `box-shadow 200ms ${EASE}, transform 200ms ${EASE}`,
-      }}
-    >
-      <button
-        type="button"
-        onClick={onClick}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          width: "100%",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        {memory.kind === "photo" && resolvedMediaUrl ? (
-          <div style={{ height: 110, overflow: "hidden", position: "relative" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resolvedMediaUrl}
-              alt={memory.title}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </div>
-        ) : (
-          <div
-            style={{
-              height: 110,
-              background: "var(--paper-deep)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 32,
-                color: "var(--rule)",
-              }}
-            >
-              {memory.kind === "story" ? "✦" : memory.kind === "voice" ? "◉" : "▤"}
-            </div>
-          </div>
-        )}
-        <div style={{ padding: "10px 12px 12px" }}>
-          <div
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 13,
-              color: "var(--ink)",
-              lineHeight: 1.3,
-              marginBottom: 4,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {memory.title}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 11,
-              color: "var(--ink-faded)",
-            }}
-          >
-            {memory.personName ?? ""}
-            {memory.personName && memory.dateOfEventText ? " · " : ""}
-            {memory.dateOfEventText ?? ""}
-          </div>
-          {memory.kind === "voice" && (
-            <div
-              style={{
-                marginTop: 8,
-                fontFamily: "var(--font-body)",
-                fontSize: 13,
-                lineHeight: 1.55,
-                color: "var(--ink-faded)",
-                display: "-webkit-box",
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
-            >
-              {getVoiceTranscriptLabel(memory)}
-            </div>
-          )}
-        </div>
-      </button>
-      {extraControls && (
-        <div style={{ padding: "0 12px 12px" }}>
-          {extraControls}
-        </div>
-      )}
-    </article>
-  );
 }
 
 function PersonCard({ person, onClick }: { person: Person; onClick: () => void }) {
@@ -509,10 +347,8 @@ export default function AtriumPage() {
     memories.find((m) => m.kind === "story") ??
     memories[0] ??
     null;
-  const featuredMemoryMediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
-  const heroExcerpt = getHeroExcerpt(featuredMemory);
-
-  const recentMemories = memories.slice(0, 20);
+  const recentMemories = memories.slice(0, 12);
+  const voiceMemories = memories.filter((memory) => memory.kind === "voice").slice(0, 8);
 
   if (isPending || loading || (needsNormalization && !loadError)) {
     return (
@@ -752,165 +588,14 @@ export default function AtriumPage() {
         </button>
       </header>
 
-      {/* Hero section */}
-      <section
-        onMouseEnter={() => setHeroPaused(true)}
-        onMouseLeave={() => setHeroPaused(false)}
-        style={{
-          position: "relative",
-          height: "min(60vh, 480px)",
-          overflow: "hidden",
-          background: "var(--ink)",
-        }}
-      >
-        {featuredMemory?.kind === "photo" && featuredMemoryMediaUrl ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={featuredMemoryMediaUrl}
-              alt={featuredMemory.title}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                filter: "sepia(20%) brightness(0.7)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "linear-gradient(to top, rgba(28,25,21,0.85) 0%, rgba(28,25,21,0.2) 60%, transparent 100%)",
-              }}
-            />
-          </>
-        ) : (
-          // No photo — sepia gradient with tree name
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: `
-                radial-gradient(ellipse at 30% 60%, rgba(176,139,62,0.18) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 20%, rgba(78,93,66,0.15) 0%, transparent 50%),
-                #1C1915
-              `,
-            }}
-          />
-        )}
-
-        {/* Hero content */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 40,
-            left: "max(40px, 5vw)",
-            right: "max(40px, 5vw)",
-            animation: `bloom 600ms ${EASE}`,
-          }}
-        >
-          {featuredMemory ? (
-            <>
-              <div
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 11,
-                  color: "rgba(246,241,231,0.55)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.12em",
-                  marginBottom: 8,
-                }}
-              >
-                {featuredMemory.kind === "photo"
-                  ? "From the archive"
-                  : featuredMemory.kind === "story"
-                  ? "A story"
-                  : "A memory"}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(24px, 4vw, 40px)",
-                  color: "rgba(246,241,231,0.95)",
-                  lineHeight: 1.2,
-                  marginBottom: 10,
-                  maxWidth: "60ch",
-                }}
-              >
-                {featuredMemory.title}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontStyle: "italic",
-                  fontSize: 14,
-                  color: "rgba(246,241,231,0.65)",
-                }}
-              >
-                {featuredMemory.personName ?? ""}
-                {featuredMemory.personName && featuredMemory.dateOfEventText ? " · " : ""}
-                {featuredMemory.dateOfEventText ?? ""}
-              </div>
-              {heroExcerpt && (
-                <div
-                  style={{
-                    marginTop: 14,
-                    maxWidth: "60ch",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 15,
-                    lineHeight: 1.7,
-                    color: "rgba(246,241,231,0.78)",
-                    display: "-webkit-box",
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden",
-                  }}
-                >
-                  {heroExcerpt}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 11,
-                  color: "rgba(246,241,231,0.45)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.12em",
-                  marginBottom: 10,
-                }}
-              >
-                A private family archive
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(28px, 5vw, 52px)",
-                  color: "rgba(246,241,231,0.9)",
-                  lineHeight: 1.15,
-                }}
-              >
-                {tree?.name ?? "Family Archive"}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontStyle: "italic",
-                  fontSize: 15,
-                  color: "rgba(246,241,231,0.5)",
-                  marginTop: 10,
-                }}
-              >
-                Begin by adding the first memory.
-              </div>
-            </>
-          )}
-        </div>
-      </section>
+      <TreeHomeHero
+        treeName={tree?.name ?? "Family Archive"}
+        featuredMemory={featuredMemory}
+        heroIndex={heroCandidates.length > 0 ? heroIndex % heroCandidates.length : 0}
+        heroCount={heroCandidates.length}
+        onPauseChange={setHeroPaused}
+        onSelectHero={setHeroIndex}
+      />
 
       {/* CTA row */}
       <section
@@ -1007,230 +692,22 @@ export default function AtriumPage() {
         }}
       />
 
-      {(homeStats || coverage) && (
-        <section
-          style={{
-            padding: "24px max(24px, 5vw) 0",
-            display: "grid",
-            gap: 14,
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          }}
-        >
-          <article
-            style={{
-              border: "1px solid var(--rule)",
-              borderRadius: 10,
-              background: "var(--paper-deep)",
-              padding: "16px 18px",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                color: "var(--ink-faded)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 8,
-              }}
-            >
-              Archive scale
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 18,
-                color: "var(--ink)",
-              }}
-            >
-              {homeStats?.peopleCount ?? people.length} people
-              {homeStats?.generationCount ? ` across ${homeStats.generationCount} generations` : ""}
-            </div>
-          </article>
+      <HomeSummaryBand stats={homeStats} coverage={coverage} />
 
-          <article
-            style={{
-              border: "1px solid var(--rule)",
-              borderRadius: 10,
-              background: "var(--paper-deep)",
-              padding: "16px 18px",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                color: "var(--ink-faded)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 8,
-              }}
-            >
-              Historical span
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 18,
-                color: "var(--ink)",
-              }}
-            >
-              {getCoverageRangeLabel(coverage)}
-            </div>
-            {coverage && coverage.decadeBuckets.length > 0 && (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 12,
-                  color: "var(--ink-faded)",
-                }}
-              >
-                {coverage.decadeBuckets.length} dated eras in the archive
-              </div>
-            )}
-          </article>
-
-          <article
-            style={{
-              border: "1px solid var(--rule)",
-              borderRadius: 10,
-              background: "var(--paper-deep)",
-              padding: "16px 18px",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                color: "var(--ink-faded)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 8,
-              }}
-            >
-              Still unfolding
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 18,
-                color: "var(--ink)",
-              }}
-            >
-              {homeStats?.peopleWithoutDirectMemoriesCount ?? 0} people still need direct memories
-            </div>
-            <div
-              style={{
-                marginTop: 6,
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "var(--ink-faded)",
-              }}
-            >
-              {homeStats?.peopleWithoutPortraitCount ?? 0} are still missing portraits
-            </div>
-          </article>
-        </section>
-      )}
-
-      {/* Recent memories strip */}
-      {recentMemories.length > 0 && (
-        <section style={{ padding: "28px 0 0" }}>
-          <div
-            style={{
-              padding: "0 max(24px, 5vw)",
-              marginBottom: 16,
-              display: "flex",
-              alignItems: "baseline",
-              gap: 12,
-            }}
-          >
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 20,
-                color: "var(--ink)",
-                margin: 0,
-                fontWeight: 400,
-              }}
-            >
-              Recently added
-            </h2>
-            <span
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "var(--ink-faded)",
-              }}
-            >
-              {recentMemories.length} memories
-            </span>
-          </div>
-
-          <div
-            style={{
-              overflowX: "auto",
-              paddingBottom: 16,
-              paddingLeft: "max(24px, 5vw)",
-              paddingRight: "max(24px, 5vw)",
-              display: "flex",
-              gap: 12,
-              scrollbarWidth: "none",
-            }}
-          >
-            {recentMemories.map((m) => (
-              <MemoryCard
-                key={m.id}
-                memory={m}
-                onClick={() => {
-                  router.push(`/trees/${treeId}/memories/${m.id}`);
-                }}
-              />
-            ))}
-            {memories.length > 20 && (
-              <a
-                href={`/trees/${treeId}`}
-                style={{
-                  background: "var(--paper-deep)",
-                  border: "1px solid var(--rule)",
-                  borderRadius: 8,
-                  flexShrink: 0,
-                  width: 200,
-                  height: 156,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  textDecoration: "none",
-                  cursor: "pointer",
-                  transition: `box-shadow 200ms ${EASE}`,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 22,
-                    color: "var(--ink-faded)",
-                  }}
-                >
-                  +{memories.length - 20}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 12,
-                    color: "var(--ink-faded)",
-                  }}
-                >
-                  more in the constellation
-                </span>
-              </a>
-            )}
-          </div>
-        </section>
-      )}
+      <MemoryLane
+        title="Resurfacing now"
+        countLabel={`${recentMemories.length} memories`}
+        memories={recentMemories}
+        onMemoryClick={(memory) => {
+          router.push(`/trees/${treeId}/memories/${memory.id}`);
+        }}
+        viewAllHref={`/trees/${treeId}`}
+        viewAllLabel={
+          memories.length > recentMemories.length
+            ? `+${memories.length - recentMemories.length} more in the constellation`
+            : undefined
+        }
+      />
 
       {/* Divider */}
       {recentMemories.length > 0 && (
@@ -1241,6 +718,26 @@ export default function AtriumPage() {
             margin: "20px max(24px, 5vw) 0",
           }}
         />
+      )}
+
+      {voiceMemories.length > 0 && (
+        <>
+          <MemoryLane
+            title="Voices in the archive"
+            countLabel={`${voiceMemories.length} voice memories`}
+            memories={voiceMemories}
+            onMemoryClick={(memory) => {
+              router.push(`/trees/${treeId}/memories/${memory.id}`);
+            }}
+          />
+          <hr
+            style={{
+              border: "none",
+              borderTop: "1px solid var(--rule)",
+              margin: "20px max(24px, 5vw) 0",
+            }}
+          />
+        </>
       )}
 
       {/* The family */}
