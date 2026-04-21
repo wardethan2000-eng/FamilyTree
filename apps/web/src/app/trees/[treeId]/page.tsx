@@ -10,6 +10,7 @@ import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { PromptComposer } from "@/components/tree/PromptComposer";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
+import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 import type { ApiPerson, ApiRelationship } from "@/components/tree/treeTypes";
 
@@ -45,12 +46,14 @@ export default function TreePage() {
   const params = useParams<{ treeId: string }>();
   const { treeId } = params;
   const { data: session, isPending } = useSession();
+  const [normalizingTreeId, setNormalizingTreeId] = useState(!isCanonicalTreeId(treeId));
 
   const [tree, setTree] = useState<Tree | null>(null);
   const [people, setPeople] = useState<ApiPerson[]>([]);
   const [relationships, setRelationships] = useState<ApiRelationship[]>([]);
   const [memories, setMemories] = useState<TreeMemory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [driftOpen, setDriftOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -91,9 +94,35 @@ export default function TreePage() {
   }, [session, isPending, router]);
 
   useEffect(() => {
-    if (!session || !treeId) return;
+    const needsNormalization = !isCanonicalTreeId(treeId);
+    setNormalizingTreeId(needsNormalization);
+    if (!session || !needsNormalization) return;
+
+    let cancelled = false;
+    void (async () => {
+      const resolvedTreeId = await resolveCanonicalTreeId(API, treeId);
+      if (cancelled) return;
+      if (resolvedTreeId && resolvedTreeId !== treeId) {
+        router.replace(`/trees/${resolvedTreeId}`);
+        return;
+      }
+      if (!resolvedTreeId) {
+        setLoadError("This tree link is invalid or no longer points to an available tree.");
+        setLoading(false);
+      }
+      setNormalizingTreeId(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, session, treeId]);
+
+  useEffect(() => {
+    if (!session || !treeId || !isCanonicalTreeId(treeId)) return;
     const fetchData = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const [treeResResult, peopleResResult, relsResResult, memoriesResResult] =
           await Promise.allSettled([
@@ -116,6 +145,10 @@ export default function TreePage() {
         if (memoriesResResult.status === "fulfilled" && memoriesResResult.value.ok) {
           setMemories(await memoriesResResult.value.json());
         }
+      } catch (error) {
+        setLoadError(
+          error instanceof Error ? error.message : "Failed to load this tree.",
+        );
       } finally {
         setLoading(false);
       }
@@ -178,7 +211,7 @@ export default function TreePage() {
     linkedUserId: p.linkedUserId ?? null,
   }));
 
-  if (isPending || loading) {
+  if (isPending || loading || normalizingTreeId) {
     return (
       <main
         style={{
@@ -193,6 +226,54 @@ export default function TreePage() {
       >
         <Shimmer width={160} height={14} />
         <Shimmer width={240} height={10} />
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "var(--paper)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 520,
+            border: "1px solid var(--rule)",
+            background: "var(--paper)",
+            borderRadius: 12,
+            padding: 24,
+          }}
+        >
+          <h1
+            style={{
+              margin: "0 0 10px",
+              fontFamily: "var(--font-display)",
+              fontSize: 28,
+              fontWeight: 400,
+              color: "var(--ink)",
+            }}
+          >
+            This tree could not be opened.
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-body)",
+              fontSize: 17,
+              lineHeight: 1.7,
+              color: "var(--ink-soft)",
+            }}
+          >
+            {loadError}
+          </p>
+        </div>
       </main>
     );
   }

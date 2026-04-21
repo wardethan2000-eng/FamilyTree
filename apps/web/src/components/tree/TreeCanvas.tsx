@@ -1032,17 +1032,7 @@ function TreeCanvasInner({
             <button
               onClick={onSearchClick}
               style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "var(--ink-faded)",
-                background: "rgba(255,255,255,0.28)",
-                border: `1px solid ${CONTROL_BORDER}`,
-                borderRadius: 999,
-                cursor: "pointer",
-                padding: "6px 11px",
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
+                ...toolbarButtonStyle,
               }}
             >
               <span>⌕</span>
@@ -1068,15 +1058,9 @@ function TreeCanvasInner({
           <button
             onClick={handleToggleEditMode}
             style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              fontWeight: 500,
-              color: editMode ? "white" : "var(--ink-faded)",
-              background: editMode ? "var(--ink)" : "rgba(255,255,255,0.28)",
-              border: editMode ? "1px solid rgba(28,25,21,0.32)" : `1px solid ${CONTROL_BORDER}`,
-              cursor: "pointer",
-              padding: "6px 11px",
-              borderRadius: 999,
+              ...(editMode ? toolbarPrimaryButtonStyle : toolbarButtonStyle),
+              background: editMode ? "var(--ink)" : toolbarButtonStyle.background,
+              border: editMode ? "1px solid rgba(28,25,21,0.32)" : toolbarButtonStyle.border,
             }}
           >
             {editMode ? "Exit edit mode" : "Edit constellation"}
@@ -1084,15 +1068,7 @@ function TreeCanvasInner({
 
           {editMode && (
             <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                color: "var(--ink-faded)",
-                background: "rgba(255,255,255,0.28)",
-                border: `1px solid ${CONTROL_BORDER}`,
-                borderRadius: 999,
-                padding: "6px 10px",
-              }}
+              style={toolbarHintStyle}
             >
               Click a person to add family. Click a connection line to edit or disconnect it.
             </div>
@@ -1100,16 +1076,7 @@ function TreeCanvasInner({
 
           {!editMode && selectedPerson && (
             <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: 4,
-                borderRadius: 999,
-                border: `1px solid ${CONTROL_BORDER}`,
-                background: "rgba(255,255,255,0.28)",
-                backdropFilter: "blur(8px)",
-              }}
+              style={toolbarSegmentedStyle}
             >
               <span
                 style={{
@@ -1134,14 +1101,13 @@ function TreeCanvasInner({
                     type="button"
                     onClick={() => setLineageMode(mode)}
                     style={{
-                      fontFamily: "var(--font-ui)",
+                      ...toolbarButtonStyle,
                       fontSize: 11,
                       color: active ? "white" : "var(--ink-faded)",
                       background: active ? "var(--moss)" : "transparent",
                       border: active ? "1px solid rgba(78,93,66,0.28)" : "1px solid transparent",
-                      borderRadius: 999,
+                      boxShadow: "none",
                       padding: "6px 10px",
-                      cursor: "pointer",
                     }}
                   >
                     {label}
@@ -1153,16 +1119,7 @@ function TreeCanvasInner({
 
           <button
             onClick={onDriftClick}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 13,
-              color: "var(--moss)",
-              background: "rgba(255,255,255,0.18)",
-              border: `1px solid ${CONTROL_BORDER}`,
-              cursor: "pointer",
-              padding: "6px 12px",
-              borderRadius: 999,
-            }}
+            style={toolbarAccentButtonStyle}
           >
             Drift ›
           </button>
@@ -1170,17 +1127,7 @@ function TreeCanvasInner({
           {onAddMemoryClick && (
             <button
               onClick={onAddMemoryClick}
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                fontWeight: 500,
-                color: "white",
-                background: "var(--moss)",
-                border: "1px solid rgba(78,93,66,0.26)",
-                cursor: "pointer",
-                padding: "6px 14px",
-                borderRadius: 999,
-              }}
+              style={toolbarPrimaryButtonStyle}
             >
               + Add
             </button>
@@ -1189,17 +1136,7 @@ function TreeCanvasInner({
           {onRequestMemoryClick && (
             <button
               onClick={onRequestMemoryClick}
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                fontWeight: 500,
-                color: "var(--ink)",
-                background: "rgba(255,255,255,0.34)",
-                border: `1px solid ${CONTROL_BORDER}`,
-                cursor: "pointer",
-                padding: "6px 14px",
-                borderRadius: 999,
-              }}
+              style={toolbarButtonStyle}
             >
               Request a memory
             </button>
@@ -1208,16 +1145,7 @@ function TreeCanvasInner({
           {familyMapHref && (
             <a
               href={familyMapHref}
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "var(--ink)",
-                textDecoration: "none",
-                padding: "6px 12px",
-                border: `1px solid ${CONTROL_BORDER}`,
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.2)",
-              }}
+              style={toolbarButtonStyle}
             >
               Family map
             </a>
@@ -1225,32 +1153,14 @@ function TreeCanvasInner({
 
           <a
             href={`/trees/${treeId}/atrium`}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 11,
-              color: "var(--ink-faded)",
-              textDecoration: "none",
-              padding: "5px 9px",
-              border: `1px solid ${CONTROL_BORDER}`,
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.2)",
-            }}
+            style={toolbarIconButtonStyle}
           >
             ⌂
           </a>
 
           <a
             href={`/trees/${treeId}/inbox`}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 13,
-              color: "var(--ink-faded)",
-              textDecoration: "none",
-              padding: "5px 9px",
-              border: `1px solid ${CONTROL_BORDER}`,
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.2)",
-            }}
+            style={toolbarIconButtonStyle}
             title="Inbox"
           >
             ✉
@@ -1258,13 +1168,7 @@ function TreeCanvasInner({
 
           <a
             href={`/trees/${treeId}/settings`}
-            style={{
-              fontFamily: "var(--font-ui)",
-              fontSize: 12,
-              color: "var(--ink-faded)",
-              textDecoration: "none",
-              padding: "5px 6px",
-            }}
+            style={toolbarIconButtonStyle}
           >
             ⚙
           </a>
@@ -1315,16 +1219,9 @@ function TreeCanvasInner({
         <button
           onClick={() => setShowLegend((v) => !v)}
           style={{
-            fontFamily: "var(--font-ui)",
+            ...toolbarButtonStyle,
             fontSize: 11,
-            color: "var(--ink-faded)",
-            background: CONTROL_SURFACE,
-            border: `1px solid ${CONTROL_BORDER}`,
-            borderRadius: 999,
-            padding: "5px 11px",
-            cursor: "pointer",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 10px 22px rgba(28,25,21,0.06)",
+            padding: "6px 11px",
           }}
         >
           Legend
@@ -1337,12 +1234,9 @@ function TreeCanvasInner({
               position: "absolute",
               bottom: 36,
               left: 0,
-              background: "rgba(246,241,231,0.95)",
-              border: `1px solid ${CONTROL_BORDER}`,
-              borderRadius: 12,
+              ...floatingPanelStyle,
               padding: "14px 16px",
               minWidth: 180,
-              boxShadow: "0 18px 32px rgba(28,25,21,0.1)",
             }}
           >
             <div
@@ -1457,11 +1351,8 @@ function TreeCanvasInner({
             left: hoverState.screenX + 14,
             top: hoverState.screenY - 16,
             zIndex: 15,
-            background: "rgba(246,241,231,0.96)",
-            border: `1px solid ${CONTROL_BORDER}`,
-            borderRadius: 10,
+            ...floatingPanelStyle,
             padding: "10px 14px",
-            boxShadow: "0 18px 30px rgba(28,25,21,0.12)",
             pointerEvents: "none",
             minWidth: 140,
           }}
@@ -2426,10 +2317,10 @@ const subtleButtonStyle: React.CSSProperties = {
 };
 
 const zoomControlStyle: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  background: CONTROL_SURFACE,
-  border: `1px solid ${CONTROL_BORDER}`,
+  width: 36,
+  height: 36,
+  background: "rgba(246,241,231,0.94)",
+  border: "1px solid var(--rule)",
   borderRadius: 999,
   cursor: "pointer",
   fontFamily: "var(--font-ui)",
@@ -2439,7 +2330,75 @@ const zoomControlStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   backdropFilter: "blur(10px)",
-  boxShadow: "0 10px 22px rgba(28,25,21,0.06)",
+  boxShadow: "0 14px 30px rgba(28,25,21,0.08)",
+};
+
+const toolbarButtonStyle: React.CSSProperties = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  color: "var(--ink-faded)",
+  background: "rgba(246,241,231,0.76)",
+  border: "1px solid var(--rule)",
+  borderRadius: 999,
+  cursor: "pointer",
+  padding: "8px 14px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  textDecoration: "none",
+  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+};
+
+const toolbarPrimaryButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  color: "#fff",
+  background: "var(--moss)",
+  border: "1px solid rgba(78,93,66,0.28)",
+  fontWeight: 500,
+};
+
+const toolbarAccentButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  color: "var(--moss)",
+  border: "1px solid rgba(78,93,66,0.28)",
+  background: "rgba(246,241,231,0.92)",
+};
+
+const toolbarIconButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  padding: "7px 10px",
+  justifyContent: "center",
+  minWidth: 36,
+};
+
+const toolbarHintStyle: React.CSSProperties = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 11,
+  color: "var(--ink-faded)",
+  background: "rgba(246,241,231,0.76)",
+  border: "1px solid var(--rule)",
+  borderRadius: 999,
+  padding: "8px 12px",
+  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+};
+
+const toolbarSegmentedStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: 4,
+  borderRadius: 999,
+  border: "1px solid var(--rule)",
+  background: "rgba(246,241,231,0.76)",
+  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+};
+
+const floatingPanelStyle: React.CSSProperties = {
+  background: "rgba(246,241,231,0.94)",
+  border: "1px solid var(--rule)",
+  borderRadius: 14,
+  boxShadow: "0 18px 34px rgba(28,25,21,0.1)",
+  backdropFilter: "blur(12px)",
 };
 
 export function TreeCanvas(props: TreeCanvasProps) {

@@ -6,12 +6,15 @@ import { useSession } from "@/lib/auth-client";
 import { MemoryLightbox, type LightboxMemory } from "@/components/tree/MemoryLightbox";
 import { PromptComposer } from "@/components/tree/PromptComposer";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
-import {
-  MemoryVisibilityControl,
-  type TreeVisibilityLevel,
-} from "@/components/tree/MemoryVisibilityControl";
+import { type TreeVisibilityLevel } from "@/components/tree/MemoryVisibilityControl";
 import { PlacePicker } from "@/components/tree/PlacePicker";
 import { getProxiedMediaUrl } from "@/lib/media-url";
+import {
+  isCanonicalPersonId,
+  isCanonicalTreeId,
+  resolveCanonicalPersonId,
+  resolveCanonicalTreeId,
+} from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -191,9 +194,14 @@ export default function PersonPage({
   const { data: session, isPending } = useSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chapterSectionRefs = useRef<Map<ChapterSectionId, HTMLElement>>(new Map());
+  const [normalizingTreeId, setNormalizingTreeId] = useState(!isCanonicalTreeId(treeId));
+  const [normalizingPersonId, setNormalizingPersonId] = useState(
+    !isCanonicalPersonId(personId),
+  );
 
   const [person, setPerson] = useState<Person | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [allPeople, setAllPeople] = useState<PersonSummary[]>([]);
   const [visibleTrees, setVisibleTrees] = useState<PersonTreeMembership[]>([]);
   const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
@@ -259,7 +267,57 @@ export default function PersonPage({
   }, [session, isPending, router]);
 
   useEffect(() => {
-    if (session) {
+    const needsNormalization = !isCanonicalTreeId(treeId);
+    setNormalizingTreeId(needsNormalization);
+    if (!session || !needsNormalization) return;
+
+    let cancelled = false;
+    void (async () => {
+      const resolvedTreeId = await resolveCanonicalTreeId(API, treeId);
+      if (cancelled) return;
+      if (resolvedTreeId && resolvedTreeId !== treeId) {
+        router.replace(`/trees/${resolvedTreeId}/people/${personId}`);
+        return;
+      }
+      if (!resolvedTreeId) {
+        setLoadError("This tree link is invalid or no longer points to an available tree.");
+        setLoading(false);
+      }
+      setNormalizingTreeId(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [personId, router, session, treeId]);
+
+  useEffect(() => {
+    const needsNormalization = !isCanonicalPersonId(personId);
+    setNormalizingPersonId(needsNormalization);
+    if (!session || !isCanonicalTreeId(treeId) || !needsNormalization) return;
+
+    let cancelled = false;
+    void (async () => {
+      const resolvedPersonId = await resolveCanonicalPersonId(API, treeId, personId);
+      if (cancelled) return;
+      if (resolvedPersonId && resolvedPersonId !== personId) {
+        router.replace(`/trees/${treeId}/people/${resolvedPersonId}`);
+        return;
+      }
+      if (!resolvedPersonId) {
+        setLoadError("This chapter link is invalid or no longer points to a person in this tree.");
+        setLoading(false);
+      }
+      setNormalizingPersonId(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [personId, router, session, treeId]);
+
+  useEffect(() => {
+    if (session && isCanonicalTreeId(treeId) && isCanonicalPersonId(personId)) {
       loadPerson();
       loadAllPeople();
       loadVisibleTrees();
@@ -272,16 +330,24 @@ export default function PersonPage({
 
   async function loadPerson() {
     setLoading(true);
-    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
-      credentials: "include",
-    });
-    if (!res.ok) {
-      router.replace(`/dashboard?treeId=${treeId}`);
-      return;
+    setLoadError(null);
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        router.replace(`/dashboard?treeId=${treeId}`);
+        return;
+      }
+      const data = (await res.json()) as Person;
+      setPerson(data);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load this person's chapter.",
+      );
+    } finally {
+      setLoading(false);
     }
-    const data = (await res.json()) as Person;
-    setPerson(data);
-    setLoading(false);
   }
 
   usePendingVoiceTranscriptionRefresh({
@@ -447,7 +513,10 @@ export default function PersonPage({
     setSavingRel(false);
   }
 
-  async function setMemorySurfaceSuppression(memoryId: string, suppressed: boolean) {
+  async function setMemorySurfaceSuppression(
+    memoryId: string,
+    suppressed: boolean,
+  ) {
     setUpdatingMemorySuppressionId(memoryId);
     const res = await fetch(
       `${API}/api/trees/${treeId}/people/${personId}/memories/${memoryId}/suppression`,
@@ -459,6 +528,11 @@ export default function PersonPage({
       },
     );
     if (res.ok) {
+      setLightboxMemories((current) =>
+        current.map((memory) =>
+          memory.id === memoryId ? { ...memory, surfaceSuppressed: suppressed } : memory,
+        ),
+      );
       await loadPerson();
     }
     setUpdatingMemorySuppressionId(null);
@@ -479,6 +553,17 @@ export default function PersonPage({
       }),
     });
     if (res.ok) {
+      setLightboxMemories((current) =>
+        current.map((memory) =>
+          memory.id === memoryId
+            ? {
+                ...memory,
+                treeVisibilityLevel: visibility ?? memory.treeVisibilityLevel,
+                treeVisibilityIsOverride: visibility !== null,
+              }
+            : memory,
+        ),
+      );
       if (options?.closeLightbox) {
         setLightboxIndex(null);
       }
@@ -541,6 +626,9 @@ export default function PersonPage({
       linkedMediaLabel: memory.linkedMediaLabel,
       treeVisibilityLevel: memory.treeVisibilityLevel,
       treeVisibilityIsOverride: memory.treeVisibilityIsOverride,
+      memoryContext: memory.memoryContext,
+      memoryReasonLabel: memory.memoryReasonLabel,
+      surfaceSuppressed: false,
     }),
     [],
   );
@@ -555,15 +643,30 @@ export default function PersonPage({
     );
 
     setLightboxMemories((current) =>
-      current.map((memory) => latestById.get(memory.id) ?? memory),
+      current.map((memory) => ({
+        ...(latestById.get(memory.id) ?? memory),
+        surfaceSuppressed: memory.surfaceSuppressed ?? false,
+      })),
     );
   }, [lightboxIndex, person, toLightboxMemory]);
 
   // Open lightbox for a list of memories at a given index
-  const openLightbox = useCallback((memories: Memory[], startIndex: number) => {
-    setLightboxMemories(memories.map(toLightboxMemory));
-    setLightboxIndex(startIndex);
-  }, [toLightboxMemory]);
+  const openLightbox = useCallback(
+    (
+      memories: Memory[],
+      startIndex: number,
+      options?: { surfaceSuppressed?: boolean },
+    ) => {
+      setLightboxMemories(
+        memories.map((memory) => ({
+          ...toLightboxMemory(memory),
+          surfaceSuppressed: options?.surfaceSuppressed ?? false,
+        })),
+      );
+      setLightboxIndex(startIndex);
+    },
+    [toLightboxMemory],
+  );
 
   const registerChapterSection = useCallback(
     (sectionId: ChapterSectionId, el: HTMLElement | null) => {
@@ -583,13 +686,66 @@ export default function PersonPage({
     });
   }, []);
 
-  if (isPending || loading) {
+  const openMemoryComposer = useCallback((kind?: MemoryKind) => {
+    setMemoryComposerKind(kind);
+    setShowMemoryForm(true);
+  }, []);
+
+  if (isPending || loading || normalizingTreeId || normalizingPersonId) {
     return (
       <main style={{ minHeight: "100vh", background: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {[160, 240, 200].map((w, i) => (
             <div key={i} style={{ width: w, height: 12, borderRadius: 4, background: "var(--paper-deep)", backgroundImage: "linear-gradient(90deg, var(--paper-deep) 25%, var(--rule) 50%, var(--paper-deep) 75%)", backgroundSize: "400px 100%", animation: "shimmer 1.5s infinite" }} />
           ))}
+        </div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "var(--paper)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 520,
+            border: "1px solid var(--rule)",
+            background: "var(--paper)",
+            borderRadius: 12,
+            padding: 24,
+          }}
+        >
+          <h1
+            style={{
+              margin: "0 0 10px",
+              fontFamily: "var(--font-display)",
+              fontSize: 28,
+              fontWeight: 400,
+              color: "var(--ink)",
+            }}
+          >
+            This chapter could not be opened.
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-body)",
+              fontSize: 17,
+              lineHeight: 1.7,
+              color: "var(--ink-soft)",
+            }}
+          >
+            {loadError}
+          </p>
         </div>
       </main>
     );
@@ -674,57 +830,12 @@ export default function PersonPage({
     ...(crossTreeLinks.length > 0 ? [{ id: "context" as const, label: "Shared context" }] : []),
   ];
 
-  function renderTreeVisibilityControl(memory: Memory) {
-    if (!canManageTreeVisibility) return null;
-
-    return (
-      <MemoryVisibilityControl
-        memory={memory}
-        disabled={updatingMemoryVisibilityId === memory.id}
-        onChange={(visibility) => {
-          void setMemoryTreeVisibility(memory.id, visibility);
-        }}
-      />
-    );
-  }
-
-  function renderMemoryCardControls(memory: Memory) {
-    if (!canManageTreeVisibility && !(canSuppressFromSurface && memory.memoryContext === "contextual")) {
-      return null;
-    }
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {renderTreeVisibilityControl(memory)}
-        {canSuppressFromSurface && memory.memoryContext === "contextual" && (
-          <button
-            type="button"
-            onClick={() => setMemorySurfaceSuppression(memory.id, true)}
-            disabled={updatingMemorySuppressionId === memory.id}
-            style={{
-              ...secondaryBtnStyle,
-              padding: "6px 10px",
-              fontSize: 12,
-            }}
-          >
-            {updatingMemorySuppressionId === memory.id ? "Hiding…" : "Hide from this page"}
-          </button>
-        )}
-      </div>
-    );
-  }
-
   const handleEditFormFieldChange = <K extends keyof EditFormState>(
     field: K,
     value: EditFormState[K],
   ) => {
     setEditForm((current) => ({ ...current, [field]: value }));
   };
-
-  const openMemoryComposer = useCallback((kind?: MemoryKind) => {
-    setMemoryComposerKind(kind);
-    setShowMemoryForm(true);
-  }, []);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--paper)", display: "flex", flexDirection: "column" }}>
@@ -1089,11 +1200,6 @@ export default function PersonPage({
                     <h3 style={{ fontFamily: "var(--font-display)", fontSize: 28, color: "var(--ink)", fontWeight: 400, margin: "0 0 8px" }}>{m.title}</h3>
                     {m.dateOfEventText && <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", marginBottom: 16 }}>{m.dateOfEventText}</p>}
                     {m.body && <p style={{ fontFamily: "var(--font-body)", fontSize: 19, lineHeight: 1.9, color: "var(--ink-soft)", whiteSpace: "pre-wrap", margin: 0 }}>{m.body}</p>}
-                    {canManageTreeVisibility && (
-                      <div style={{ marginTop: 16, maxWidth: 240 }}>
-                        {renderTreeVisibilityControl(m)}
-                      </div>
-                    )}
                   </article>
                 ))}
 
@@ -1108,38 +1214,16 @@ export default function PersonPage({
                     <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
                       {contextualStoryMemories.map((m) => (
                         <article key={m.id} style={{ borderBottom: "1px solid var(--rule)", paddingBottom: 40 }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                               <h3 style={{ fontFamily: "var(--font-display)", fontSize: 28, color: "var(--ink)", fontWeight: 400, margin: 0 }}>
                                 {m.title}
                               </h3>
                               {m.memoryReasonLabel && (
                                 <span style={pillStyle}>{m.memoryReasonLabel}</span>
                               )}
-                            </div>
-                            {canSuppressFromSurface && (
-                              <button
-                                type="button"
-                                onClick={() => setMemorySurfaceSuppression(m.id, true)}
-                                disabled={updatingMemorySuppressionId === m.id}
-                                style={{
-                                  ...secondaryBtnStyle,
-                                  padding: "6px 10px",
-                                  fontSize: 12,
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {updatingMemorySuppressionId === m.id ? "Hiding…" : "Hide from this page"}
-                              </button>
-                            )}
                           </div>
                           {m.dateOfEventText && <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", marginBottom: 16 }}>{m.dateOfEventText}</p>}
                           {m.body && <p style={{ fontFamily: "var(--font-body)", fontSize: 19, lineHeight: 1.9, color: "var(--ink-soft)", whiteSpace: "pre-wrap", margin: 0 }}>{m.body}</p>}
-                          {(canManageTreeVisibility || canSuppressFromSurface) && (
-                            <div style={{ marginTop: 16, maxWidth: 240 }}>
-                              {renderTreeVisibilityControl(m)}
-                            </div>
-                          )}
                         </article>
                       ))}
                     </div>
@@ -1203,7 +1287,6 @@ export default function PersonPage({
                           <MemoryCard
                             key={m.id}
                             memory={m}
-                            extraControls={renderMemoryCardControls(m)}
                             onClick={() => openLightbox(mems, i)}
                           />
                         ))}
@@ -1223,7 +1306,6 @@ export default function PersonPage({
                         <MemoryCard
                           key={m.id}
                           memory={m}
-                          extraControls={renderMemoryCardControls(m)}
                           onClick={() => openLightbox(undatedMemories, i)}
                         />
                       ))}
@@ -1247,7 +1329,6 @@ export default function PersonPage({
                         <MemoryCard
                           key={memory.id}
                           memory={memory}
-                          extraControls={renderMemoryCardControls(memory)}
                           onClick={() => openLightbox(contextualArchiveMemories, index)}
                         />
                       ))}
@@ -1267,26 +1348,14 @@ export default function PersonPage({
                        These memories still live in the archive, but they no longer surface on this page.
                      </p>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
-                      {suppressedContextualMemories.map((memory) => (
+                      {suppressedContextualMemories.map((memory, index) => (
                         <MemoryCard
                           key={memory.id}
                           memory={memory}
-                          extraControls={
-                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                              {renderTreeVisibilityControl(memory)}
-                              <button
-                                type="button"
-                                onClick={() => setMemorySurfaceSuppression(memory.id, false)}
-                                disabled={updatingMemorySuppressionId === memory.id}
-                                style={{
-                                  ...secondaryBtnStyle,
-                                  padding: "6px 10px",
-                                  fontSize: 12,
-                                }}
-                              >
-                                {updatingMemorySuppressionId === memory.id ? "Restoring…" : "Restore to page"}
-                              </button>
-                            </div>
+                          onClick={() =>
+                            openLightbox(suppressedContextualMemories, index, {
+                              surfaceSuppressed: true,
+                            })
                           }
                         />
                       ))}
@@ -1426,9 +1495,14 @@ export default function PersonPage({
           initialIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           canManageTreeVisibility={canManageTreeVisibility}
+          canSuppressFromSurface={canSuppressFromSurface}
           updatingTreeVisibilityId={updatingMemoryVisibilityId}
+          updatingSurfaceSuppressionId={updatingMemorySuppressionId}
           onSetTreeVisibility={(memoryId, visibility) =>
-            void setMemoryTreeVisibility(memoryId, visibility, { closeLightbox: true })
+            void setMemoryTreeVisibility(memoryId, visibility)
+          }
+          onSetSurfaceSuppression={(memoryId, suppressed) =>
+            void setMemorySurfaceSuppression(memoryId, suppressed)
           }
         />
       )}

@@ -27,6 +27,9 @@ export interface LightboxMemory {
   linkedMediaLabel?: string | null;
   treeVisibilityLevel?: TreeVisibilityLevel;
   treeVisibilityIsOverride?: boolean;
+  memoryContext?: "direct" | "contextual";
+  memoryReasonLabel?: string | null;
+  surfaceSuppressed?: boolean;
 }
 
 interface MemoryLightboxProps {
@@ -34,11 +37,14 @@ interface MemoryLightboxProps {
   initialIndex: number;
   onClose: () => void;
   canManageTreeVisibility?: boolean;
+  canSuppressFromSurface?: boolean;
   updatingTreeVisibilityId?: string | null;
+  updatingSurfaceSuppressionId?: string | null;
   onSetTreeVisibility?: (
     memoryId: string,
     visibility: TreeVisibilityLevel | null,
   ) => void;
+  onSetSurfaceSuppression?: (memoryId: string, suppressed: boolean) => void;
 }
 
 export function MemoryLightbox({
@@ -46,11 +52,15 @@ export function MemoryLightbox({
   initialIndex,
   onClose,
   canManageTreeVisibility,
+  canSuppressFromSurface,
   updatingTreeVisibilityId,
+  updatingSurfaceSuppressionId,
   onSetTreeVisibility,
+  onSetSurfaceSuppression,
 }: MemoryLightboxProps) {
   const [index, setIndex] = useState(initialIndex);
   const [playing, setPlaying] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const filmstripRef = useRef<HTMLDivElement>(null);
   const memory = memories[index];
@@ -77,6 +87,7 @@ export function MemoryLightbox({
   // Reset audio when index changes
   useEffect(() => {
     setPlaying(false);
+    setShowSettings(false);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -102,6 +113,13 @@ export function MemoryLightbox({
   const isStory = memory.kind === "story" || memory.kind === "document";
   const transcriptText =
     memory.transcriptStatus === "completed" ? memory.transcriptText?.trim() : null;
+  const canManageSurfaceVisibility =
+    Boolean(canManageTreeVisibility && onSetTreeVisibility) ||
+    Boolean(
+      canSuppressFromSurface &&
+        onSetSurfaceSuppression &&
+        memory.memoryContext === "contextual",
+    );
 
   const toggleAudio = () => {
     const audio = audioRef.current;
@@ -196,15 +214,26 @@ export function MemoryLightbox({
             </div>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {canManageTreeVisibility && onSetTreeVisibility && (
-            <div style={{ minWidth: 220 }}>
-              <MemoryVisibilityControl
-                memory={memory}
-                disabled={updatingTreeVisibilityId === memory.id}
-                onChange={(visibility) => onSetTreeVisibility(memory.id, visibility)}
-              />
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
+          {canManageSurfaceVisibility && (
+            <button
+              type="button"
+              onClick={() => setShowSettings((current) => !current)}
+              style={{
+                border: "1px solid rgba(246,241,231,0.16)",
+                background: showSettings ? "rgba(246,241,231,0.14)" : "rgba(246,241,231,0.06)",
+                borderRadius: 999,
+                color: "rgba(246,241,231,0.8)",
+                cursor: "pointer",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                padding: "7px 12px",
+                textTransform: "uppercase",
+              }}
+            >
+              Memory settings
+            </button>
           )}
           <span
             style={{
@@ -215,6 +244,120 @@ export function MemoryLightbox({
           >
             {index + 1} / {memories.length}
           </span>
+          {showSettings && canManageSurfaceVisibility && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 10px)",
+                right: 0,
+                width: 280,
+                borderRadius: 14,
+                border: "1px solid rgba(246,241,231,0.14)",
+                background: "rgba(28,25,21,0.94)",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+                padding: 16,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 10,
+                    color: "rgba(246,241,231,0.42)",
+                    letterSpacing: "0.08em",
+                    marginBottom: 6,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Memory settings
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 13,
+                    color: "rgba(246,241,231,0.64)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  These controls are only visible to people who can manage this memory in the tree.
+                </div>
+              </div>
+
+              {canManageTreeVisibility && onSetTreeVisibility && (
+                <div
+                  style={{
+                    paddingTop: 12,
+                    borderTop: "1px solid rgba(246,241,231,0.1)",
+                  }}
+                >
+                  <MemoryVisibilityControl
+                    memory={memory}
+                    disabled={updatingTreeVisibilityId === memory.id}
+                    onChange={(visibility) => onSetTreeVisibility(memory.id, visibility)}
+                  />
+                </div>
+              )}
+
+              {canSuppressFromSurface &&
+                onSetSurfaceSuppression &&
+                memory.memoryContext === "contextual" && (
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: "1px solid rgba(246,241,231,0.1)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 11,
+                        color: "rgba(246,241,231,0.55)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {memory.surfaceSuppressed
+                        ? "This contextual memory is hidden from this chapter page."
+                        : "This contextual memory currently appears on this chapter page."}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onSetSurfaceSuppression(
+                          memory.id,
+                          !memory.surfaceSuppressed,
+                        )
+                      }
+                      disabled={updatingSurfaceSuppressionId === memory.id}
+                      style={{
+                        border: "1px solid rgba(246,241,231,0.16)",
+                        background: "rgba(246,241,231,0.06)",
+                        borderRadius: 999,
+                        color: "rgba(246,241,231,0.88)",
+                        cursor:
+                          updatingSurfaceSuppressionId === memory.id ? "default" : "pointer",
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 12,
+                        padding: "9px 12px",
+                      }}
+                    >
+                      {updatingSurfaceSuppressionId === memory.id
+                        ? memory.surfaceSuppressed
+                          ? "Restoring…"
+                          : "Hiding…"
+                        : memory.surfaceSuppressed
+                        ? "Restore to this page"
+                        : "Hide from this page"}
+                    </button>
+                  </div>
+                )}
+            </div>
+          )}
         </div>
       </div>
 

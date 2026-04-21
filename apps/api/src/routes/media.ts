@@ -106,9 +106,15 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
       const statusCode = object.ContentRange ? 206 : 200;
       reply.status(statusCode);
 
-      const stream = Readable.fromWeb(
-        object.Body as globalThis.ReadableStream<Uint8Array>,
-      );
+      // AWS SDK v3 returns a WHATWG ReadableStream in some environments but a
+      // Node.js Readable (IncomingMessage) when talking to MinIO over HTTP.
+      // Handle both by checking for the Node.js Readable interface first.
+      const body = object.Body;
+      const isNodeReadable =
+        typeof (body as { pipe?: unknown }).pipe === "function";
+      const stream = isNodeReadable
+        ? (body as Readable)
+        : Readable.fromWeb(body as globalThis.ReadableStream<Uint8Array>);
       return reply.send(stream);
     } catch (err) {
       const code =
