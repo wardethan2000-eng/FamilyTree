@@ -10,6 +10,7 @@ import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { PromptComposer } from "@/components/tree/PromptComposer";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
+import { writeLastOpenedTreeId } from "@/lib/last-opened-tree";
 import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 import type { ApiPerson, ApiRelationship } from "@/components/tree/treeTypes";
@@ -46,7 +47,7 @@ export default function TreePage() {
   const params = useParams<{ treeId: string }>();
   const { treeId } = params;
   const { data: session, isPending } = useSession();
-  const [normalizingTreeId, setNormalizingTreeId] = useState(!isCanonicalTreeId(treeId));
+  const needsNormalization = !isCanonicalTreeId(treeId);
 
   const [tree, setTree] = useState<Tree | null>(null);
   const [people, setPeople] = useState<ApiPerson[]>([]);
@@ -94,8 +95,6 @@ export default function TreePage() {
   }, [session, isPending, router]);
 
   useEffect(() => {
-    const needsNormalization = !isCanonicalTreeId(treeId);
-    setNormalizingTreeId(needsNormalization);
     if (!session || !needsNormalization) return;
 
     let cancelled = false;
@@ -110,13 +109,12 @@ export default function TreePage() {
         setLoadError("This tree link is invalid or no longer points to an available tree.");
         setLoading(false);
       }
-      setNormalizingTreeId(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [router, session, treeId]);
+  }, [needsNormalization, router, session, treeId]);
 
   useEffect(() => {
     if (!session || !treeId || !isCanonicalTreeId(treeId)) return;
@@ -155,6 +153,11 @@ export default function TreePage() {
     };
     fetchData();
   }, [mapPeoplePayload, session, treeId]);
+
+  useEffect(() => {
+    if (!session || !isCanonicalTreeId(treeId)) return;
+    writeLastOpenedTreeId(treeId);
+  }, [session, treeId]);
 
   const handlePersonDetail = useCallback(
     (personId: string) => {
@@ -211,7 +214,7 @@ export default function TreePage() {
     linkedUserId: p.linkedUserId ?? null,
   }));
 
-  if (isPending || loading || normalizingTreeId) {
+  if (isPending || loading || (needsNormalization && !loadError)) {
     return (
       <main
         style={{

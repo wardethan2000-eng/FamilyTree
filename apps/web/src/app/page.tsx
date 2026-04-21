@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
+import { readLastOpenedTreeId } from "@/lib/last-opened-tree";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -16,12 +17,28 @@ export default function Home() {
       router.replace("/auth/signin");
       return;
     }
-    // Redirect to the user's first tree canvas
+    // Route through the last-opened tree when possible so the foyer and
+    // atrium feel like one continuous entry system.
     fetch(`${API}/api/trees`, { credentials: "include" })
       .then((r) => r.json())
       .then((trees) => {
         if (Array.isArray(trees) && trees.length > 0) {
-          router.replace(`/trees/${trees[0].id}/atrium`);
+          const lastOpenedTreeId = readLastOpenedTreeId();
+          const matchingLastTree = lastOpenedTreeId
+            ? trees.find((tree) => tree.id === lastOpenedTreeId)
+            : null;
+
+          if (matchingLastTree) {
+            router.replace(`/trees/${matchingLastTree.id}/atrium`);
+            return;
+          }
+
+          if (trees.length === 1) {
+            router.replace(`/trees/${trees[0].id}/atrium`);
+            return;
+          }
+
+          router.replace("/dashboard");
         } else {
           router.replace("/onboarding");
         }

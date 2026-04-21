@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth-client";
 import { TreeArchiveCard } from "@/components/home/TreeArchiveCard";
 import type { TreeHomeCoverage, TreeHomeMemory, TreeHomeStats } from "@/components/home/homeTypes";
+import { readLastOpenedTreeId } from "@/lib/last-opened-tree";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -83,11 +84,16 @@ function DashboardContent() {
         const nextSummaries = homeResults.filter(
           (summary): summary is DashboardTreeSummary => Boolean(summary),
         );
+        const lastOpenedTreeId = readLastOpenedTreeId();
 
         nextSummaries.sort((left, right) => {
           const leftPreferred = preferredTreeId === left.tree.id ? 1 : 0;
           const rightPreferred = preferredTreeId === right.tree.id ? 1 : 0;
           if (leftPreferred !== rightPreferred) return rightPreferred - leftPreferred;
+
+          const leftLastOpened = !preferredTreeId && lastOpenedTreeId === left.tree.id ? 1 : 0;
+          const rightLastOpened = !preferredTreeId && lastOpenedTreeId === right.tree.id ? 1 : 0;
+          if (leftLastOpened !== rightLastOpened) return rightLastOpened - leftLastOpened;
 
           const memoryDiff = right.stats.memoryCount - left.stats.memoryCount;
           if (memoryDiff !== 0) return memoryDiff;

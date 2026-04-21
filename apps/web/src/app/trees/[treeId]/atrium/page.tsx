@@ -14,6 +14,7 @@ import { DriftMode } from "@/components/tree/DriftMode";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { Shimmer } from "@/components/ui/Shimmer";
+import { writeLastOpenedTreeId } from "@/lib/last-opened-tree";
 import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 import { extractYearFromText, memoryMatchesDecade } from "@/components/home/homeUtils";
@@ -290,6 +291,11 @@ export default function AtriumPage() {
       }
     };
     void fetchHome();
+  }, [session, treeId]);
+
+  useEffect(() => {
+    if (!session || !isCanonicalTreeId(treeId)) return;
+    writeLastOpenedTreeId(treeId);
   }, [session, treeId]);
 
   const handlePersonClick = useCallback(
