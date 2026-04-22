@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -49,7 +49,11 @@ const ROLE_LABELS: Record<string, string> = {
 export default function TreeSettingsPage() {
   const { treeId } = useParams<{ treeId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedPersonId = searchParams.get("personId");
   const { data: session } = useSession();
+  const inviteSectionRef = useRef<HTMLElement | null>(null);
+  const inviteEmailRef = useRef<HTMLInputElement | null>(null);
 
   const [tree, setTree] = useState<Tree | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -189,6 +193,26 @@ export default function TreeSettingsPage() {
     fetchData();
   }, [fetchData]);
 
+  // Apply ?personId=... preselection once people are loaded
+  const preselectAppliedRef = useRef(false);
+  useEffect(() => {
+    if (preselectAppliedRef.current) return;
+    if (!preselectedPersonId || people.length === 0) return;
+    const match = people.find((p) => p.id === preselectedPersonId);
+    if (!match) return;
+    preselectAppliedRef.current = true;
+    setInviteLinkedPersonId(preselectedPersonId);
+    // Default to steward so the invited subject has full edit rights across
+    // this tree (matches the user's typical intent when inviting the person
+    // their record represents).
+    setInviteRole("steward");
+    // Scroll to invite section and focus the email field.
+    setTimeout(() => {
+      inviteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      inviteEmailRef.current?.focus();
+    }, 100);
+  }, [preselectedPersonId, people]);
+
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
     setInviting(true);
@@ -259,7 +283,7 @@ export default function TreeSettingsPage() {
         </p>
 
         {/* Invite section */}
-        <section style={sectionStyle}>
+        <section id="invite" ref={inviteSectionRef} style={sectionStyle}>
           <h2 style={sectionHeadingStyle}>Invite a contributor</h2>
           <p style={sectionDescStyle}>
             Send an email invitation to share this family archive. Contributors can add memories and people.
@@ -273,6 +297,7 @@ export default function TreeSettingsPage() {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 required
+                ref={inviteEmailRef}
                 style={inputStyle}
               />
               <select

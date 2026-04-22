@@ -342,6 +342,36 @@ export function PersonBanner({
             >
               Enter life story →
             </button>
+
+            {/* Account linkage */}
+            <Section label="Account">
+              {person.linkedUserId ? (
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--moss)" }}>
+                  Linked to a member account
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--ink-faded)", lineHeight: 1.5 }}>
+                    Invite {displayName.split(" ")[0] || "them"} by email so they
+                    can sign in and edit their own page. When they accept, their
+                    account will link to this person.
+                  </div>
+                  <a
+                    href={`/trees/${treeId}/settings?personId=${person.id}#invite`}
+                    style={{
+                      fontFamily: "var(--font-ui)", fontSize: 12, textAlign: "center",
+                      color: "var(--moss)", background: "transparent", border: "1px solid var(--moss)",
+                      borderRadius: 4, padding: "8px 10px", cursor: "pointer", textDecoration: "none",
+                      transition: `all 150ms ${EASE}`,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--moss)"; e.currentTarget.style.color = "var(--paper)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--moss)"; }}
+                  >
+                    Invite by email
+                  </a>
+                </div>
+              )}
+            </Section>
           </div>
         </motion.div>
       )}

@@ -164,6 +164,16 @@ function TreeCanvasInner({
     isLiving: true,
     relationshipStartDateText: "",
   });
+  const [firstPersonModalOpen, setFirstPersonModalOpen] = useState(false);
+  const [firstPersonForm, setFirstPersonForm] = useState({
+    displayName: "",
+    essenceLine: "",
+    birthDateText: "",
+    deathDateText: "",
+    isLiving: true,
+  });
+  const [firstPersonError, setFirstPersonError] = useState<string | null>(null);
+  const [creatingFirstPerson, setCreatingFirstPerson] = useState(false);
   const layoutRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -950,6 +960,59 @@ function TreeCanvasInner({
     treeId,
   ]);
 
+  const submitCreateFirstPerson = useCallback(async () => {
+    const displayName = firstPersonForm.displayName.trim();
+    if (!displayName) {
+      setFirstPersonError("Please enter a name.");
+      return;
+    }
+    setCreatingFirstPerson(true);
+    setFirstPersonError(null);
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/people`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName,
+          essenceLine: firstPersonForm.essenceLine.trim() || undefined,
+          birthDateText: firstPersonForm.birthDateText.trim() || undefined,
+          deathDateText: firstPersonForm.deathDateText.trim() || undefined,
+          isLiving: firstPersonForm.isLiving,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "Failed to create person");
+      }
+      const created = (await res.json()) as { id: string };
+      await onConstellationChanged?.();
+      setFirstPersonModalOpen(false);
+      setFirstPersonForm({
+        displayName: "",
+        essenceLine: "",
+        birthDateText: "",
+        deathDateText: "",
+        isLiving: true,
+      });
+      selectPerson(created.id);
+      setTimeout(() => selectPerson(created.id), 220);
+    } catch (err) {
+      setFirstPersonError(err instanceof Error ? err.message : "Failed to create person");
+    } finally {
+      setCreatingFirstPerson(false);
+    }
+  }, [
+    firstPersonForm.birthDateText,
+    firstPersonForm.deathDateText,
+    firstPersonForm.displayName,
+    firstPersonForm.essenceLine,
+    firstPersonForm.isLiving,
+    onConstellationChanged,
+    selectPerson,
+    treeId,
+  ]);
+
   const handleEdgeClick: EdgeMouseHandler<TreeEdge> = useCallback(
     (_, edge) => {
       if (!editMode) return;
@@ -1307,6 +1370,158 @@ function TreeCanvasInner({
           activeDecade={activeDecade}
           onSelectDecade={setActiveDecade}
         />
+      )}
+
+      {/* Empty-tree first-person CTA */}
+      {people.length === 0 && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              pointerEvents: "auto",
+              background: "var(--paper)",
+              border: "1px solid var(--rule)",
+              borderRadius: 14,
+              padding: "28px 32px",
+              boxShadow: "0 24px 48px rgba(28,25,21,0.12)",
+              maxWidth: 420,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--ink)", marginBottom: 8 }}>
+              Plant the first seed
+            </div>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink-soft)", lineHeight: 1.55, margin: "0 0 20px" }}>
+              This lineage has no one in it yet. Add the first person to start
+              weaving their story — you can connect parents, spouses, and
+              children from their card once they&rsquo;re here.
+            </p>
+            <button
+              onClick={() => {
+                setFirstPersonError(null);
+                setFirstPersonModalOpen(true);
+              }}
+              style={{
+                ...toolbarPrimaryButtonStyle,
+                padding: "10px 18px",
+                fontSize: 14,
+              }}
+            >
+              + Add first person
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* First-person create modal */}
+      {firstPersonModalOpen && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 40,
+            background: "rgba(28,25,21,0.4)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !creatingFirstPerson) {
+              setFirstPersonModalOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "min(460px, 94vw)",
+              background: "var(--paper)",
+              border: "1px solid var(--rule)",
+              borderRadius: 12,
+              padding: "20px 20px 16px",
+              boxShadow: "0 24px 48px rgba(28,25,21,0.2)",
+            }}
+          >
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", marginBottom: 12 }}>
+              Add first person
+            </div>
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ display: "grid", gap: 5, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)" }}>
+                Name
+                <input
+                  autoFocus
+                  value={firstPersonForm.displayName}
+                  onChange={(e) => setFirstPersonForm((f) => ({ ...f, displayName: e.target.value }))}
+                  placeholder="e.g. Karsen Adams"
+                  style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink)", background: "var(--paper-deep)" }}
+                  disabled={creatingFirstPerson}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 5, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)" }}>
+                Essence (optional)
+                <input
+                  value={firstPersonForm.essenceLine}
+                  onChange={(e) => setFirstPersonForm((f) => ({ ...f, essenceLine: e.target.value }))}
+                  placeholder="A short line that captures them"
+                  style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink)", background: "var(--paper-deep)" }}
+                  disabled={creatingFirstPerson}
+                />
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <label style={{ display: "grid", gap: 5, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)" }}>
+                  Born (optional)
+                  <input
+                    value={firstPersonForm.birthDateText}
+                    onChange={(e) => setFirstPersonForm((f) => ({ ...f, birthDateText: e.target.value }))}
+                    placeholder="1990 or March 12, 1990"
+                    style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink)", background: "var(--paper-deep)" }}
+                    disabled={creatingFirstPerson}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 5, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)" }}>
+                  Died (optional)
+                  <input
+                    value={firstPersonForm.deathDateText}
+                    onChange={(e) => setFirstPersonForm((f) => ({ ...f, deathDateText: e.target.value, isLiving: e.target.value.trim() ? false : f.isLiving }))}
+                    placeholder="Leave blank if living"
+                    style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink)", background: "var(--paper-deep)" }}
+                    disabled={creatingFirstPerson}
+                  />
+                </label>
+              </div>
+              {firstPersonError && (
+                <div style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--error, #a33)" }}>
+                  {firstPersonError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+                <button
+                  onClick={() => setFirstPersonModalOpen(false)}
+                  disabled={creatingFirstPerson}
+                  style={subtleButtonStyle}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitCreateFirstPerson}
+                  disabled={creatingFirstPerson || !firstPersonForm.displayName.trim()}
+                  style={toolbarPrimaryButtonStyle}
+                >
+                  {creatingFirstPerson ? "Adding…" : "Add to constellation"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Selected-person lineage switcher */}
