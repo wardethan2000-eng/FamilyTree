@@ -95,11 +95,10 @@ To confirm the working directories:
 ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 ```
 
-Current verified live pids during the dashboard-redesign deployment:
+Current verified live pids after media-fix deployment:
 
-- API listener pid: `148997`
-- Web wrapper pid file: `148995`
-- Web listener pid: `149023`
+- API listener pid: `37297`
+- Web wrapper pid: `37298`
 
 ## Historical Startup Shape On The App VM
 
@@ -198,7 +197,8 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 - Alternate checkout: `/home/ubuntu/FamilyTree`
 - Current feature deployment checkout: `/home/ubuntu/heirloom-feature-family-map`
 - Previous non-git live directory: `/home/ubuntu/heirloom-memory-pages-live`
-- Current live checkout: `/home/ubuntu/heirloom-dashboard-redesign-live`
+- Current live checkout: `/home/ubuntu/heirloom-media-fix-live`
+- Previous live checkout: `/home/ubuntu/heirloom-dashboard-redesign-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
 - Backup directory on data VM: `~/familytree-backups`
 
