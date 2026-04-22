@@ -15,6 +15,7 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
     isYou,
     isFocused,
     isDimmed,
+    decadeRelevance,
   } = data;
 
   const initials = name
@@ -31,6 +32,10 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
         ? `${birthYear} –`
         : null;
 
+  const decadeScale = decadeRelevance != null ? 0.8 + 0.2 * decadeRelevance : 1;
+  const decadeOpacity = decadeRelevance != null ? 0.25 + 0.75 * decadeRelevance : 1;
+  const combinedOpacity = isDimmed ? 0.24 : decadeOpacity;
+
   const ringStyle: React.CSSProperties = isYou
     ? { border: "2px solid var(--moss)" }
     : isFocused
@@ -41,7 +46,7 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
     <div
       style={{
         position: "relative",
-        transition: "opacity 500ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+        transition: "opacity 500ms cubic-bezier(0.22, 0.61, 0.36, 1), transform 600ms cubic-bezier(0.22, 0.61, 0.36, 1)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -49,8 +54,10 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
         userSelect: "none",
-        opacity: isDimmed ? 0.24 : 1,
+        opacity: combinedOpacity,
         filter: isDimmed ? "saturate(0.75)" : "none",
+        transform: `scale(${decadeScale})`,
+        transformOrigin: "center top",
       }}
     >
       {/* Portrait circle */}

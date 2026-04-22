@@ -20,6 +20,7 @@ import React from "react";
 
 import { PersonNode as PersonNodeComponent } from "./PersonNode";
 import { CinematicPersonOverlay } from "./CinematicPersonOverlay";
+import { DecadeRail } from "./DecadeRail";
 import type {
   ApiPerson,
   ConstellationEdgeData,
@@ -38,6 +39,7 @@ import {
   getConstellationFocusBounds,
   getConstellationFocusIds,
   getLineageFocusIds,
+  getAvailableDecades,
   type LineageFocusMode,
 } from "./treeLayout";
 
@@ -130,6 +132,7 @@ function TreeCanvasInner({
   const [showLegend, setShowLegend] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [lineageMode, setLineageMode] = useState<LineageFocusMode>("full");
+  const [activeDecade, setActiveDecade] = useState<number | null>(null);
   const [editInteraction, setEditInteraction] = useState<EditInteractionState>({ mode: "idle" });
   const [editingRelationshipType, setEditingRelationshipType] = useState<
     "parent_child" | "sibling" | "spouse"
@@ -220,8 +223,9 @@ function TreeCanvasInner({
       selectedPersonId,
       currentUserPersonId,
       renderFocusIds,
+      activeDecade,
     );
-    const edgeList = buildEdges(renderRelationships, layout, renderFocusIds);
+    const edgeList = buildEdges(renderRelationships, layout, renderFocusIds, renderPeople, activeDecade);
     setNodes(personNodes);
     setEdges(edgeList);
   }, [
@@ -231,6 +235,7 @@ function TreeCanvasInner({
     selectedPersonId,
     currentUserPersonId,
     renderFocusIds,
+    activeDecade,
     setNodes,
     setEdges,
   ]);
@@ -244,6 +249,31 @@ function TreeCanvasInner({
   // Only run on mount / people change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [people.length]);
+
+  const availableDecades = useMemo(() => getAvailableDecades(people), [people]);
+
+  // When active decade changes, pan to the relevant people
+  useEffect(() => {
+    if (activeDecade === null) return;
+    const relevantIds = new Set(
+      people
+        .filter((p) => {
+          if (p.birthYear == null) return false;
+          const birthDecade = Math.floor(p.birthYear / 10) * 10;
+          const aliveEnd = p.deathYear ?? new Date().getFullYear();
+          const aliveEndDecade = Math.floor(aliveEnd / 10) * 10;
+          return activeDecade >= birthDecade && activeDecade <= aliveEndDecade;
+        })
+        .map((p) => p.id),
+    );
+    if (relevantIds.size === 0) return;
+    const bounds = getFocusBoundsForIds(relevantIds, layoutRef.current);
+    if (bounds) {
+      reactFlow.fitBounds(bounds, { duration: 650, padding: 0.22 });
+    }
+  // Only trigger on decade change, not layout changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDecade]);
 
   const selectPerson = useCallback(
     (personId: string, focusCamera = true) => {
@@ -1214,6 +1244,15 @@ function TreeCanvasInner({
           ⊕
         </button>
       </div>
+
+      {/* Decade rail */}
+      {!editMode && availableDecades.length > 1 && (
+        <DecadeRail
+          decades={availableDecades}
+          activeDecade={activeDecade}
+          onSelectDecade={setActiveDecade}
+        />
+      )}
 
       {/* Legend button */}
       <div style={{ position: "absolute", left: 16, bottom: 18, zIndex: 10 }}>

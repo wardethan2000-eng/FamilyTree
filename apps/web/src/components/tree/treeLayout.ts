@@ -1610,12 +1610,68 @@ function buildGenerationLanes(
 }
 
 /** Build ReactFlow person nodes */
+export function computeDecadeRelevance(
+  person: ApiPerson,
+  activeDecade: number | null,
+): number | null {
+  if (activeDecade === null) return null;
+
+  const birthDecade = person.birthYear != null ? Math.floor(person.birthYear / 10) * 10 : null;
+  const deathDecade = person.deathYear != null ? Math.floor(person.deathYear / 10) * 10 : null;
+
+  if (birthDecade === null) return 0.15;
+
+  const aliveEnd = deathDecade ?? 2030;
+  if (activeDecade >= birthDecade && activeDecade <= aliveEnd) {
+    if (activeDecade === birthDecade) return 1;
+    const distance = (activeDecade - birthDecade) / 10;
+    return Math.max(0.45, 1 - distance * 0.15);
+  }
+
+  const distance = activeDecade < birthDecade
+    ? (birthDecade - activeDecade) / 10
+    : (activeDecade - aliveEnd) / 10;
+
+  return Math.max(0, 1 - distance * 0.35);
+}
+
+export function getAvailableDecades(people: ApiPerson[]): number[] {
+  const decades = new Set<number>();
+  const currentYear = new Date().getFullYear();
+  const currentDecade = Math.floor(currentYear / 10) * 10;
+
+  for (const person of people) {
+    if (person.birthYear != null) {
+      const birthDecade = Math.floor(person.birthYear / 10) * 10;
+      decades.add(birthDecade);
+    }
+    if (person.deathYear != null) {
+      const deathDecade = Math.floor(person.deathYear / 10) * 10;
+      decades.add(deathDecade);
+    }
+  }
+
+  if (decades.size === 0) {
+    decades.add(currentDecade);
+  }
+
+  decades.add(currentDecade);
+
+  const sorted = [...decades].sort((a, b) => a - b);
+  const full: number[] = [];
+  for (let d = sorted[0]!; d <= sorted[sorted.length - 1]!; d += 10) {
+    full.push(d);
+  }
+  return full;
+}
+
 export function buildPersonNodes(
   people: ApiPerson[],
   positions: Map<string, { x: number; y: number }>,
   selectedPersonId: string | null,
   currentUserId: string | null,
   focusPersonIds: Set<string> | null = null,
+  activeDecade: number | null = null,
 ): PersonFlowNode[] {
   return people.map((person) => {
     const pos = positions.get(person.id) ?? { x: 0, y: 0 };
@@ -1634,6 +1690,7 @@ export function buildPersonNodes(
         isYou: person.id === currentUserId,
         isFocused: person.id === selectedPersonId,
         isDimmed: focusPersonIds ? !focusPersonIds.has(person.id) : false,
+        decadeRelevance: computeDecadeRelevance(person, activeDecade),
       },
       draggable: false,
     };
@@ -1645,7 +1702,13 @@ export function buildEdges(
   relationships: ApiRelationship[],
   positions: Map<string, { x: number; y: number }>,
   focusPersonIds: Set<string> | null = null,
+  people: ApiPerson[] = [],
+  activeDecade: number | null = null,
 ): TreeEdge[] {
+  const personRelevance = new Map<string, number | null>();
+  for (const p of people) {
+    personRelevance.set(p.id, computeDecadeRelevance(p, activeDecade));
+  }
   const explicitSiblingComponents = buildExplicitSiblingComponentsForPersonIds(
     [...positions.keys()],
     relationships,
@@ -1721,7 +1784,13 @@ export function buildEdges(
     const isLocal = focusPersonIds
       ? focusPersonIds.has(r.fromPersonId) && focusPersonIds.has(r.toPersonId)
       : true;
-    const baseOpacity = isLocal ? 0.95 : 0.1;
+    let baseOpacity = isLocal ? 0.95 : 0.1;
+    if (activeDecade !== null) {
+      const fromRel = personRelevance.get(r.fromPersonId) ?? null;
+      const toRel = personRelevance.get(r.toPersonId) ?? null;
+      const avgRel = fromRel != null && toRel != null ? (fromRel + toRel) / 2 : fromRel ?? toRel ?? 0;
+      baseOpacity *= Math.max(0.15, 0.25 + 0.75 * avgRel);
+    }
     if (r.type === "parent_child") {
       const parentIds = [...(parentIdsByChild.get(r.toPersonId) ?? [])].sort();
       const hasFamilyUnion = parentIds.length === 2;

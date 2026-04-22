@@ -11,6 +11,8 @@ export type PersonNodeData = {
   /** True when this person's cinematic overlay is open */
   isFocused: boolean;
   isDimmed: boolean;
+  /** 0–1 indicating how relevant this person is to the active decade (1 = exact match, null = no decade filter active) */
+  decadeRelevance: number | null;
 };
 
 export type PersonFlowNode = Node<PersonNodeData, "person">;
