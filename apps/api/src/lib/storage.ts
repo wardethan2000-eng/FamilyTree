@@ -5,14 +5,14 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const MEDIA_BUCKET = process.env.MINIO_BUCKET ?? "familytree-media";
+export const MEDIA_BUCKET = process.env.MINIO_BUCKET ?? "tessera-media";
 
 export const s3 = new S3Client({
   endpoint: `http://${process.env.MINIO_ENDPOINT ?? "localhost"}:${process.env.MINIO_PORT ?? "9000"}`,
   region: "us-east-1",
   credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY ?? "familytree",
-    secretAccessKey: process.env.MINIO_SECRET_KEY ?? "familytree-dev-secret",
+    accessKeyId: process.env.MINIO_ACCESS_KEY ?? "tessera",
+    secretAccessKey: process.env.MINIO_SECRET_KEY ?? "tessera-dev-secret",
   },
   forcePathStyle: true, // required for MinIO
 });

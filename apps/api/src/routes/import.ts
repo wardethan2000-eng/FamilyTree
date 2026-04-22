@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { canManageTreeScope } from "../lib/cross-tree-permission-service.js";

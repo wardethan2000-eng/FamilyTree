@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { getViewableMemoryIdsForTree } from "./cross-tree-permission-service.js";
 import { db } from "./db.js";
 import { getReachMatchedMemoryIdsForTree } from "./memory-reach-service.js";

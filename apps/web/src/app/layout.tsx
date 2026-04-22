@@ -25,9 +25,12 @@ const inter = Inter({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://tessera.family";
+
 export const metadata: Metadata = {
-  title: "Heirloom",
-  description: "A quiet, private family archive.",
+  metadataBase: new URL(SITE_URL),
+  title: "Tessera",
+  description: "Tessera is a quiet, private family archive.",
 };
 
 export const viewport: Viewport = {

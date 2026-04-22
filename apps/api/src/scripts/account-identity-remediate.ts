@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { createDb } from "@familytree/database";
+import { createDb } from "@tessera/database";
 import {
   remediateDuplicateClaimedAccounts,
   type DuplicateClaimRemediationResult,

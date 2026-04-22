@@ -1,6 +1,6 @@
-# FamilyTree
+# Tessera
 
-A private family archive — a living memorial where a family records who its people were, what they made, and how they were connected. Built as a self-hosted web application with a pnpm monorepo.
+Tessera is a private family archive — a living memorial where a family records who its people were, what they made, and how they were connected. Built as a self-hosted web application with a pnpm monorepo.
 
 See [SPEC.md](./SPEC.md) for the full product vision.
 
@@ -11,7 +11,7 @@ Operational access notes for the Proxmox host and VMs live in [infra/proxmox-acc
 ## Monorepo layout
 
 ```
-familytree/
+tessera/
 ├── apps/
 │   ├── api/          Fastify REST API (auth, domain routes)
 │   └── web/          Next.js frontend

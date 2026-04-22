@@ -404,7 +404,7 @@ function buildOfflineViewer(data: {
     </main>
   </div>
   <footer class="footer">
-    Heirloom · private family archive · ${escapeHtml(data.tree.name)} · exported ${new Date(data.exportedAt).toLocaleDateString()}
+    Tessera · private family archive · ${escapeHtml(data.tree.name)} · exported ${new Date(data.exportedAt).toLocaleDateString()}
   </footer>
 
   <script>

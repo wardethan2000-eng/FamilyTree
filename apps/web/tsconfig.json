@@ -1,5 +1,5 @@
 {
-  "extends": "@familytree/typescript-config/nextjs.json",
+  "extends": "@tessera/typescript-config/nextjs.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "plugins": [

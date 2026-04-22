@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import {
   getVisibleMemoryIdsForTree,
   getTreeScopedPerson,
@@ -20,6 +20,7 @@ import {
 import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
+import { mayEmailUser } from "./me.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
@@ -492,6 +493,14 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
     }
 
     const email = parsed.data.email.toLowerCase();
+
+    if (!(await mayEmailUser(email, "promptsEmail"))) {
+      return reply.status(403).send({
+        error:
+          "This recipient has opted out of memory-prompt emails in their notification settings.",
+      });
+    }
+
     const rawToken = generateToken();
     const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);

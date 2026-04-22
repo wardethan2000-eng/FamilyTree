@@ -13,7 +13,7 @@ This effort spans four related surfaces:
 - `/trees/[treeId]/atrium` — immersive tree home
 - `/trees/[treeId]` — constellation workspace
 
-The core goal is not "make the dashboard prettier." The goal is to make the first signed-in experience feel like an heirloom archive.
+The core goal is not "make the dashboard prettier." The goal is to make the first signed-in experience feel like a Tessera archive.
 
 ---
 

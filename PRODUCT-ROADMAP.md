@@ -5,7 +5,7 @@
 > with a completion note are partially implemented. Items marked `[ ]` are not
 > yet started.
 
-This document is the long-term product reference for Heirloom / FamilyTree.
+This document is the long-term product reference for Tessera.
 
 It is organized by phases rather than dates. The intent is to preserve product
 order, rationale, and scope as the implementation evolves.
@@ -17,7 +17,7 @@ where people actually live.
 
 ## Product Thesis
 
-Heirloom should win on four axes:
+Tessera should win on four axes:
 
 1. Setup must be dramatically easier than starting from a blank archive.
 2. Memory capture must work for relatives who will never learn a complex app.
@@ -86,7 +86,7 @@ Why this phase comes first:
 - The current product is stronger at preservation and experience than at setup.
 - My Family Archive's practical strength is that it can begin from media that
   already exists elsewhere.
-- If Heirloom remains upload-first, it will feel heavier than it should.
+- If Tessera remains upload-first, it will feel heavier than it should.
 
 Features to implement:
 
@@ -109,7 +109,7 @@ Features to implement:
     memory composer rather than a generic upload flow.
   - The flow should support "save now, enrich later" while still nudging users
     to add at least one memory signal such as person, event, place, or meaning.
-  - This should make capture feel lightweight without turning Heirloom into a
+  - This should make capture feel lightweight without turning Tessera into a
     generic camera roll backup product.
 
 - [ ] Batch import from folder / ZIP
@@ -268,7 +268,7 @@ Definition of done for this phase:
 
 ## Phase 4: Curated Viewing and Discovery
 
-Goal: make Heirloom feel like an experience people want to revisit, not just a
+Goal: make Tessera feel like an experience people want to revisit, not just a
 database they maintain.
 
 Why this phase matters:
@@ -391,7 +391,7 @@ Definition of done for this phase:
 
 - [ ] Users can spin out meaningful, curated outputs without exporting the entire
   archive.
-- [ ] Heirloom becomes useful not only as a repository, but as a publishing system
+- [ ] Tessera becomes useful not only as a repository, but as a publishing system
   for family memory.
 
 ## Phase 6: Mobile Capture Surface
@@ -460,7 +460,7 @@ Features to implement:
 Definition of done for this phase:
 
 - [ ] The archive can be experienced passively and communally.
-- [ ] Heirloom begins to feel like infrastructure for remembrance, not just a web
+- [ ] Tessera begins to feel like infrastructure for remembrance, not just a web
   app.
 
 ## Phase 8: Trust, Hosting, and Ownership Modes

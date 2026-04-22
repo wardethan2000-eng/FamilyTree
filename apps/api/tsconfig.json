@@ -1,5 +1,5 @@
 {
-  "extends": "@familytree/typescript-config/fastify.json",
+  "extends": "@tessera/typescript-config/fastify.json",
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist"

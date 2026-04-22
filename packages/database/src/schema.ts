@@ -191,6 +191,24 @@ export const verifications = pgTable("verifications", {
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });
 
+export const userNotificationPreferences = pgTable(
+  "user_notification_preferences",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    invitationsEmail: boolean("invitations_email").default(true).notNull(),
+    promptsEmail: boolean("prompts_email").default(true).notNull(),
+    systemEmail: boolean("system_email").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+);
+
 // ── Domain tables ──────────────────────────────────────────────────────────────
 
 export const trees = pgTable(

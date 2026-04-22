@@ -1,5 +1,5 @@
 import { and, eq, inArray, or } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { db } from "./db.js";
 
 type MemoryVisibilityLevel =

@@ -16,4 +16,4 @@ function buildTransport(): Transporter {
 export const mailer = buildTransport();
 
 export const MAIL_FROM =
-  process.env.SMTP_FROM ?? "Heirloom <onboarding@resend.dev>";
+  process.env.SMTP_FROM ?? "Tessera <onboarding@tessera.family>";

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import {
   canManageTreeScope,
   getResolvedMemoryVisibilitiesForTree,

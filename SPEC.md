@@ -1,4 +1,4 @@
-# Heirloom
+# Tessera
 ## A Living Family Archive — Implementation Specification
 
 *Working name; alternatives include **Lineage**, **Kin**, **The Keep**, **Mantle**, **Evergreen**, **Hearth**. Use whichever feels most right at build time.*
@@ -17,7 +17,7 @@ The roadmap in **Part XII** is phased. Do not attempt to build everything at onc
 
 ## Vision
 
-Heirloom is a quiet, private web application that helps a family build a living archive of the people in it — past, present, and future. It is not a genealogy tool, not a social network, and not a photo-sharing service. It exists to preserve *texture*: the way a grandmother laughed, the stories only one cousin remembers, the recipe card in someone's handwriting, the voice on a three-minute memo saying hello.
+Tessera is a quiet, private web application that helps a family build a living archive of the people in it — past, present, and future. It is not a genealogy tool, not a social network, and not a photo-sharing service. It exists to preserve *texture*: the way a grandmother laughed, the stories only one cousin remembers, the recipe card in someone's handwriting, the voice on a three-minute memo saying hello.
 
 The app treats memory as sacred and as fragile. Every design decision serves that posture.
 
@@ -27,7 +27,7 @@ Every family has knowledge that dies with its holders. A grandfather's stories a
 
 Existing tools fail this problem in specific ways. Ancestry.com is built for *lineage* (proving who descended from whom), not *memory* (what they were like). Photo apps are chronological dumps with no narrative structure. Social networks optimize for engagement and ephemerality, the opposite of what a memorial needs. Nothing on the market has the right posture, and so the work doesn't get done.
 
-Heirloom is the tool for the work.
+Tessera is the tool for the work.
 
 ## Why Now
 
@@ -35,7 +35,7 @@ Three convergent shifts make this buildable today. Voice memos have become ambie
 
 ## Anti-Vision
 
-Heirloom is **not**:
+Tessera is **not**:
 
 - A social network. There is no feed, no likes, no followers, no discovery, no algorithm.
 - A growth-hack product. There are no viral loops, no share-to-unlock, no engagement streaks.
@@ -103,7 +103,7 @@ A dark mode exists, but it is warm and low-contrast — more *candlelit reading 
 
 ## Motion
 
-Motion in Heirloom breathes. It does not bounce, spring, or pop.
+Motion in Tessera breathes. It does not bounce, spring, or pop.
 
 - **Durations:** 400–700ms for major transitions, 150–250ms for micro-interactions. Nothing instant, nothing gimmicky.
 - **Easing:** Custom cubic-bezier curves that feel decelerated and weighted, roughly `cubic-bezier(0.22, 0.61, 0.36, 1)`. Think of a page turning, not a slide snapping.
@@ -153,7 +153,7 @@ The app never says "engagement," "feed," "post," "follow," "like," "user," or "c
 
 ## Account Model
 
-Accounts are personal and portable. One person has one Heirloom account, regardless of how many trees they participate in. An account is *not* the same thing as a person-node — a person can have a node in a tree before they ever sign up, and a subject who joins later is *linked* to their node rather than replacing it.
+Accounts are personal and portable. One person has one Tessera account, regardless of how many trees they participate in. An account is *not* the same thing as a person-node — a person can have a node in a tree before they ever sign up, and a subject who joins later is *linked* to their node rather than replacing it.
 
 **Authentication:** Magic-link email as primary, with passkey support as the modern upgrade. Passwords are a fallback for users who insist. Phone-number authentication is offered *specifically* for elderly users who are more comfortable with SMS.
 
@@ -458,7 +458,7 @@ Drift sessions are gently curated: they favor memories the viewer has seen less,
 
 ## The Prompt System (Question of the Week)
 
-The feature that sets Heirloom apart from passive archives. Designed around the reality that elders will not remember to open an app, but they *will* answer a question texted to them by their grandchild.
+The feature that sets Tessera apart from passive archives. Designed around the reality that elders will not remember to open an app, but they *will* answer a question texted to them by their grandchild.
 
 **The flow:**
 
@@ -492,7 +492,7 @@ That's it. The rest is added over time.
 
 Invitations are sent by email or SMS. The invitee clicks the link, sees the tree as it exists, and is guided through claiming their own node (if they have one) or being added as a contributor. The tone is inviting, not bureaucratic — "Your cousin Maya invited you to help remember the Chen family" rather than "You have been granted Contributor access to shared resource."
 
-**The elder invitation** is a specifically designed flow. An elder does not need to create an account to participate — a contributor can set up the elder's node, enter the elder's phone number, and begin queueing questions immediately. The elder's first contact with Heirloom is a text message: *"Hi Gramma, it's Maya. I'm making a family memory book with your stories. I'll send you a question each week — just tap and answer. Here's the first one: ..."*
+**The elder invitation** is a specifically designed flow. An elder does not need to create an account to participate — a contributor can set up the elder's node, enter the elder's phone number, and begin queueing questions immediately. The elder's first contact with Tessera is a text message: *"Hi Gramma, it's Maya. I'm making a family memory book with your stories. I'll send you a question each week — just tap and answer. Here's the first one: ..."*
 
 ## Anniversaries & Surfacing
 
@@ -519,7 +519,7 @@ A core feature, not an afterthought. At any time, a steward can click "Create ar
 - Every story, transcript, caption, and metadata as plain text (Markdown) and structured JSON.
 - A self-contained HTML viewer that renders the whole tree — person pages, relationships, media — as a static site that works offline, forever, on any computer with a browser. No server required.
 
-The export format is documented, open, and stable. Families who outgrow Heirloom or outlive the service still have their archive, in a form they can open in 2050.
+The export format is documented, open, and stable. Families who outgrow Tessera or outlive the service still have their archive, in a form they can open in 2050.
 
 **Physical book generation** (optional, probably paid): the steward selects a person (or the whole tree) and the system generates a print-ready PDF — typeset like a proper book, with photographs, stories, and a relationship appendix. The PDF can be printed locally or sent to a print-on-demand partner.
 
@@ -529,11 +529,11 @@ The export format is documented, open, and stable. Families who outgrow Heirloom
 
 ## Flow 1: Starting a Tree
 
-Sarah, 34, has been meaning to do something about her grandmother's stories for years. She hears about Heirloom. She signs up with email, creates "The Alvarez Family," adds herself, adds her grandmother Rosa (96, lives alone, uses a flip phone for texts), and her mother Elena (who gave her the idea). She enters Rosa's phone number, then picks a question from the library: *"What did your kitchen smell like when you were a child?"* She queues it for Wednesday morning.
+Sarah, 34, has been meaning to do something about her grandmother's stories for years. She hears about Tessera. She signs up with email, creates "The Alvarez Family," adds herself, adds her grandmother Rosa (96, lives alone, uses a flip phone for texts), and her mother Elena (who gave her the idea). She enters Rosa's phone number, then picks a question from the library: *"What did your kitchen smell like when you were a child?"* She queues it for Wednesday morning.
 
 Wednesday at 9am, Rosa gets a text from an unknown number: *"Hi Abuela, it's Sarah. I'm making a family memory book. Each week I'll send you a question — just tap the link and talk for a minute. This week: What did your kitchen smell like when you were a child?"* Rosa taps. A page opens with the question in large type and a big red record button. She taps it, talks for three minutes about her mother's mole negro, her father coming home smelling of the bakery. She taps done.
 
-Thursday morning, Sarah opens Heirloom. The atrium has one quiet line of text: *"Abuela Rosa answered. Three minutes."* She taps. The voice memo plays while the transcript renders beneath. She cries a little. She adds two more questions to the queue.
+Thursday morning, Sarah opens Tessera. The atrium has one quiet line of text: *"Abuela Rosa answered. Three minutes."* She taps. The voice memo plays while the transcript renders beneath. She cries a little. She adds two more questions to the queue.
 
 This is the product working.
 
@@ -543,7 +543,7 @@ Marcus, 52, gets an email from his niece. *"I'm putting together something for o
 
 ## Flow 3: Drifting
 
-It's Sunday evening. Elena, Sarah's mother, opens Heirloom on her iPad. The atrium shows one photograph she's never seen — her sister at seventeen, standing on a beach, hair blowing. Elena taps "Drift." The app dissolves into full-screen. Her sister's photograph holds for twenty seconds, slowly zooming. It dissolves into a voice memo of their mother, laughing at something off-mic. It dissolves into a paragraph her daughter wrote about Elena herself. Elena lets it run for forty-five minutes, making dinner with one eye on the screen.
+It's Sunday evening. Elena, Sarah's mother, opens Tessera on her iPad. The atrium shows one photograph she's never seen — her sister at seventeen, standing on a beach, hair blowing. Elena taps "Drift." The app dissolves into full-screen. Her sister's photograph holds for twenty seconds, slowly zooming. It dissolves into a voice memo of their mother, laughing at something off-mic. It dissolves into a paragraph her daughter wrote about Elena herself. Elena lets it run for forty-five minutes, making dinner with one eye on the screen.
 
 ## Flow 4: A Subject Claiming Their Node
 
@@ -568,10 +568,10 @@ Expected cost for the first 100 active families: $40–80/month. For 1,000 famil
 
 ## BYO-Storage Mode (Phase 2+)
 
-An advanced option: the user connects their own Google Drive, Dropbox, or S3-compatible bucket. Heirloom stores only metadata; media lives in the user's cloud. Benefits:
+An advanced option: the user connects their own Google Drive, Dropbox, or S3-compatible bucket. Tessera stores only metadata; media lives in the user's cloud. Benefits:
 
-- Near-zero media cost for Heirloom.
-- Data permanence — users keep their media if Heirloom disappears.
+- Near-zero media cost for Tessera.
+- Data permanence — users keep their media if Tessera disappears.
 - Philosophically aligned: "your memories, in your cloud, we're just the interface."
 
 Costs: more engineering complexity (OAuth for each provider, handling rate limits, handling deleted-out-from-under-us files). Offered as a premium option or to privacy-conscious families, not as the default.
@@ -664,7 +664,7 @@ Two family members remember an event differently. Both accounts belong. The prod
 
 ## Phase 1 — The Keepsake (MVP, ~3 months solo)
 
-The smallest version of Heirloom that is useful.
+The smallest version of Tessera that is useful.
 
 - Founder creates a tree.
 - Founder adds person-nodes with name, dates, portrait, essence line.
@@ -680,7 +680,7 @@ The smallest version of Heirloom that is useful.
 
 ## Phase 2 — The Voice (~2 months)
 
-The feature that sets Heirloom apart from a glorified photo album.
+The feature that sets Tessera apart from a glorified photo album.
 
 - Voice memo upload.
 - Automatic transcription via Whisper.
@@ -728,7 +728,7 @@ Only after Phase 4 is stable. Improvements and careful expansion.
 
 # PART XIII — ANTI-FEATURES
 
-Things Heirloom will not do, documented so future contributors do not accidentally build them.
+Things Tessera will not do, documented so future contributors do not accidentally build them.
 
 - **No social feed.** There is no "what's new across all trees." There is no public discovery of other families.
 - **No likes, reactions, or emoji responses.** The response to a memory is to sit with it, or to add one of your own.
@@ -806,6 +806,6 @@ Key strings, drafted. Implement these as a centralized copy file.
 
 # CLOSING
 
-Heirloom is, at its core, a well-designed container for a kind of love that most technology doesn't accommodate. It will not be used by millions of people. It will be used by thousands of families, and it will matter to them more than almost any software they own. Build it like it matters, because it does.
+Tessera is, at its core, a well-designed container for a kind of love that most technology doesn't accommodate. It will not be used by millions of people. It will be used by thousands of families, and it will matter to them more than almost any software they own. Build it like it matters, because it does.
 
 When in doubt, return to the soul. Serve the families. Distrust anything that feels like growth hacking. Remember that the best version of this product is the one a grandchild, in thirty years, will open and hear their great-grandmother's voice — a voice that would otherwise be lost — and think: *someone cared enough to build the thing that kept her here.*

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-process.env.DATABASE_URL ??= "postgresql://familytree:familytree@localhost:5432/familytree_test";
+process.env.DATABASE_URL ??= "postgresql://tessera:tessera@localhost:5432/tessera_test";
 
 const {
   PersonMergeError,

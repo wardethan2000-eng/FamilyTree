@@ -1,23 +1,23 @@
 {
-  "name": "familytree",
+  "name": "tessera",
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @familytree/api --filter @familytree/web dev",
-    "dev:api": "pnpm --filter @familytree/api dev",
-    "dev:web": "pnpm --filter @familytree/web dev",
-    "test": "pnpm --filter @familytree/api test && pnpm --filter @familytree/web test",
-    "build": "pnpm --filter @familytree/database build && pnpm --filter @familytree/api build && pnpm --filter @familytree/web build",
-    "lint": "pnpm --filter @familytree/database lint && pnpm --filter @familytree/api lint && pnpm --filter @familytree/web lint",
-    "typecheck": "pnpm --filter @familytree/database build && pnpm --filter @familytree/api typecheck && pnpm --filter @familytree/web typecheck",
-    "db:generate": "pnpm --filter @familytree/database db:generate",
-    "db:push": "pnpm --filter @familytree/database db:push",
-    "db:migrate": "pnpm --filter @familytree/database db:migrate",
-    "db:studio": "pnpm --filter @familytree/database db:studio",
-    "identity:audit": "pnpm --filter @familytree/api identity:audit",
-    "identity:remediate": "pnpm --filter @familytree/api identity:remediate"
+    "dev": "pnpm --parallel --filter @tessera/api --filter @tessera/web dev",
+    "dev:api": "pnpm --filter @tessera/api dev",
+    "dev:web": "pnpm --filter @tessera/web dev",
+    "test": "pnpm --filter @tessera/api test && pnpm --filter @tessera/web test",
+    "build": "pnpm --filter @tessera/database build && pnpm --filter @tessera/api build && pnpm --filter @tessera/web build",
+    "lint": "pnpm --filter @tessera/database lint && pnpm --filter @tessera/api lint && pnpm --filter @tessera/web lint",
+    "typecheck": "pnpm --filter @tessera/database build && pnpm --filter @tessera/api typecheck && pnpm --filter @tessera/web typecheck",
+    "db:generate": "pnpm --filter @tessera/database db:generate",
+    "db:push": "pnpm --filter @tessera/database db:push",
+    "db:migrate": "pnpm --filter @tessera/database db:migrate",
+    "db:studio": "pnpm --filter @tessera/database db:studio",
+    "identity:audit": "pnpm --filter @tessera/api identity:audit",
+    "identity:remediate": "pnpm --filter @tessera/api identity:remediate"
   }
 }

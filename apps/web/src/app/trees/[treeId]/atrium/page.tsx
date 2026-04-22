@@ -454,7 +454,7 @@ export default function AtriumPage() {
             color: "var(--ink)",
           }}
         >
-          {tree?.name ?? "Heirloom"}
+          {tree?.name ?? "Tessera"}
         </span>
 
         <div style={headerNavGroupStyle}>

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { randomBytes, createHash } from "node:crypto";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import {
   decideInvitationLinkedIdentity,
   getIdentityStatusForUser,
@@ -13,6 +13,7 @@ import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { addPersonToTreeScope } from "../lib/cross-tree-write-service.js";
 import { isPersonInTreeScope } from "../lib/cross-tree-read-service.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
+import { mayEmailUser } from "./me.js";
 
 function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
@@ -99,14 +100,21 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
     const acceptUrl = `${WEB_URL}/invitations/accept?token=${rawToken}`;
     const inviterName = session.user.name ?? session.user.email;
 
+    const recipientAllowsEmail = await mayEmailUser(email, "invitationsEmail");
+
     let emailDelivered = true;
     let emailError: string | undefined;
-    try {
-      await mailer.sendMail({
-        from: MAIL_FROM,
-        to: email,
-        subject: `You've been invited to the ${tree.name} family archive`,
-        html: `
+    if (!recipientAllowsEmail) {
+      emailDelivered = false;
+      emailError =
+        "Recipient has opted out of invitation emails — share the link manually.";
+    } else {
+      try {
+        await mailer.sendMail({
+          from: MAIL_FROM,
+          to: email,
+          subject: `You've been invited to the ${tree.name} family archive`,
+          html: `
         <div style="font-family: Georgia, serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; color: #1C1915; background: #F6F1E7;">
           <h1 style="font-size: 28px; font-weight: 400; margin: 0 0 16px;">You're invited</h1>
           <p style="font-size: 16px; line-height: 1.7; color: #403A2E;">
@@ -123,24 +131,25 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
             This invitation expires in 7 days. If you did not expect this, you can safely ignore it.
           </p>
           <hr style="border: none; border-top: 1px solid #D9D0BC; margin: 32px 0;">
-          <p style="font-size: 12px; color: #847A66;">Heirloom · private family archive</p>
+          <p style="font-size: 12px; color: #847A66;">Tessera · private family archive</p>
         </div>
       `,
-        text: `You've been invited to the ${tree.name} family archive by ${inviterName}.\n\nAccept your invitation: ${acceptUrl}\n\nThis link expires in 7 days.`,
-      });
-    } catch (err) {
-      emailDelivered = false;
-      emailError = err instanceof Error ? err.message : String(err);
-      request.log.error(
-        { err, email, treeId },
-        "Failed to deliver invitation email; invitation record still created",
-      );
+          text: `You've been invited to the ${tree.name} family archive by ${inviterName}.\n\nAccept your invitation: ${acceptUrl}\n\nThis link expires in 7 days.`,
+        });
+      } catch (err) {
+        emailDelivered = false;
+        emailError = err instanceof Error ? err.message : String(err);
+        request.log.error(
+          { err, email, treeId },
+          "Failed to deliver invitation email; invitation record still created",
+        );
+      }
     }
 
     return reply.status(201).send({
       message: emailDelivered
         ? "Invitation sent"
-        : "Invitation created but email delivery failed — share the link manually",
+        : `Invitation created — ${emailError ?? "share the link manually"}`,
       email,
       emailDelivered,
       emailError,

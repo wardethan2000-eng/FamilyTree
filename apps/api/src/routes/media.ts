@@ -4,7 +4,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { and, eq, or } from "drizzle-orm";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import {

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { afterEach, describe, it } from "node:test";
 
-process.env.DATABASE_URL ??= "postgresql://familytree:familytree@localhost:5432/familytree_test";
+process.env.DATABASE_URL ??= "postgresql://tessera:tessera@localhost:5432/tessera_test";
 process.env.WHISPER_API_URL ??= "http://whisper.local/transcribe";
 
-const schema = await import("@familytree/database");
+const schema = await import("@tessera/database");
 const { db } = await import("./db.js");
 const { s3 } = await import("./storage.js");
 const {

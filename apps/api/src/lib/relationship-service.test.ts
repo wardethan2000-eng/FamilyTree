@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-process.env.DATABASE_URL ??= "postgresql://familytree:familytree@localhost:5432/familytree_test";
+process.env.DATABASE_URL ??= "postgresql://tessera:tessera@localhost:5432/tessera_test";
 
 const { db } = await import("./db.js");
 const { createRelationship, RelationshipRuleError } = await import("./relationship-service.js");

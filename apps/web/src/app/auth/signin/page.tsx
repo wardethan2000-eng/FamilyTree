@@ -57,7 +57,7 @@ function SignInContent() {
     <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <p className="text-xs uppercase tracking-widest text-stone-400">FamilyTree</p>
+          <p className="text-xs uppercase tracking-widest text-stone-400">Tessera</p>
           <h1 className="mt-2 text-2xl font-semibold text-stone-900">Sign in</h1>
         </div>
 

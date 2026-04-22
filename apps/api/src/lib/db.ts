@@ -1,4 +1,4 @@
-import { createDb } from "@familytree/database";
+import { createDb } from "@tessera/database";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is required");

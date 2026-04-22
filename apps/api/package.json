@@ -1,5 +1,5 @@
 {
-  "name": "@familytree/api",
+  "name": "@tessera/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "@aws-sdk/client-s3": "^3.1032.0",
     "@aws-sdk/s3-request-presigner": "^3.1032.0",
     "@better-auth/drizzle-adapter": "^1.6.5",
-    "@familytree/database": "workspace:*",
+    "@tessera/database": "workspace:*",
     "@fastify/cors": "^11.2.0",
     "@types/archiver": "^7.0.0",
     "archiver": "^7.0.1",
@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@familytree/typescript-config": "workspace:*",
+    "@tessera/typescript-config": "workspace:*",
     "@types/node": "^24.7.2",
     "@types/nodemailer": "^6.4.17",
     "eslint": "^9.39.1",

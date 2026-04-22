@@ -1,5 +1,5 @@
 {
-  "name": "@familytree/database",
+  "name": "@tessera/database",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@familytree/typescript-config": "workspace:*",
+    "@tessera/typescript-config": "workspace:*",
     "@types/node": "^24.7.2",
     "@types/pg": "^8.15.5",
     "drizzle-kit": "^0.31.5",

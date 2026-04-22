@@ -1,6 +1,6 @@
 # Data services — Docker Compose
 
-This directory contains the Docker Compose configuration for FamilyTree's self-hosted data services, intended for the **data VM** (`familytree-data`, default IP `192.168.68.111`).
+This directory contains the Docker Compose configuration for Tessera's self-hosted data services, intended for the **data VM** (`familytree-data`, default IP `192.168.68.111`).
 
 ---
 
@@ -28,7 +28,7 @@ Edit `.env` and set secure passwords before deploying to any network:
 
 | Variable              | Description                         |
 |-----------------------|-------------------------------------|
-| `POSTGRES_DB`         | Database name (default: `familytree`) |
+| `POSTGRES_DB`         | Database name (default: `tessera`) |
 | `POSTGRES_USER`       | Postgres username                   |
 | `POSTGRES_PASSWORD`   | Postgres password — **change this** |
 | `POSTGRES_PORT`       | Host port for Postgres (default: `5432`) |

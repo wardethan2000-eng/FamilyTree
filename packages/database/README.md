@@ -1,6 +1,6 @@
-# @familytree/database
+# @tessera/database
 
-Drizzle ORM schema, SQL migrations, and the Postgres client factory for FamilyTree. All other packages that need database access import from here.
+Drizzle ORM schema, SQL migrations, and the Postgres client factory for Tessera. All other packages that need database access import from here.
 
 ---
 
@@ -63,7 +63,7 @@ Domain-owned tables use `uuid` primary keys with `defaultRandom()`. All user for
 `src/client.ts` exports `createDb(connectionString)`, which creates a `pg` Pool and returns a typed Drizzle instance:
 
 ```ts
-import { createDb } from "@familytree/database";
+import { createDb } from "@tessera/database";
 
 const db = createDb(process.env.DATABASE_URL!);
 ```

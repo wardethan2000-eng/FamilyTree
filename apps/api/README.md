@@ -1,6 +1,6 @@
-# @familytree/api
+# @tessera/api
 
-Fastify REST API for FamilyTree. Handles authentication, domain routes, and media presigned-URL generation.
+Fastify REST API for Tessera. Handles authentication, domain routes, and media presigned-URL generation.
 
 ---
 
@@ -54,7 +54,7 @@ cp .env.example .env
 | `WEB_URL`           | `http://localhost:3000`         | Public URL of the web app (invites/reply links)  |
 | `SMTP_HOST`         | `localhost`                     | SMTP server hostname                             |
 | `SMTP_PORT`         | `1025`                          | SMTP server port (1025 = Mailpit)                |
-| `SMTP_FROM`         | `noreply@familytree.local`      | From address for invitation/reply emails         |
+| `SMTP_FROM`         | `Tessera <onboarding@tessera.family>` | From address for invitation/reply emails         |
 | `WHISPER_API_URL`   | —                               | Whisper-compatible transcription endpoint         |
 | `WHISPER_API_KEY`   | —                               | Optional bearer token for transcription API      |
 | `WHISPER_MODEL`     | `whisper-1`                     | Model name sent with transcription requests      |

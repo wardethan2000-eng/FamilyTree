@@ -1,6 +1,6 @@
 # Proxmox And VM Access
 
-This is the practical runbook for reaching the FamilyTree VMs and the currently deployed app without rediscovering the access path.
+This is the practical runbook for reaching the Tessera VMs and the currently deployed app without rediscovering the access path.
 
 Do not commit passwords, tokens, or new private keys into this repo. This file documents hostnames, users, key paths, and the deployment shape that was verified during setup.
 
@@ -58,7 +58,7 @@ These were the non-obvious parts:
 - The Proxmox host was reachable as `root`, but the app VM was not.
 - `qm config 110` showed `ciuser: ubuntu`, which explained why `root` failed.
 - The cloud-init public key on the VM matched `~/.ssh/proxmox_key.pub`, so direct VM SSH with that key was valid.
-- The app VM had two different FamilyTree checkouts:
+- The app VM had two different Tessera checkouts, though one still used the older repo directory name:
   - `/home/ubuntu/heirloom`
   - `/home/ubuntu/FamilyTree`
 - The actually running app was **not** using `/home/ubuntu/FamilyTree`.
@@ -118,7 +118,7 @@ It points to:
 That script historically started:
 
 - API from `~/heirloom/apps/api` via `node dist/server.js`
-- Web from `~/heirloom` via `pnpm --filter @familytree/web start`
+- Web from `~/heirloom` via `pnpm --filter @tessera/web start`
 
 Important:
 

@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { db } from "./db.js";
 
 type TxClient = Parameters<Parameters<typeof db.transaction>[0]>[0];

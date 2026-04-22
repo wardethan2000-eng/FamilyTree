@@ -242,7 +242,7 @@ function DashboardContent() {
               color: "rgba(63,53,41,0.52)",
             }}
           >
-            FamilyTree
+            Tessera
           </div>
           <div
             style={{

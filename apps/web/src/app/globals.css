@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ─── Heirloom Design Tokens ─────────────────────────────────────────────── */
+/* ─── Tessera Design Tokens ──────────────────────────────────────────────── */
 
 :root {
   /* Surface */
@@ -42,7 +42,7 @@
   --font-ui:           var(--font-ui);
 
   /* Easing */
-  --ease-heirloom:     cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-tessera:      cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* ─── Motion keyframes ───────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { and, asc, eq, isNotNull, lte } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { db } from "./db.js";
 import { MEDIA_BUCKET, s3 } from "./storage.js";
 

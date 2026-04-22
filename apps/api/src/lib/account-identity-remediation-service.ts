@@ -1,6 +1,6 @@
 import { and, inArray, or } from "drizzle-orm";
-import type { DbClient } from "@familytree/database";
-import * as schema from "@familytree/database";
+import type { DbClient } from "@tessera/database";
+import * as schema from "@tessera/database";
 import { mergePeopleRecords } from "./cross-tree-merge-service.js";
 import {
   auditDuplicateClaimedAccounts,

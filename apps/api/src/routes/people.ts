@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, eq, inArray, or } from "drizzle-orm";
-import * as schema from "@familytree/database";
+import * as schema from "@tessera/database";
 import { getIdentityStatusForUser } from "../lib/account-identity-service.js";
 import {
   listLikelyDuplicatePeople,

@@ -13,6 +13,7 @@ import { promptsPlugin } from "./routes/prompts.js";
 import { placesPlugin } from "./routes/places.js";
 import { importPlugin } from "./routes/import.js";
 import { curationPlugin } from "./routes/curation.js";
+import { mePlugin } from "./routes/me.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -80,7 +81,7 @@ export function buildApp() {
   }));
 
   app.get("/", async () => ({
-    name: "FamilyTree API",
+    name: "Tessera API",
     status: "ready",
   }));
 
@@ -95,6 +96,7 @@ export function buildApp() {
   app.register(placesPlugin);
   app.register(importPlugin);
   app.register(curationPlugin);
+  app.register(mePlugin);
 
   return app;
 }

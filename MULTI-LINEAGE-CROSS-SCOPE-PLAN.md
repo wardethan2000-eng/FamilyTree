@@ -2,7 +2,7 @@
 
 ## Summary
 
-Heirloom should support one user owning and participating in multiple family lineages, with movement between them happening through shared people rather than through a separate archive-to-archive connection model.
+Tessera should support one user owning and participating in multiple family lineages, with movement between them happening through shared people rather than through a separate archive-to-archive connection model.
 
 This is the right direction for the current codebase because the platform already has:
 

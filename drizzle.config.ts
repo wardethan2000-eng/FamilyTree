@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
 const databaseUrl =
   process.env.DATABASE_URL ??
-  "postgres://familytree:familytree-dev-secret@192.168.68.111:5432/familytree";
+  "postgres://tessera:tessera-dev-secret@192.168.68.111:5432/tessera";
 
 export default defineConfig({
   dialect: "postgresql",

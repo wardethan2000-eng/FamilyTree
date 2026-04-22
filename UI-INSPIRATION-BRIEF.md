@@ -1,6 +1,6 @@
-# Heirloom UI Inspiration Brief
+# Tessera UI Inspiration Brief
 
-This document is a design-direction brief for generating inspirational images, mood boards, and conceptual interface explorations for **Heirloom**.
+This document is a design-direction brief for generating inspirational images, mood boards, and conceptual interface explorations for **Tessera**.
 
 It is not a technical implementation plan. It is a creative source-of-truth for image models, designers, and anyone trying to visualize what this product should feel like before translating it into code.
 
@@ -8,7 +8,7 @@ It is not a technical implementation plan. It is a creative source-of-truth for 
 
 ## One-Sentence Product Summary
 
-**Heirloom is a quiet, private family archive for preserving people, relationships, stories, photographs, voices, recipes, places, and artifacts across generations.**
+**Tessera is a quiet, private family archive for preserving people, relationships, stories, photographs, voices, recipes, places, and artifacts across generations.**
 
 It is not a genealogy utility, not a social network, and not a dashboard. It is a living memorial and family memory archive.
 
@@ -24,7 +24,7 @@ Families lose irreplaceable knowledge constantly:
 - the context behind an old photograph
 - the texture of ordinary family life that never makes it into formal records
 
-Heirloom exists to preserve that material with dignity.
+Tessera exists to preserve that material with dignity.
 
 The app should feel like:
 
@@ -382,7 +382,7 @@ Most family-oriented digital products drift toward one of these:
 - messaging/social tools
 - productivity/admin systems
 
-Heirloom is intentionally none of those.
+Tessera is intentionally none of those.
 
 Its differentiation is not a feature checklist. Its differentiation is posture.
 
@@ -547,7 +547,7 @@ An image is off-target if it makes you think:
 
 ## Short Creative Summary
 
-Heirloom should look like a cross between:
+Tessera should look like a cross between:
 
 - a monograph
 - a memorial archive

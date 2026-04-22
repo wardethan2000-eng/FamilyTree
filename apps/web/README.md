@@ -1,6 +1,6 @@
-# @familytree/web
+# @tessera/web
 
-Next.js frontend for FamilyTree. Renders the family archive UI and communicates with the Fastify API for all data and auth operations.
+Next.js frontend for Tessera. Renders the family archive UI and communicates with the Fastify API for all data and auth operations.
 
 ---
 
@@ -46,6 +46,7 @@ cp .env.example .env.local
 | Variable                | Default                   | Description                             |
 |-------------------------|---------------------------|-----------------------------------------|
 | `NEXT_PUBLIC_API_URL`   | `http://localhost:4000`   | Public URL of the Fastify API           |
+| `NEXT_PUBLIC_SITE_URL`  | `https://tessera.family`  | Canonical public site URL for metadata  |
 
 `NEXT_PUBLIC_` prefix is required — Next.js only exposes variables with this prefix to the browser bundle.
 
