@@ -5,7 +5,7 @@ import {
   MemoryVisibilityControl,
   type TreeVisibilityLevel,
 } from "@/components/tree/MemoryVisibilityControl";
-import { getProxiedMediaUrl } from "@/lib/media-url";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 
 type MemoryKind = "story" | "photo" | "voice" | "document" | "other";
 
@@ -382,6 +382,7 @@ export function MemoryLightbox({
             key={memory.id}
             src={resolvedMediaUrl}
             alt={memory.title}
+            onError={handleMediaError}
             style={{
               maxWidth: "calc(100vw - 160px)",
               maxHeight: "calc(100vh - 220px)",
@@ -681,6 +682,7 @@ export function MemoryLightbox({
                 <img
                   src={getProxiedMediaUrl(m.mediaUrl) ?? undefined}
                   alt={m.title}
+                  onError={handleMediaError}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               ) : (

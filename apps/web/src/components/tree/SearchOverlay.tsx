@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getProxiedMediaUrl } from "@/lib/media-url";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 
 type MemoryKind = "story" | "photo" | "voice" | "document" | "other";
 
@@ -341,8 +341,9 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
                         {p.portraitUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={p.portraitUrl}
+                            src={getProxiedMediaUrl(p.portraitUrl) ?? undefined}
                             alt={p.name}
+                            onError={handleMediaError}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />
                         ) : (

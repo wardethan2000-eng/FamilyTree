@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ApiRelationship } from "@/components/tree/treeTypes";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import {
   resolveRequestRecipients,
   type RequestPersonOption,
@@ -323,8 +324,9 @@ export function PromptComposer({
                     >
                       {person.portraitUrl ? (
                         <img
-                          src={person.portraitUrl}
+                          src={getProxiedMediaUrl(person.portraitUrl) ?? undefined}
                           alt={person.displayName}
+                          onError={handleMediaError}
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 
 interface PersonSummary {
   id: string;
@@ -493,8 +494,9 @@ function Portrait({
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={person.portraitUrl}
+            src={getProxiedMediaUrl(person.portraitUrl) ?? undefined}
             alt={person.name}
+            onError={handleMediaError}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         </>

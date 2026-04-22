@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import type { ApiMemory, ApiPerson } from "./treeTypes";
-import { getProxiedMediaUrl } from "@/lib/media-url";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 
 interface MemoryOverlayProps {
   memory: ApiMemory | null;
@@ -82,6 +82,7 @@ export function MemoryOverlay({
               <img
                 src={resolvedMediaUrl}
                 alt={memory.title}
+                onError={handleMediaError}
                 style={{
                   width: "100%",
                   maxHeight: "60vh",

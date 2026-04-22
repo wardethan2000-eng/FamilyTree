@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PlacePicker } from "@/components/tree/PlacePicker";
 import { VoiceRecorderField } from "@/components/tree/VoiceRecorderField";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 
 type MemoryKind = "story" | "photo" | "voice" | "document" | "other";
 
@@ -96,6 +97,7 @@ export function AddMemoryWizard({
     shareWithWholeTree: false,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -140,12 +142,15 @@ export function AddMemoryWizard({
     if (!promptId && !step3.personId) return;
     setSubmitting(true);
     setError(null);
+    setUploadProgress(null);
 
     try {
-      let resolvedMediaIds: string[] = [];
+      const resolvedMediaIds: string[] = [];
 
       if (step2.files.length > 0 && needsFile && !usingDriveLink) {
-        for (const file of step2.files) {
+        for (let i = 0; i < step2.files.length; i++) {
+          const file = step2.files[i]!;
+          setUploadProgress(step2.files.length > 1 ? `Uploading file ${i + 1} of ${step2.files.length}…` : "Uploading…");
           const presignRes = await fetch(`${apiBase_}/api/trees/${treeId}/media/presign`, {
             method: "POST",
             credentials: "include",
@@ -161,10 +166,19 @@ export function AddMemoryWizard({
             mediaId: string;
             uploadUrl: string;
           };
-          await fetch(uploadUrl, { method: "PUT", body: file });
+          const uploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+          if (!uploadRes.ok) {
+            throw new Error(`Upload failed (${uploadRes.status})`);
+          }
           resolvedMediaIds.push(mediaId);
         }
       }
+
+      setUploadProgress("Saving…");
 
       const body: Record<string, unknown> = {
         kind: step1.kind,
@@ -226,11 +240,12 @@ export function AddMemoryWizard({
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
   const acceptType = step1.kind === "photo"
-    ? "image/*,video/*"
+    ? "image/jpeg,image/png,image/gif,image/webp,image/tiff,video/mp4,video/quicktime,video/webm"
     : step1.kind === "voice"
     ? "audio/*"
     : step1.kind === "document"
@@ -1044,7 +1059,7 @@ export function AddMemoryWizard({
                           {p.portraitUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={p.portraitUrl}
+                              src={getProxiedMediaUrl(p.portraitUrl) ?? undefined}
                               alt={p.name}
                               style={{ width: "100%", height: "100%", objectFit: "cover" }}
                             />
@@ -1431,7 +1446,7 @@ export function AddMemoryWizard({
                   transition: "background 150ms",
                 }}
               >
-                {submitting ? "Saving…" : "Save memory"}
+                {submitting ? (uploadProgress ?? "Saving…") : "Save memory"}
               </button>
             </div>
           </div>

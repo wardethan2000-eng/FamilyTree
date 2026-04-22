@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { getProxiedMediaUrl } from "@/lib/media-url";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeCoverage, TreeHomeMemory } from "./homeTypes";
 import { getHeroExcerpt, getVoiceTranscriptLabel } from "./homeUtils";
 
@@ -288,6 +288,7 @@ function TrailLeadScene({
             <img
               src={mediaUrl ?? ""}
               alt={memory.title}
+              onError={handleMediaError}
               style={{
                 position: "absolute",
                 inset: 0,
@@ -613,6 +614,7 @@ function TrailEchoImage({
           <img
             src={primary.mediaUrl}
             alt={title}
+            onError={handleMediaError}
             style={{
               width: "100%",
               height: "100%",
@@ -683,6 +685,7 @@ function MemoryStackHint({
             <img
               src={item.mediaUrl}
               alt=""
+              onError={handleMediaError}
               style={{
                 width: "100%",
                 height: "100%",
@@ -759,16 +762,17 @@ function PersonBubble({
           justifyContent: "center",
         }}
       >
-        {person.portraitUrl ? (
-          <>
+{person.portraitUrl ? (
+<>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={person.portraitUrl}
               alt={person.name}
+              onError={handleMediaError}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           </>
-        ) : (
+          ) : (
           <span
             style={{
               fontFamily: "var(--font-display)",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getProxiedMediaUrl } from "@/lib/media-url";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory } from "./homeTypes";
 import { EASE, getVoiceTranscriptLabel } from "./homeUtils";
 
@@ -62,6 +62,7 @@ export function MemoryCard({
             <img
               src={resolvedMediaUrl}
               alt={memory.title}
+              onError={handleMediaError}
               style={{
                 width: "100%",
                 height: "100%",

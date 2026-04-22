@@ -13,7 +13,7 @@ import {
   describeTreeVisibility,
   type TreeVisibilityLevel,
 } from "@/components/tree/MemoryVisibilityControl";
-import { getProxiedMediaUrl } from "@/lib/media-url";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import {
   isCanonicalMemoryId,
   isCanonicalTreeId,
@@ -317,6 +317,7 @@ function RelatedMemoryCard({
         <img
           src={resolvedMediaUrl}
           alt={memory.title}
+          onError={handleMediaError}
           style={{
             width: "100%",
             height: 180,
@@ -598,6 +599,7 @@ export default function MemoryPage({
         };
         const uploadRes = await fetch(uploadUrl, {
           method: "PUT",
+          headers: { "Content-Type": perspectiveFile.type || "application/octet-stream" },
           body: perspectiveFile,
         });
 
@@ -914,6 +916,7 @@ export default function MemoryPage({
               <img
                 src={resolvedMediaUrl}
                 alt={memory.title}
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
                 style={{
                   width: "100%",
                   display: "block",
@@ -1459,8 +1462,9 @@ export default function MemoryPage({
                   >
                     {memory.primaryPerson.portraitUrl && (
                       <img
-                        src={memory.primaryPerson.portraitUrl}
+                        src={getProxiedMediaUrl(memory.primaryPerson.portraitUrl) ?? memory.primaryPerson.portraitUrl}
                         alt={memory.primaryPerson.displayName}
+                        onError={handleMediaError}
                         style={{
                           width: 44,
                           height: 44,
@@ -1831,8 +1835,9 @@ export default function MemoryPage({
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             {perspective.contributorPerson?.portraitUrl && (
                               <img
-                                src={perspective.contributorPerson.portraitUrl}
+                                src={getProxiedMediaUrl(perspective.contributorPerson.portraitUrl) ?? perspective.contributorPerson.portraitUrl}
                                 alt={perspective.contributorPerson.displayName}
+                                onError={handleMediaError}
                                 style={{
                                   width: 42,
                                   height: 42,

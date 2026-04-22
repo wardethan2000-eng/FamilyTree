@@ -1108,7 +1108,7 @@ export default function PersonPage({
       <div style={{ position: "relative", height: 360, overflow: "hidden", flexShrink: 0 }}>
         {person.portraitUrl ? (
           <img
-            src={person.portraitUrl}
+            src={getProxiedMediaUrl(person.portraitUrl) ?? person.portraitUrl}
             alt={person.displayName}
             style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.6) sepia(0.2)" }}
           />
@@ -3064,7 +3064,7 @@ function RelationshipsSection({
                 >
                   {other.portraitUrl ? (
                     <img
-                      src={other.portraitUrl}
+                      src={getProxiedMediaUrl(other.portraitUrl) ?? other.portraitUrl}
                       alt={other.displayName}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
@@ -3177,7 +3177,7 @@ function DuplicateCandidatesSection({
                 <div style={{ display: "flex", gap: 12 }}>
                   {candidate.portraitUrl ? (
                     <img
-                      src={candidate.portraitUrl}
+                      src={getProxiedMediaUrl(candidate.portraitUrl) ?? candidate.portraitUrl}
                       alt={candidate.displayName}
                       style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--rule)" }}
                     />
@@ -3272,7 +3272,7 @@ function CrossTreeContextSection({ crossTreeLinks }: { crossTreeLinks: CrossTree
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: link.memories.length > 0 ? 14 : 0 }}>
             {link.linkedPerson.portraitUrl && (
               <img
-                src={link.linkedPerson.portraitUrl}
+                src={getProxiedMediaUrl(link.linkedPerson.portraitUrl) ?? link.linkedPerson.portraitUrl}
                 alt={link.linkedPerson.displayName}
                 style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--rule)" }}
               />

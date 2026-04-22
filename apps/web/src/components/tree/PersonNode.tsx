@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { PersonFlowNode } from "./treeTypes";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import { NODE_HEIGHT, NODE_WIDTH, PORTRAIT_SIZE } from "./treeLayout";
 
 function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
@@ -42,6 +43,8 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
       ? { border: "1.5px dashed var(--ink)" }
       : { border: "1.5px solid var(--rule)" };
 
+  const resolvedPortraitUrl = getProxiedMediaUrl(portraitUrl);
+
   return (
     <div
       style={{
@@ -78,10 +81,11 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
           boxShadow: isFocused ? "0 0 0 4px rgba(212,190,159,0.28)" : "none",
         }}
       >
-        {portraitUrl ? (
+        {resolvedPortraitUrl ? (
           <img
-            src={portraitUrl}
+            src={resolvedPortraitUrl}
             alt={name}
+            onError={handleMediaError}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         ) : (

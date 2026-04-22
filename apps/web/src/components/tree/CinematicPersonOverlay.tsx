@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ApiPerson } from "./treeTypes";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 
 interface CinematicPersonOverlayProps {
   person: ApiPerson | null;
@@ -102,8 +103,9 @@ export function CinematicPersonOverlay({
             >
               {person.portraitUrl ? (
                 <img
-                  src={person.portraitUrl}
+                  src={getProxiedMediaUrl(person.portraitUrl) ?? undefined}
                   alt={person.name}
+                  onError={handleMediaError}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               ) : (

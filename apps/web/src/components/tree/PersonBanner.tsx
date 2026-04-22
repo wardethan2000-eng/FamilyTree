@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ApiPerson, ApiRelationship } from "./treeTypes";
+import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
@@ -196,7 +197,7 @@ export function PersonBanner({
           <div style={{ padding: "44px 24px 18px", display: "flex", gap: 16, borderBottom: "1px solid var(--rule)", alignItems: "flex-start" }}>
             <div style={{ width: 72, height: 72, borderRadius: "50%", overflow: "hidden", border: "1.5px solid var(--rule)", background: "var(--paper-deep)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {person.portraitUrl ? (
-                <img src={person.portraitUrl} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={getProxiedMediaUrl(person.portraitUrl) ?? undefined} alt={displayName} onError={handleMediaError} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
                 <span style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--ink-faded)", fontWeight: 400, lineHeight: 1 }}>{initials}</span>
               )}

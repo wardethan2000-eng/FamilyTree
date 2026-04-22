@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -28,8 +29,6 @@ export const ALLOWED_MIME_TYPES = new Set([
   "image/png",
   "image/gif",
   "image/webp",
-  "image/heic",
-  "image/heif",
   "image/tiff",
   // Video
   "video/mp4",
@@ -85,6 +84,32 @@ export async function ensureBucket(): Promise<void> {
       throw err;
     }
   }
+
+  const trustedOrigins = (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  try {
+    await s3.send(
+      new PutBucketCorsCommand({
+        Bucket: MEDIA_BUCKET,
+        CORSConfiguration: {
+          CORSRules: [
+            {
+              AllowedHeaders: ["Content-Type", "x-amz-*"],
+              AllowedMethods: ["GET", "PUT"],
+              AllowedOrigins: trustedOrigins,
+              ExposeHeaders: ["ETag", "Content-Length", "Content-Range"],
+              MaxAgeSeconds: 3600,
+            },
+          ],
+        },
+      }),
+    );
+  } catch {
+    // MinIO may not support PutBucketCors in all versions; log but don't crash
+  }
 }
 
 export async function getPresignedUploadUrl(
@@ -100,9 +125,5 @@ export async function getPresignedUploadUrl(
 }
 
 export function mediaUrl(objectKey: string): string {
-  const apiBase = (process.env.API_BASE_URL ?? "http://localhost:4000").replace(
-    /\/$/,
-    "",
-  );
-  return `${apiBase}/api/media?key=${encodeURIComponent(objectKey)}`;
+  return `/api/media?key=${encodeURIComponent(objectKey)}`;
 }
