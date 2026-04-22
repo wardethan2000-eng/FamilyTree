@@ -35,6 +35,7 @@ import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTransc
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { DriftMode } from "@/components/tree/DriftMode";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
+import { GearIcon, InboxIcon } from "@/components/tree/SurfaceToolbarIcons";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { usePendingTimeout } from "@/lib/usePendingTimeout";
 
@@ -428,137 +429,166 @@ export default function AtriumPage() {
           background: "rgba(246,241,231,0.92)",
           backdropFilter: "blur(8px)",
           borderBottom: "1px solid var(--rule)",
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
           alignItems: "center",
-          flexWrap: "wrap",
           padding: "8px 16px",
-          gap: 12,
+          gap: 16,
         }}
       >
-        <Link
-          href="/dashboard"
+        <div
           style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            color: "var(--ink-faded)",
-            textDecoration: "none",
-            padding: "4px 0",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            minWidth: 0,
           }}
         >
-          ← Home
-        </Link>
-        <span
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 17,
-            color: "var(--ink)",
-          }}
-        >
-          {tree?.name ?? "Tessera"}
-        </span>
-
-        <div style={headerNavGroupStyle}>
-          <Link href={`/trees/${treeId}/atrium`} style={getHeaderNavItemStyle(true)}>
-            Atrium
+          <Link
+            href="/dashboard"
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              color: "var(--ink-faded)",
+              textDecoration: "none",
+              padding: "4px 0",
+            }}
+          >
+            ← Home
           </Link>
-          <Link href={`/trees/${treeId}`} style={getHeaderNavItemStyle(false)}>
-            Tree
-          </Link>
-          <Link href={`/trees/${treeId}/map`} style={getHeaderNavItemStyle(false)}>
-            Map
-          </Link>
+          <span
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 17,
+              color: "var(--ink)",
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            {tree?.name ?? "Tessera"}
+          </span>
         </div>
 
-        <div style={{ flex: 1 }} />
-
-        {curationCount > 0 && (
-          <Link
-            href={`/trees/${treeId}/curation`}
-            style={{
-              ...headerLinkStyle,
-              color: "var(--amber, #c97d1a)",
-              border: "1px solid var(--amber, #c97d1a)",
-              gap: 4,
-            }}
-            title="Curation queue"
-          >
-            ✎ {curationCount} need{curationCount === 1 ? "s" : ""} attention
-          </Link>
-        )}
-
-        <Link
-          href={`/trees/${treeId}/inbox`}
+        <div
           style={{
-            ...headerLinkStyle,
-            position: "relative",
+            justifySelf: "center",
+            display: "flex",
+            alignItems: "center",
+            minWidth: 0,
+          }}
+        >
+          <div style={headerNavGroupStyle}>
+            <Link href={`/trees/${treeId}/atrium`} style={getHeaderNavItemStyle(true)}>
+              Atrium
+            </Link>
+            <Link href={`/trees/${treeId}`} style={getHeaderNavItemStyle(false)}>
+              Tree
+            </Link>
+            <button type="button" onClick={() => setDriftOpen(true)} style={getHeaderNavButtonStyle(false)}>
+              Drift
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            justifySelf: "end",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flexWrap: "wrap",
             gap: 8,
+            minWidth: 0,
           }}
-          title="Inbox"
         >
-          <span>Inbox</span>
-          {inboxCount > 0 && (
-            <span
+          {curationCount > 0 && (
+            <Link
+              href={`/trees/${treeId}/curation`}
               style={{
-                minWidth: 18,
-                height: 18,
-                borderRadius: 999,
-                background: "var(--rose)",
-                color: "#fff",
-                fontFamily: "var(--font-ui)",
-                fontSize: 10,
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 5px",
+                ...headerButtonStyle,
+                color: "var(--amber, #c97d1a)",
+                border: "1px solid var(--amber, #c97d1a)",
+                gap: 4,
               }}
+              title="Curation queue"
             >
-              {inboxCount > 9 ? "9+" : inboxCount}
-            </span>
+              ✎ {curationCount} need{curationCount === 1 ? "s" : ""} attention
+            </Link>
           )}
-        </Link>
 
-        <button type="button" onClick={() => setSearchOpen(true)} style={headerButtonStyle}>
-          <span>⌕</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            Search
-            <kbd
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 10,
-                background: "var(--paper)",
-                border: "1px solid var(--rule)",
-                borderRadius: 3,
-                padding: "1px 4px",
-                color: "var(--ink-faded)",
-              }}
-            >
-              ⌘K
-            </kbd>
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setWizardOpen(true)}
+            style={headerPrimaryButtonStyle}
+          >
+            + Add memory
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setWizardOpen(true)}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 12,
-            fontWeight: 500,
-            color: "white",
-            background: "var(--moss)",
-            border: "none",
-            borderRadius: 6,
-            padding: "5px 14px",
-            cursor: "pointer",
-          }}
-        >
-          + Add memory
-        </button>
+          <button type="button" onClick={() => setSearchOpen(true)} style={headerButtonStyle}>
+            <span>⌕</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              Search
+              <kbd
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 10,
+                  background: "var(--paper)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: 3,
+                  padding: "1px 4px",
+                  color: "var(--ink-faded)",
+                }}
+              >
+                ⌘K
+              </kbd>
+            </span>
+          </button>
 
-        <Link href={`/trees/${treeId}/settings`} style={headerLinkStyle}>
-          Settings
-        </Link>
+          <Link
+            href={`/trees/${treeId}/inbox`}
+            style={{
+              ...headerIconButtonStyle,
+              position: "relative",
+            }}
+            title="Inbox"
+            aria-label="Inbox"
+          >
+            <InboxIcon />
+            {inboxCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  background: "var(--rose)",
+                  color: "#fff",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0 5px",
+                }}
+              >
+                {inboxCount > 9 ? "9+" : inboxCount}
+              </span>
+            )}
+          </Link>
+
+          <Link
+            href={`/trees/${treeId}/settings`}
+            style={headerIconButtonStyle}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <GearIcon />
+          </Link>
+        </div>
       </header>
 
       {memories.length === 0 ? (
@@ -650,17 +680,35 @@ export default function AtriumPage() {
   );
 }
 
-const headerLinkStyle = {
+const headerButtonStyle = {
   fontFamily: "var(--font-ui)",
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--ink-faded)",
   background: "var(--paper-deep)",
   border: "1px solid var(--rule)",
-  borderRadius: 6,
-  padding: "5px 12px",
-  textDecoration: "none",
-  display: "flex",
+  borderRadius: 999,
+  padding: "8px 14px",
+  cursor: "pointer",
+  display: "inline-flex",
   alignItems: "center",
+  gap: 6,
+  textDecoration: "none",
+  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+} as const;
+
+const headerPrimaryButtonStyle = {
+  ...headerButtonStyle,
+  color: "#fff",
+  background: "var(--moss)",
+  border: "1px solid rgba(78,93,66,0.28)",
+  fontWeight: 500,
+} as const;
+
+const headerIconButtonStyle = {
+  ...headerButtonStyle,
+  padding: "7px 10px",
+  justifyContent: "center",
+  minWidth: 36,
 } as const;
 
 const headerNavGroupStyle = {
@@ -671,20 +719,7 @@ const headerNavGroupStyle = {
   borderRadius: 999,
   border: "1px solid var(--rule)",
   background: "var(--paper-deep)",
-} as const;
-
-const headerButtonStyle = {
-  fontFamily: "var(--font-ui)",
-  fontSize: 12,
-  color: "var(--ink-faded)",
-  background: "var(--paper-deep)",
-  border: "1px solid var(--rule)",
-  borderRadius: 6,
-  padding: "5px 12px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
+  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
 } as const;
 
 function getHeaderNavItemStyle(active: boolean) {
@@ -699,6 +734,13 @@ function getHeaderNavItemStyle(active: boolean) {
     textDecoration: "none",
     display: "inline-flex",
     alignItems: "center",
+  } as const;
+}
+
+function getHeaderNavButtonStyle(active: boolean) {
+  return {
+    ...getHeaderNavItemStyle(active),
+    cursor: "pointer",
   } as const;
 }
 

@@ -23,6 +23,7 @@ import { CinematicPersonOverlay } from "./CinematicPersonOverlay";
 import { PersonBanner } from "./PersonBanner";
 import { DecadeRail } from "./DecadeRail";
 import { FamilySelector } from "./FamilySelector";
+import { GearIcon, InboxIcon } from "./SurfaceToolbarIcons";
 import type {
   ApiPerson,
   ConstellationEdgeData,
@@ -74,7 +75,6 @@ interface HoverState {
 interface TreeCanvasProps {
   treeId: string;
   treeName: string;
-  familyMapHref?: string;
   people: ApiPerson[];
   relationships: ApiRelationship[];
   currentUserPersonId: string | null;
@@ -115,7 +115,6 @@ type EditInteractionState =
 function TreeCanvasInner({
   treeId,
   treeName,
-  familyMapHref,
   people,
   relationships,
   currentUserPersonId,
@@ -1284,11 +1283,6 @@ function TreeCanvasInner({
             <a href={`/trees/${treeId}`} style={toolbarNavItemStyle(true)}>
               Tree
             </a>
-            {familyMapHref && (
-              <a href={familyMapHref} style={toolbarNavItemStyle(false)}>
-                Map
-              </a>
-            )}
             <button
               type="button"
               onClick={onDriftClick}
@@ -2659,43 +2653,5 @@ export function TreeCanvas(props: TreeCanvasProps) {
     <ReactFlowProvider>
       <TreeCanvasInner {...props} />
     </ReactFlowProvider>
-  );
-}
-
-function InboxIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M4 6.75A1.75 1.75 0 0 1 5.75 5h12.5A1.75 1.75 0 0 1 20 6.75v10.5A1.75 1.75 0 0 1 18.25 19H5.75A1.75 1.75 0 0 1 4 17.25V6.75Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-      />
-      <path
-        d="M4 14h4.1a1 1 0 0 1 .8.4l1.4 1.87a1 1 0 0 0 .8.4h2a1 1 0 0 0 .8-.4l1.4-1.87a1 1 0 0 1 .8-.4H20"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-      />
-      <path
-        d="M19.35 14.25a1.1 1.1 0 0 0 .22 1.21l.04.04a1.5 1.5 0 0 1 0 2.12 1.5 1.5 0 0 1-2.12 0l-.04-.04a1.1 1.1 0 0 0-1.21-.22 1.1 1.1 0 0 0-.67 1v.11A1.5 1.5 0 0 1 14.08 20h-2.16a1.5 1.5 0 0 1-1.5-1.5v-.06a1.1 1.1 0 0 0-.67-1 1.1 1.1 0 0 0-1.21.22l-.04.04a1.5 1.5 0 0 1-2.12 0 1.5 1.5 0 0 1 0-2.12l.04-.04a1.1 1.1 0 0 0 .22-1.21 1.1 1.1 0 0 0-1-.67H5.5A1.5 1.5 0 0 1 4 12.08V9.92a1.5 1.5 0 0 1 1.5-1.5h.06a1.1 1.1 0 0 0 1-.67 1.1 1.1 0 0 0-.22-1.21L6.3 6.5a1.5 1.5 0 0 1 0-2.12 1.5 1.5 0 0 1 2.12 0l.04.04a1.1 1.1 0 0 0 1.21.22 1.1 1.1 0 0 0 .67-1V3.5A1.5 1.5 0 0 1 11.84 2h2.16a1.5 1.5 0 0 1 1.5 1.5v.06a1.1 1.1 0 0 0 .67 1 1.1 1.1 0 0 0 1.21-.22l.04-.04a1.5 1.5 0 0 1 2.12 0 1.5 1.5 0 0 1 0 2.12l-.04.04a1.1 1.1 0 0 0-.22 1.21 1.1 1.1 0 0 0 1 .67h.11A1.5 1.5 0 0 1 20 9.84v2.32a1.5 1.5 0 0 1-1.5 1.5h-.06a1.1 1.1 0 0 0-1 .59Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

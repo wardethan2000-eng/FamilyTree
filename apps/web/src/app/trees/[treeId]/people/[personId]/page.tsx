@@ -1081,15 +1081,9 @@ export default function PersonPage({
             </button>
           </>
         )}
-        <a
-          href={`/trees/${treeId}/map?personId=${personId}`}
-          style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 999, padding: "8px 14px", cursor: "pointer", textDecoration: "none" }}
-        >
-          View on the map
-        </a>
         <button
           onClick={() => setPromptComposerOpen(true)}
-          style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 999, padding: "8px 14px", cursor: "pointer", marginLeft: 8 }}
+          style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)", background: "none", border: "1px solid var(--moss)", borderRadius: 999, padding: "8px 14px", cursor: "pointer" }}
         >
           Request a memory
         </button>

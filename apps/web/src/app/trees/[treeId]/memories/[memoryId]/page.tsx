@@ -856,9 +856,6 @@ export default function MemoryPage({
           <a href={`/trees/${treeId}`} style={memoryNavItemStyle(false)}>
             Tree
           </a>
-          <a href={`/trees/${treeId}/map`} style={memoryNavItemStyle(false)}>
-            Map
-          </a>
         </div>
         {memory.primaryPerson && (
           <>
