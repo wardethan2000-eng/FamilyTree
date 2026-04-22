@@ -48,40 +48,11 @@ export function AtriumMemoryTrail({
     <section style={{ padding: "42px max(20px, 5vw) 64px" }}>
       <div
         style={{
-          marginBottom: 26,
+          marginBottom: 20,
           display: "flex",
-          alignItems: "baseline",
-          gap: 12,
-          flexWrap: "wrap",
+          justifyContent: "flex-end",
         }}
       >
-        <div>
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-display)",
-              fontSize: "clamp(28px, 3vw, 38px)",
-              fontWeight: 400,
-              color: "var(--ink)",
-            }}
-          >
-            Follow the thread
-          </h2>
-          <p
-            style={{
-              margin: "10px 0 0",
-              maxWidth: 760,
-              fontFamily: "var(--font-body)",
-              fontSize: 16,
-              lineHeight: 1.85,
-              color: "var(--ink-soft)",
-            }}
-          >
-            Begin with one memory, stay close to its branch, and let the archive widen outward from
-            there.
-          </p>
-        </div>
-        <div style={{ flex: 1 }} />
         <Link
           href={openArchiveHref}
           style={{
@@ -202,37 +173,6 @@ function TrailSectionThread({
         marginTop: sectionIndex === 0 ? 0 : "clamp(-18px, -2vw, -10px)",
       }}
     >
-      <div
-        style={{
-          marginBottom: 16,
-          maxWidth: 560,
-          paddingLeft: "clamp(4px, 1vw, 8px)",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            color: "var(--ink-faded)",
-            marginBottom: 8,
-          }}
-        >
-          {section.title}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 16,
-            lineHeight: 1.8,
-            color: "var(--ink-soft)",
-          }}
-        >
-          {section.description}
-        </div>
-      </div>
-
       <div
         style={{
           position: "relative",
@@ -393,8 +333,6 @@ function TrailLeadScene({
                 color: "rgba(246,241,231,0.64)",
               }}
             >
-              <span>{formatMemoryKind(memory.kind)}</span>
-              <span style={{ opacity: 0.46 }}>·</span>
               <span>{memory.dateOfEventText ?? "Undated"}</span>
             </div>
 
@@ -425,15 +363,6 @@ function TrailLeadScene({
               }}
             >
               {memory.personName && <span>{memory.personName}</span>}
-              <span
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  background: "rgba(246,241,231,0.08)",
-                }}
-              >
-                {getLeadDescriptor(memory)}
-              </span>
             </div>
 
             {excerpt && (
@@ -470,27 +399,6 @@ function TrailLeadScene({
                 ))}
               </div>
             )}
-
-            <div
-              style={{
-                marginTop: 24,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 12,
-                fontFamily: "var(--font-ui)",
-                fontSize: 13,
-                color: "rgba(246,241,231,0.88)",
-              }}
-            >
-              <span
-                style={{
-                  width: 48,
-                  height: 1,
-                  background: "rgba(246,241,231,0.32)",
-                }}
-              />
-              <span>Step deeper into this memory</span>
-            </div>
           </div>
         </div>
       </button>
@@ -593,13 +501,7 @@ function TrailEchoEntry({
                 color: "var(--ink-faded)",
               }}
             >
-              <span>{memory.personName ?? "Family memory"}</span>
-              {memory.dateOfEventText && (
-                <>
-                  <span style={{ opacity: 0.42 }}>·</span>
-                  <span>{memory.dateOfEventText}</span>
-                </>
-              )}
+              <span>{memory.dateOfEventText ?? "Undated"}</span>
             </div>
 
             <div
@@ -643,27 +545,6 @@ function TrailEchoEntry({
                 ))}
               </div>
             )}
-
-            <div
-              style={{
-                marginTop: 14,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 10,
-                fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "var(--moss)",
-              }}
-            >
-              <span
-                style={{
-                  width: 34,
-                  height: 1,
-                  background: "rgba(78,93,66,0.32)",
-                }}
-              />
-              <span>Open this echo</span>
-            </div>
           </div>
 
           {mediaUrl && memory.kind === "photo" && alignsRight && (
@@ -834,36 +715,6 @@ function getMemoryExcerpt(memory: TreeHomeMemory) {
     memory.kind === "voice" ? transcriptLabel : getHeroExcerpt(memory) ?? transcriptLabel ?? null;
   if (!excerpt) return null;
   return excerpt.length > 260 ? `${excerpt.slice(0, 257).trimEnd()}…` : excerpt;
-}
-
-function formatMemoryKind(kind: TreeHomeMemory["kind"]) {
-  switch (kind) {
-    case "photo":
-      return "Photograph";
-    case "voice":
-      return "Voice";
-    case "story":
-      return "Story";
-    case "document":
-      return "Document";
-    default:
-      return "Memory";
-  }
-}
-
-function getLeadDescriptor(memory: TreeHomeMemory) {
-  switch (memory.kind) {
-    case "photo":
-      return "Held as an image";
-    case "voice":
-      return "Heard in a voice";
-    case "story":
-      return "Told as a story";
-    case "document":
-      return "Saved as an artifact";
-    default:
-      return "Preserved in the archive";
-  }
 }
 
 function EraChip({
