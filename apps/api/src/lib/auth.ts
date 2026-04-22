@@ -8,10 +8,25 @@ import { emailTemplates } from "./email-templates.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
+function buildWebUrl(webPath: string, token: string | undefined, url?: string): string {
+  const params = new URLSearchParams();
+  if (token) params.set("token", token);
+  // Preserve any callbackURL from the original better-auth URL (query or path).
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      const cb = parsed.searchParams.get("callbackURL");
+      if (cb) params.set("callbackURL", cb);
+    } catch {
+      // ignore
+    }
+  }
+  const qs = params.toString();
+  return `${WEB_URL}${webPath}${qs ? `?${qs}` : ""}`;
+}
+
 function rewriteAuthUrl(url: string, webPath: string): string {
-  // better-auth gives us a URL pointing at its own API endpoint. We want
-  // the user clicking the email link to hit our web app which then calls
-  // the API. Extract the token and build a web URL.
+  // Legacy helper for URLs where token is a query param (magic link, verify).
   try {
     const parsed = new URL(url);
     const token = parsed.searchParams.get("token");
@@ -38,8 +53,8 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
-    sendResetPassword: async ({ user, url }) => {
-      const resetUrl = rewriteAuthUrl(url, "/auth/reset-password");
+    sendResetPassword: async ({ user, url, token }) => {
+      const resetUrl = buildWebUrl("/auth/reset-password", token, url);
       await mailer.sendMail({
         from: MAIL_FROM,
         to: user.email,
@@ -58,8 +73,8 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      const verifyUrl = rewriteAuthUrl(url, "/auth/verify-email");
+    sendVerificationEmail: async ({ user, url, token }) => {
+      const verifyUrl = buildWebUrl("/auth/verify-email", token, url);
       await mailer.sendMail({
         from: MAIL_FROM,
         to: user.email,

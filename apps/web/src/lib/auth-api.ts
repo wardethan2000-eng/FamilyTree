@@ -28,7 +28,7 @@ async function call<T = unknown>(path: string, body: unknown, method = "POST"): 
 
 export const authApi = {
   forgetPassword: (body: { email: string; redirectTo?: string }) =>
-    call("/forget-password", body),
+    call("/request-password-reset", body),
   resetPassword: (body: { token: string; newPassword: string }) =>
     call("/reset-password", body),
   sendVerificationEmail: (body: { email: string; callbackURL?: string }) =>
