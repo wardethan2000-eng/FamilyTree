@@ -1797,6 +1797,8 @@ export function buildPersonNodes(
         isFocused: person.id === selectedPersonId,
         isDimmed: focusPersonIds ? !focusPersonIds.has(person.id) : false,
         decadeRelevance: computeDecadeRelevance(person, activeDecade, generationDecades),
+        lastName: person.lastName ?? null,
+        maidenName: person.maidenName ?? null,
       },
       draggable: false,
     };

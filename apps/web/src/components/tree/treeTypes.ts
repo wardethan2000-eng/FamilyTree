@@ -8,11 +8,11 @@ export type PersonNodeData = {
   portraitUrl?: string | null;
   essenceLine?: string | null;
   isYou: boolean;
-  /** True when this person's cinematic overlay is open */
   isFocused: boolean;
   isDimmed: boolean;
-  /** 0–1 indicating how relevant this person is to the active decade (1 = exact match, null = no decade filter active) */
   decadeRelevance: number | null;
+  lastName?: string | null;
+  maidenName?: string | null;
 };
 
 export type PersonFlowNode = Node<PersonNodeData, "person">;
@@ -44,9 +44,11 @@ export interface ApiPerson {
   name: string;
   birthYear?: number | null;
   deathYear?: number | null;
-  essenceLine?: string | null;
-  portraitMediaId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  maidenName?: string | null;
   portraitUrl?: string | null;
+  essenceLine?: string | null;
   linkedUserId?: string | null;
 }
 

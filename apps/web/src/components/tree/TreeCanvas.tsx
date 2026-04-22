@@ -20,7 +20,9 @@ import React from "react";
 
 import { PersonNode as PersonNodeComponent } from "./PersonNode";
 import { CinematicPersonOverlay } from "./CinematicPersonOverlay";
+import { PersonBanner } from "./PersonBanner";
 import { DecadeRail } from "./DecadeRail";
+import { FamilySelector } from "./FamilySelector";
 import type {
   ApiPerson,
   ConstellationEdgeData,
@@ -59,6 +61,7 @@ const EDGE_TYPES = {
 const CONTROL_SURFACE = "rgba(246,241,231,0.82)";
 const CONTROL_BORDER = "rgba(177,165,145,0.48)";
 const CANVAS_TOP_PADDING = 68;
+const PERSON_BANNER_WIDTH = 320;
 const CANVAS_BACKGROUND =
   "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.72), transparent 32%), radial-gradient(circle at 82% 20%, rgba(226,214,194,0.38), transparent 28%), linear-gradient(180deg, #f7f2e9 0%, #f1eadf 100%)";
 
@@ -132,10 +135,10 @@ function TreeCanvasInner({
   const [edges, setEdges, onEdgesChange] = useEdgesState<TreeEdge>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [hoverState, setHoverState] = useState<HoverState | null>(null);
-  const [showLegend, setShowLegend] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [lineageMode, setLineageMode] = useState<LineageFocusMode>("full");
   const [activeDecade, setActiveDecade] = useState<number | null>(null);
+  const [activeFamily, setActiveFamily] = useState<string | null>(null);
   const [editInteraction, setEditInteraction] = useState<EditInteractionState>({ mode: "idle" });
   const [editingRelationshipType, setEditingRelationshipType] = useState<
     "parent_child" | "sibling" | "spouse"
@@ -177,23 +180,54 @@ function TreeCanvasInner({
   const activeFocusIds = editMode ? immediateFocusIds : lineageFocusIds;
   const renderFocusIds =
     !editMode && lineageMode !== "full" && lineageFocusIds ? lineageFocusIds : null;
+
+  const familyFocusIds = useMemo(() => {
+    if (!activeFamily) return null;
+    const ids = new Set<string>();
+    for (const person of people) {
+      const last = person.lastName?.trim();
+      const maiden = person.maidenName?.trim();
+      if (last === activeFamily || maiden === activeFamily) {
+        ids.add(person.id);
+        continue;
+      }
+      if (!last && !maiden) {
+        const parts = person.name.trim().split(/\s+/);
+        if (parts.length >= 2 && parts[parts.length - 1] === activeFamily) {
+          ids.add(person.id);
+        }
+      }
+    }
+    if (ids.size === 0) return null;
+    return ids;
+  }, [people, activeFamily]);
+
+  const combinedFocusIds = useMemo(() => {
+    if (!familyFocusIds && !renderFocusIds) return null;
+    if (familyFocusIds && !renderFocusIds) return familyFocusIds;
+    if (!familyFocusIds && renderFocusIds) return renderFocusIds;
+    const combined = new Set(familyFocusIds!);
+    for (const id of renderFocusIds!) combined.add(id);
+    return combined;
+  }, [familyFocusIds, renderFocusIds]);
+
   const renderPeople = useMemo(
     () =>
-      renderFocusIds
-        ? people.filter((person) => renderFocusIds.has(person.id))
+      combinedFocusIds
+        ? people.filter((person) => combinedFocusIds.has(person.id))
         : people,
-    [people, renderFocusIds],
+    [people, combinedFocusIds],
   );
   const renderRelationships = useMemo(
     () =>
-      renderFocusIds
+      combinedFocusIds
         ? relationships.filter(
             (relationship) =>
-              renderFocusIds.has(relationship.fromPersonId) &&
-              renderFocusIds.has(relationship.toPersonId),
+              combinedFocusIds.has(relationship.fromPersonId) &&
+              combinedFocusIds.has(relationship.toPersonId),
           )
         : relationships,
-    [relationships, renderFocusIds],
+    [relationships, combinedFocusIds],
   );
   const layout = useMemo(
     () => computeLayout(renderPeople, renderRelationships),
@@ -209,7 +243,7 @@ function TreeCanvasInner({
     if (initialSelectedPersonId && people.some((p) => p.id === initialSelectedPersonId)) {
       didInitializeLineageRef.current = true;
       setSelectedPersonId(initialSelectedPersonId);
-      setLineageMode("birth");
+      setLineageMode("household");
       return;
     }
     if (!currentUserPersonId) return;
@@ -217,7 +251,7 @@ function TreeCanvasInner({
 
     didInitializeLineageRef.current = true;
     setSelectedPersonId(currentUserPersonId);
-    setLineageMode("birth");
+    setLineageMode("household");
   }, [currentUserPersonId, initialSelectedPersonId, people]);
 
   useEffect(() => {
@@ -231,10 +265,10 @@ function TreeCanvasInner({
       layout,
       selectedPersonId,
       currentUserPersonId,
-      renderFocusIds,
+      combinedFocusIds,
       activeDecade,
     );
-    const edgeList = buildEdges(renderRelationships, layout, renderFocusIds, renderPeople, activeDecade);
+    const edgeList = buildEdges(renderRelationships, layout, combinedFocusIds, renderPeople, activeDecade);
     setNodes(personNodes);
     setEdges(edgeList);
   }, [
@@ -243,7 +277,7 @@ function TreeCanvasInner({
     layout,
     selectedPersonId,
     currentUserPersonId,
-    renderFocusIds,
+    combinedFocusIds,
     activeDecade,
     setNodes,
     setEdges,
@@ -294,23 +328,25 @@ function TreeCanvasInner({
   const selectPerson = useCallback(
     (personId: string, focusCamera = true) => {
       setSelectedPersonId(personId);
-      const nextLineageMode = lineageMode === "full" ? "birth" : lineageMode;
+      const nextLineageMode = lineageMode === "full" ? "household" : lineageMode;
       if (lineageMode === "full") {
-        setLineageMode("birth");
+        setLineageMode("household");
       }
       if (focusCamera) {
-        const bounds =
-          getFocusBoundsForIds(
-            getLineageFocusIds(personId, relationships, nextLineageMode),
-            layoutRef.current,
-          );
+        const focusIds = getLineageFocusIds(personId, relationships, nextLineageMode);
+        const bounds = getFocusBoundsForIds(focusIds, layoutRef.current);
         if (bounds) {
-          reactFlow.fitBounds(bounds, { duration: 650, padding: 0.16 });
+          const shiftedBounds = {
+            ...bounds,
+            x: bounds.x - PERSON_BANNER_WIDTH / 2,
+            width: bounds.width + PERSON_BANNER_WIDTH / 2,
+          };
+          reactFlow.fitBounds(shiftedBounds, { duration: 650, padding: 0.22 });
           return;
         }
         const pos = layoutRef.current.get(personId);
         if (pos) {
-          reactFlow.setCenter(pos.x + 48, pos.y + 65, { duration: 600, zoom: 1.4 });
+          reactFlow.setCenter(pos.x + 48 - PERSON_BANNER_WIDTH / 2, pos.y + 65, { duration: 600, zoom: 1.4 });
         }
       }
     },
@@ -429,14 +465,6 @@ function TreeCanvasInner({
       reactFlow.setCenter(pos.x + 48, pos.y + 65, { duration: 600, zoom: 1.2 });
     }
   }, [currentUserPersonId, reactFlow, relationships]);
-
-  const handleZoomIn = useCallback(() => {
-    reactFlow.zoomIn({ duration: 300 });
-  }, [reactFlow]);
-
-  const handleZoomOut = useCallback(() => {
-    reactFlow.zoomOut({ duration: 300 });
-  }, [reactFlow]);
 
   const handleToggleEditMode = useCallback(() => {
     const next = !editMode;
@@ -1108,6 +1136,14 @@ function TreeCanvasInner({
             {treeName}
           </span>
 
+          {!editMode && (
+            <FamilySelector
+              people={people}
+              activeFamily={activeFamily}
+              onSelectFamily={setActiveFamily}
+            />
+          )}
+
           <div style={toolbarSegmentedStyle}>
             <a href={`/trees/${treeId}/atrium`} style={toolbarNavItemStyle(false)}>
               Atrium
@@ -1259,45 +1295,6 @@ function TreeCanvasInner({
         </div>
       </div>
 
-      {/* Left zoom controls */}
-      <div
-        style={{
-          position: "absolute",
-          left: 16,
-          bottom: 60,
-          zIndex: 10,
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-        }}
-      >
-        <button
-          onClick={handleZoomIn}
-          style={zoomControlStyle}
-        >
-          +
-        </button>
-        <button
-          onClick={handleZoomOut}
-          style={zoomControlStyle}
-        >
-          −
-        </button>
-        <button
-          onClick={handleLocateMe}
-          disabled={!currentUserPersonId}
-          title="Locate me"
-          style={{
-            ...zoomControlStyle,
-            cursor: !currentUserPersonId ? "default" : "pointer",
-            fontSize: 14,
-            color: !currentUserPersonId ? "var(--rule)" : "var(--moss)",
-          }}
-        >
-          ⊕
-        </button>
-      </div>
-
       {/* Decade rail */}
       {!editMode && availableDecades.length > 1 && (
         <DecadeRail
@@ -1360,135 +1357,6 @@ function TreeCanvasInner({
           </div>
         </div>
       )}
-
-      {/* Legend button */}
-      <div style={{ position: "absolute", left: 16, bottom: 18, zIndex: 10 }}>
-        <button
-          onClick={() => setShowLegend((v) => !v)}
-          style={{
-            ...toolbarButtonStyle,
-            fontSize: 11,
-            padding: "6px 11px",
-          }}
-        >
-          Legend
-        </button>
-
-        {/* Legend panel */}
-        {showLegend && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 36,
-              left: 0,
-              ...floatingPanelStyle,
-              padding: "14px 16px",
-              minWidth: 180,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 10,
-                color: "var(--ink-faded)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 10,
-              }}
-            >
-              Legend
-            </div>
-            {[
-              {
-                ring: "1.5px solid var(--rule)",
-                label: "Family member",
-              },
-              {
-                ring: "2px solid var(--moss)",
-                label: "That's you",
-              },
-              {
-                ring: "1.5px dashed var(--ink)",
-                label: "Selected",
-              },
-            ].map(({ ring, label }) => (
-              <div
-                key={label}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  marginBottom: 8,
-                }}
-              >
-                <div
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: "50%",
-                    border: ring,
-                    background: "var(--paper-deep)",
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 12,
-                    color: "var(--ink-soft)",
-                  }}
-                >
-                  {label}
-                </span>
-              </div>
-            ))}
-            <div
-              style={{
-                borderTop: "1px solid var(--rule)",
-                paddingTop: 8,
-                marginTop: 4,
-              }}
-            >
-              {[
-                { dash: "none", label: "Parent / child" },
-                { dash: "2 4", label: "Sibling" },
-                { dash: "4 4", label: "Spouse" },
-              ].map(({ dash, label }) => (
-                <div
-                  key={label}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginBottom: 6,
-                  }}
-                >
-                  <svg width="24" height="10">
-                    <line
-                      x1="0"
-                      y1="5"
-                      x2="24"
-                      y2="5"
-                      stroke="var(--rule)"
-                      strokeWidth="1.5"
-                      strokeDasharray={dash === "none" ? undefined : dash}
-                    />
-                  </svg>
-                  <span
-                    style={{
-                      fontFamily: "var(--font-ui)",
-                      fontSize: 12,
-                      color: "var(--ink-soft)",
-                    }}
-                  >
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Hover tooltip */}
       {hoveredPerson && hoverState && !selectedPersonId && !editMode && (
@@ -2056,12 +1924,14 @@ function TreeCanvasInner({
         </div>
       )}
 
-      {/* Cinematic person overlay */}
+      {/* Person side banner */}
       {!editMode && (
-        <CinematicPersonOverlay
+        <PersonBanner
           person={selectedPerson}
+          treeId={treeId}
           onClose={clearSelection}
-          onEnter={onPersonDetailClick}
+          onEnterLife={onPersonDetailClick}
+          onPersonUpdated={onConstellationChanged}
         />
       )}
     </div>
@@ -2461,23 +2331,6 @@ const subtleButtonStyle: React.CSSProperties = {
   borderRadius: 7,
   padding: "8px 12px",
   cursor: "pointer",
-};
-
-const zoomControlStyle: React.CSSProperties = {
-  width: 36,
-  height: 36,
-  background: "rgba(246,241,231,0.94)",
-  border: "1px solid var(--rule)",
-  borderRadius: 999,
-  cursor: "pointer",
-  fontFamily: "var(--font-ui)",
-  fontSize: 18,
-  color: "var(--ink)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  backdropFilter: "blur(10px)",
-  boxShadow: "0 14px 30px rgba(28,25,21,0.08)",
 };
 
 const toolbarButtonStyle: React.CSSProperties = {

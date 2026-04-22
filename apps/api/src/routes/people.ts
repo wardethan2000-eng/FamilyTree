@@ -35,6 +35,9 @@ import { mediaUrl } from "../lib/storage.js";
 
 const CreatePersonBody = z.object({
   displayName: z.string().min(1).max(200),
+  firstName: z.string().max(200).optional(),
+  lastName: z.string().max(200).optional(),
+  maidenName: z.string().max(200).optional(),
   alsoKnownAs: z.array(z.string()).optional(),
   essenceLine: z.string().max(255).optional(),
   birthDateText: z.string().max(100).optional(),
@@ -49,6 +52,9 @@ const CreatePersonBody = z.object({
 
 const UpdatePersonBody = z.object({
   displayName: z.string().min(1).max(200).optional(),
+  firstName: z.string().max(200).nullable().optional(),
+  lastName: z.string().max(200).nullable().optional(),
+  maidenName: z.string().max(200).nullable().optional(),
   alsoKnownAs: z.array(z.string()).optional(),
   essenceLine: z.string().max(255).nullable().optional(),
   birthDateText: z.string().max(100).nullable().optional(),
