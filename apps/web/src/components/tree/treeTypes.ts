@@ -5,6 +5,8 @@ export type PersonNodeData = {
   name: string;
   birthYear?: number | null;
   deathYear?: number | null;
+  birthDateText?: string | null;
+  deathDateText?: string | null;
   portraitUrl?: string | null;
   essenceLine?: string | null;
   isYou: boolean;
@@ -44,6 +46,8 @@ export interface ApiPerson {
   name: string;
   birthYear?: number | null;
   deathYear?: number | null;
+  birthDateText?: string | null;
+  deathDateText?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   maidenName?: string | null;

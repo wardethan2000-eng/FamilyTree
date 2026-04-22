@@ -198,9 +198,20 @@ function TreeCanvasInner({
         }
       }
     }
+    // Include spouses of family members even if they have a different last name
+    for (const rel of relationships) {
+      if (rel.type === "spouse") {
+        if (ids.has(rel.fromPersonId) && !ids.has(rel.toPersonId)) {
+          ids.add(rel.toPersonId);
+        }
+        if (ids.has(rel.toPersonId) && !ids.has(rel.fromPersonId)) {
+          ids.add(rel.fromPersonId);
+        }
+      }
+    }
     if (ids.size === 0) return null;
     return ids;
-  }, [people, activeFamily]);
+  }, [people, relationships, activeFamily]);
 
   const displayFocusIds = useMemo(() => {
     if (familyFocusIds && lineageFocusIds) {

@@ -1791,6 +1791,8 @@ export function buildPersonNodes(
         name: person.name,
         birthYear: person.birthYear,
         deathYear: person.deathYear,
+        birthDateText: person.birthDateText ?? null,
+        deathDateText: person.deathDateText ?? null,
         portraitUrl: person.portraitUrl,
         essenceLine: person.essenceLine,
         isYou: person.id === currentUserId,

@@ -69,6 +69,8 @@ export default function TreePage() {
       name: (p.displayName ?? p.name ?? "") as string,
       birthYear: extractYear(p.birthDateText as string | null),
       deathYear: extractYear(p.deathDateText as string | null),
+      birthDateText: (p.birthDateText ?? null) as string | null,
+      deathDateText: (p.deathDateText ?? null) as string | null,
       firstName: (p.firstName ?? null) as string | null,
       lastName: (p.lastName ?? null) as string | null,
       maidenName: (p.maidenName ?? null) as string | null,
