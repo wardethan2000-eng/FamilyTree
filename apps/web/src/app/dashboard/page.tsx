@@ -15,6 +15,7 @@ type TreeMembership = {
   name: string;
   role: string;
   createdAt: string;
+  founderUserId?: string;
 };
 
 type DashboardTreeSummary = {
@@ -22,6 +23,7 @@ type DashboardTreeSummary = {
   stats: TreeHomePayload["stats"];
   coverage: TreeHomePayload["coverage"];
   heroCandidates: TreeHomePayload["heroCandidates"];
+  isFoundedByYou: boolean;
 };
 
 function DashboardContent() {
@@ -33,6 +35,10 @@ function DashboardContent() {
   const [summaries, setSummaries] = useState<DashboardTreeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [creatingLineage, setCreatingLineage] = useState(false);
+  const [newLineageName, setNewLineageName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [submittingLineage, setSubmittingLineage] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -71,6 +77,8 @@ function DashboardContent() {
               stats: payload.stats,
               coverage: payload.coverage,
               heroCandidates: payload.heroCandidates,
+              isFoundedByYou:
+                !!tree.founderUserId && tree.founderUserId === session?.user?.id,
             } satisfies DashboardTreeSummary;
           }),
         );
@@ -107,6 +115,36 @@ function DashboardContent() {
 
     void fetchDashboard();
   }, [preferredTreeId, router, session]);
+
+  async function handleCreateLineage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = newLineageName.trim();
+    if (!trimmed) {
+      setCreateError("Give this lineage a name before creating it.");
+      return;
+    }
+    setSubmittingLineage(true);
+    setCreateError(null);
+    try {
+      const res = await fetch(`${API}/api/trees`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        throw new Error("Could not create lineage.");
+      }
+      const created = (await res.json()) as { id: string };
+      router.push(`/trees/${created.id}`);
+    } catch (error) {
+      setCreateError(
+        error instanceof Error ? error.message : "Could not create lineage.",
+      );
+    } finally {
+      setSubmittingLineage(false);
+    }
+  }
 
   const primarySummary = summaries[0] ?? null;
   const secondarySummaries = summaries.slice(1);
@@ -214,11 +252,30 @@ function DashboardContent() {
               color: "var(--ink)",
             }}
           >
-            Your archive foyer
+            Your lineages
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <button
+            onClick={() => {
+              setCreatingLineage(true);
+              setCreateError(null);
+              setNewLineageName("");
+            }}
+            style={{
+              border: "1px solid rgba(128,107,82,0.2)",
+              background: "var(--ink)",
+              color: "white",
+              borderRadius: 999,
+              padding: "8px 14px",
+              cursor: "pointer",
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+            }}
+          >
+            + Create lineage
+          </button>
           <span
             style={{
               fontFamily: "var(--font-ui)",
@@ -262,10 +319,10 @@ function DashboardContent() {
               fontSize: "clamp(34px, 5vw, 56px)",
               lineHeight: 1.02,
               color: "var(--ink)",
-              maxWidth: "12ch",
+              maxWidth: "14ch",
             }}
           >
-            Step into the family archives.
+            Step between your family lineages.
           </div>
           <div
             style={{
@@ -277,9 +334,10 @@ function DashboardContent() {
               color: "rgba(53,44,33,0.74)",
             }}
           >
-            This is the cross-tree foyer. Choose an archive to enter, revisit a memory already
-            surfacing there, or move between branches of family history without dropping into a
-            utility dashboard.
+            You can belong to many lineages — the ones you founded and the ones you were
+            welcomed into. Shared relatives are the bridges between them. Open a lineage
+            to step inside it, or create a new one for a spouse, a maternal line, or a
+            chosen family.
           </div>
         </section>
 
@@ -291,12 +349,12 @@ function DashboardContent() {
             marginBottom: 36,
           }}
         >
-          <StatTile label="Archives" value={`${summaries.length}`} />
+          <StatTile label="Lineages" value={`${summaries.length}`} />
           <StatTile label="People" value={`${totalPeople}`} />
           <StatTile label="Memories" value={`${totalMemories}`} />
           <StatTile
-            label="Primary route"
-            value={primarySummary ? `${primarySummary.tree.name}` : "Archive"}
+            label="Primary lineage"
+            value={primarySummary ? `${primarySummary.tree.name}` : "Lineage"}
           />
         </section>
 
@@ -411,7 +469,7 @@ function DashboardContent() {
                   color: "var(--ink)",
                 }}
               >
-                Other archives
+                Other lineages
               </h2>
               <span
                 style={{
@@ -420,7 +478,7 @@ function DashboardContent() {
                   color: "var(--ink-faded)",
                 }}
               >
-                Move between the rest of your family spaces without leaving the foyer.
+                Move between the rest of your family spaces — founded by you or shared with you.
               </span>
             </div>
 
@@ -432,15 +490,35 @@ function DashboardContent() {
               }}
             >
               {secondarySummaries.map((summary) => (
-                <TreeArchiveCard
-                  key={summary.tree.id}
-                  treeName={summary.tree.name}
-                  role={summary.tree.role}
-                  stats={summary.stats}
-                  coverage={summary.coverage}
-                  heroMemory={summary.heroCandidates[0] ?? null}
-                  href={`/trees/${summary.tree.id}/atrium`}
-                />
+                <div key={summary.tree.id} style={{ position: "relative" }}>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 14,
+                      right: 14,
+                      zIndex: 2,
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 10,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: summary.isFoundedByYou ? "var(--moss)" : "rgba(63,53,41,0.55)",
+                      background: "rgba(255,250,244,0.84)",
+                      border: "1px solid rgba(128,107,82,0.18)",
+                      borderRadius: 999,
+                      padding: "3px 8px",
+                    }}
+                  >
+                    {summary.isFoundedByYou ? "Founded by you" : "Shared with you"}
+                  </div>
+                  <TreeArchiveCard
+                    treeName={summary.tree.name}
+                    role={summary.tree.role}
+                    stats={summary.stats}
+                    coverage={summary.coverage}
+                    heroMemory={summary.heroCandidates[0] ?? null}
+                    href={`/trees/${summary.tree.id}/atrium`}
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -459,12 +537,134 @@ function DashboardContent() {
                 maxWidth: 720,
               }}
             >
-              Only one archive is open right now. If more family branches are added later, they
-              will surface here as companion archives in the foyer.
+              Only one lineage is open right now. Create another for a spouse-family line,
+              a maternal branch, or a chosen family — shared relatives will become the bridges
+              between them.
             </div>
           </section>
         )}
       </main>
+
+      {creatingLineage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (!submittingLineage) setCreatingLineage(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(28,25,21,0.55)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <form
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleCreateLineage}
+            style={{
+              maxWidth: 440,
+              width: "100%",
+              background: "rgba(252,248,242,0.98)",
+              borderRadius: 18,
+              border: "1px solid rgba(128,107,82,0.2)",
+              padding: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              boxShadow: "0 24px 60px rgba(40,30,18,0.3)",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 24,
+                color: "var(--ink)",
+              }}
+            >
+              Name a new lineage
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                lineHeight: 1.6,
+                color: "rgba(53,44,33,0.72)",
+              }}
+            >
+              Lineages can be a family name like{" "}
+              <em>Ward Family</em> or <em>Karsen Family</em>, a line like{" "}
+              <em>Maternal Line</em>, or a framing like <em>Chosen Family</em>.
+            </div>
+            <input
+              autoFocus
+              value={newLineageName}
+              onChange={(event) => setNewLineageName(event.target.value)}
+              placeholder="e.g. Karsen Family"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 16,
+                padding: "10px 12px",
+                border: "1px solid rgba(128,107,82,0.3)",
+                borderRadius: 10,
+                background: "white",
+                color: "var(--ink)",
+              }}
+            />
+            {createError && (
+              <div
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  color: "#8a2a1c",
+                }}
+              >
+                {createError}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                disabled={submittingLineage}
+                onClick={() => setCreatingLineage(false)}
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  background: "transparent",
+                  color: "var(--ink-faded)",
+                  border: "1px solid rgba(128,107,82,0.2)",
+                  borderRadius: 999,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingLineage}
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  background: "var(--ink)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 999,
+                  padding: "8px 16px",
+                  cursor: submittingLineage ? "default" : "pointer",
+                }}
+              >
+                {submittingLineage ? "Creating…" : "Create lineage"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

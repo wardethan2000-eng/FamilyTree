@@ -1002,6 +1002,146 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * GET /api/people/:personId/available-trees
+   *
+   * Lists every tree the requesting user belongs to, annotated with whether
+   * the person is already in that tree's scope and whether the user can add
+   * them. Intended for the person-page "Add to another lineage" workflow.
+   */
+  app.get("/api/people/:personId/available-trees", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { personId } = request.params as { personId: string };
+
+    const personExists = await db.query.people.findFirst({
+      where: (p, { eq }) => eq(p.id, personId),
+      columns: { id: true },
+    });
+    if (!personExists) {
+      return reply.status(404).send({ error: "Person not found" });
+    }
+
+    const memberships = await db.query.treeMemberships.findMany({
+      where: (t, { eq }) => eq(t.userId, session.user.id),
+      with: { tree: true },
+    });
+
+    const results = await Promise.all(
+      memberships.map(async (membership) => {
+        const alreadyInScope = await isPersonInTreeScope(
+          membership.treeId,
+          personId,
+        );
+        const canAddToScope =
+          !alreadyInScope && canManageTreeScope(membership.role);
+        return {
+          treeId: membership.tree.id,
+          treeName: membership.tree.name,
+          role: membership.role,
+          alreadyInScope,
+          canAddToScope,
+        };
+      }),
+    );
+
+    return reply.send(results);
+  });
+
+  /**
+   * GET /api/trees/:treeId/people/:personId/scope-conflicts?targetTreeId=:id
+   *
+   * Preflight duplicate detection before adding a shared person into another
+   * lineage. Returns whether the target already has the person in scope, and
+   * any likely-duplicate person records in the target tree so the user can
+   * consciously choose to reuse, merge, or proceed with the add.
+   */
+  app.get(
+    "/api/trees/:treeId/people/:personId/scope-conflicts",
+    async (request, reply) => {
+      const session = await getSession(request.headers);
+      if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+      const { treeId, personId } = request.params as {
+        treeId: string;
+        personId: string;
+      };
+      const { targetTreeId } = request.query as { targetTreeId?: string };
+
+      if (!targetTreeId) {
+        return reply.status(400).send({ error: "targetTreeId is required" });
+      }
+
+      const sourceMembership = await verifyMembership(treeId, session.user.id);
+      if (!sourceMembership) {
+        return reply.status(403).send({ error: "Not a member of this tree" });
+      }
+      const targetMembership = await verifyMembership(
+        targetTreeId,
+        session.user.id,
+      );
+      if (!targetMembership) {
+        return reply
+          .status(403)
+          .send({ error: "Not a member of the target tree" });
+      }
+
+      const personInScope = await isPersonInTreeScope(treeId, personId);
+      if (!personInScope) {
+        return reply.status(404).send({ error: "Person not found" });
+      }
+
+      const targetTree = await db.query.trees.findFirst({
+        where: (t, { eq }) => eq(t.id, targetTreeId),
+        columns: { id: true, name: true },
+      });
+      if (!targetTree) {
+        return reply.status(404).send({ error: "Target tree not found" });
+      }
+
+      const existingScopedMatch = await isPersonInTreeScope(
+        targetTreeId,
+        personId,
+      );
+
+      const allDuplicates = await listLikelyDuplicatePeople(personId);
+      const duplicateCandidates = allDuplicates
+        ? await Promise.all(
+            allDuplicates.map(async (candidate) => {
+              const inTargetScope = await isPersonInTreeScope(
+                targetTreeId,
+                candidate.id,
+              );
+              if (!inTargetScope) return null;
+              return {
+                personId: candidate.id,
+                displayName: candidate.displayName,
+                confidence: candidate.score,
+                reasons: candidate.reasons,
+                portraitUrl: candidate.portraitMedia
+                  ? mediaUrl(candidate.portraitMedia.objectKey)
+                  : null,
+                birthDateText: candidate.birthDateText,
+                deathDateText: candidate.deathDateText,
+              };
+            }),
+          )
+        : [];
+
+      return reply.send({
+        targetTree: { id: targetTree.id, name: targetTree.name },
+        existingScopedMatch,
+        canAddToScope:
+          !existingScopedMatch && canManageTreeScope(targetMembership.role),
+        duplicateCandidates: duplicateCandidates.filter(
+          (candidate): candidate is NonNullable<typeof candidate> =>
+            candidate !== null,
+        ),
+      });
+    },
+  );
+
   app.patch("/api/trees/:treeId/people/:personId", async (request, reply) => {
     const session = await getSession(request.headers);
     if (!session) return reply.status(401).send({ error: "Unauthorized" });

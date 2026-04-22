@@ -283,6 +283,37 @@ export default function PersonPage({
   const [mergingDuplicateId, setMergingDuplicateId] = useState<string | null>(null);
   const [mergeError, setMergeError] = useState<string | null>(null);
 
+  // Add-to-another-lineage workflow
+  type AvailableTree = {
+    treeId: string;
+    treeName: string;
+    role: string;
+    alreadyInScope: boolean;
+    canAddToScope: boolean;
+  };
+  type ScopeConflictResponse = {
+    targetTree: { id: string; name: string };
+    existingScopedMatch: boolean;
+    canAddToScope: boolean;
+    duplicateCandidates: Array<{
+      personId: string;
+      displayName: string;
+      confidence: number;
+      reasons: string[];
+      portraitUrl: string | null;
+      birthDateText: string | null;
+      deathDateText: string | null;
+    }>;
+  };
+  const [addLineageOpen, setAddLineageOpen] = useState(false);
+  const [availableLineages, setAvailableLineages] = useState<AvailableTree[]>([]);
+  const [availableLineagesLoading, setAvailableLineagesLoading] = useState(false);
+  const [selectedTargetTreeId, setSelectedTargetTreeId] = useState<string | null>(null);
+  const [scopeConflict, setScopeConflict] = useState<ScopeConflictResponse | null>(null);
+  const [conflictLoading, setConflictLoading] = useState(false);
+  const [submittingScopeAdd, setSubmittingScopeAdd] = useState(false);
+  const [addLineageError, setAddLineageError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isPending && !session) router.replace("/auth/signin");
   }, [session, isPending, router]);
@@ -399,6 +430,92 @@ export default function PersonPage({
       { credentials: "include" },
     );
     if (res.ok) setCrossTreeLinks((await res.json()) as CrossTreeLink[]);
+  }
+
+  async function openAddLineageDialog() {
+    setAddLineageOpen(true);
+    setAddLineageError(null);
+    setSelectedTargetTreeId(null);
+    setScopeConflict(null);
+    setAvailableLineagesLoading(true);
+    try {
+      const res = await fetch(`${API}/api/people/${personId}/available-trees`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Could not load your lineages.");
+      }
+      setAvailableLineages((await res.json()) as AvailableTree[]);
+    } catch (error) {
+      setAddLineageError(
+        error instanceof Error ? error.message : "Could not load your lineages.",
+      );
+      setAvailableLineages([]);
+    } finally {
+      setAvailableLineagesLoading(false);
+    }
+  }
+
+  function closeAddLineageDialog() {
+    if (submittingScopeAdd) return;
+    setAddLineageOpen(false);
+    setScopeConflict(null);
+    setSelectedTargetTreeId(null);
+    setAddLineageError(null);
+  }
+
+  async function selectTargetLineage(targetTreeId: string) {
+    setSelectedTargetTreeId(targetTreeId);
+    setScopeConflict(null);
+    setConflictLoading(true);
+    setAddLineageError(null);
+    try {
+      const res = await fetch(
+        `${API}/api/trees/${treeId}/people/${personId}/scope-conflicts?targetTreeId=${targetTreeId}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) {
+        throw new Error("Could not check for duplicates in that lineage.");
+      }
+      setScopeConflict((await res.json()) as ScopeConflictResponse);
+    } catch (error) {
+      setAddLineageError(
+        error instanceof Error ? error.message : "Could not check for duplicates.",
+      );
+    } finally {
+      setConflictLoading(false);
+    }
+  }
+
+  async function confirmAddToLineage() {
+    if (!selectedTargetTreeId) return;
+    setSubmittingScopeAdd(true);
+    setAddLineageError(null);
+    try {
+      const res = await fetch(
+        `${API}/api/trees/${selectedTargetTreeId}/scope/people`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ personId }),
+        },
+      );
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? "Could not add to that lineage.");
+      }
+      setAddLineageOpen(false);
+      setScopeConflict(null);
+      setSelectedTargetTreeId(null);
+      await Promise.all([loadVisibleTrees(), loadCrossTreeLinks()]);
+    } catch (error) {
+      setAddLineageError(
+        error instanceof Error ? error.message : "Could not add to that lineage.",
+      );
+    } finally {
+      setSubmittingScopeAdd(false);
+    }
   }
 
   async function loadDuplicateCandidates() {
@@ -1178,35 +1295,77 @@ export default function PersonPage({
                 )}
                 {sortedVisibleTrees.length > 0 && (
                   <div style={{ display: "flex", gap: 30, alignItems: "flex-start" }}>
-                    <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", width: 120, textTransform: "uppercase", letterSpacing: "0.05em" }}>Trees</span>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", width: 120, textTransform: "uppercase", letterSpacing: "0.05em" }}>Lineages</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
                       {sortedVisibleTrees.map((tree) => (
-                        <button
+                        <div
                           key={tree.id}
-                          type="button"
-                          onClick={() => router.push(`/trees/${tree.id}/people/${person.id}`)}
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 8,
-                            border: "none",
-                            background: "none",
-                            padding: 0,
-                            textAlign: "left",
-                            cursor: "pointer",
+                            gap: 10,
+                            flexWrap: "wrap",
                           }}
                         >
-                          <span style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--ink)" }}>
-                            {tree.name}
-                          </span>
-                          {tree.id === person.homeTreeId && (
-                            <span style={pillStyle}>home</span>
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/trees/${tree.id}/people/${person.id}`)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              border: "none",
+                              background: "none",
+                              padding: 0,
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--ink)" }}>
+                              {tree.name}
+                            </span>
+                            {tree.id === person.homeTreeId && (
+                              <span style={pillStyle}>home</span>
+                            )}
+                            {tree.id === treeId && (
+                              <span style={pillStyle}>current</span>
+                            )}
+                          </button>
+                          {tree.id !== treeId && (
+                            <a
+                              href={`/trees/${tree.id}?focusPersonId=${person.id}`}
+                              style={{
+                                fontFamily: "var(--font-ui)",
+                                fontSize: 12,
+                                color: "var(--moss)",
+                                textDecoration: "none",
+                              }}
+                            >
+                              Open in tree →
+                            </a>
                           )}
-                          {tree.id === treeId && (
-                            <span style={pillStyle}>current</span>
-                          )}
-                        </button>
+                        </div>
                       ))}
+                      {canManageTreeVisibility && (
+                        <button
+                          type="button"
+                          onClick={openAddLineageDialog}
+                          style={{
+                            alignSelf: "flex-start",
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 13,
+                            color: "var(--moss)",
+                            background: "none",
+                            border: "1px solid var(--moss)",
+                            borderRadius: 999,
+                            padding: "6px 12px",
+                            cursor: "pointer",
+                            marginTop: 4,
+                          }}
+                        >
+                          + Add to another lineage
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1636,6 +1795,308 @@ export default function PersonPage({
           defaultKind={memoryComposerKind}
           subjectName={person.displayName}
         />
+      )}
+
+      {addLineageOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={closeAddLineageDialog}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 60,
+            background: "rgba(28,25,21,0.55)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              maxWidth: 540,
+              width: "100%",
+              background: "rgba(252,248,242,0.98)",
+              borderRadius: 18,
+              border: "1px solid rgba(128,107,82,0.2)",
+              padding: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              boxShadow: "0 24px 60px rgba(40,30,18,0.3)",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 24,
+                  color: "var(--ink)",
+                }}
+              >
+                Add {person.displayName} to another lineage
+              </div>
+              <div
+                style={{
+                  marginTop: 6,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  color: "rgba(53,44,33,0.72)",
+                }}
+              >
+                Shared people bridge lineages. Choose a lineage below. If a likely match
+                already lives there, you&apos;ll see it before anything is saved.
+              </div>
+            </div>
+
+            {availableLineagesLoading ? (
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)" }}>
+                Loading your lineages…
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {availableLineages
+                  .filter((lineage) => lineage.treeId !== treeId)
+                  .map((lineage) => {
+                    const disabled =
+                      lineage.alreadyInScope || !lineage.canAddToScope;
+                    const isSelected = selectedTargetTreeId === lineage.treeId;
+                    return (
+                      <button
+                        key={lineage.treeId}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => selectTargetLineage(lineage.treeId)}
+                        style={{
+                          textAlign: "left",
+                          fontFamily: "var(--font-body)",
+                          fontSize: 15,
+                          color: disabled ? "var(--ink-faded)" : "var(--ink)",
+                          background: isSelected
+                            ? "rgba(210,182,133,0.22)"
+                            : "rgba(255,250,244,0.74)",
+                          border: `1px solid ${isSelected ? "var(--moss)" : "rgba(128,107,82,0.2)"}`,
+                          borderRadius: 12,
+                          padding: "10px 14px",
+                          cursor: disabled ? "not-allowed" : "pointer",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <span>{lineage.treeName}</span>
+                        <span
+                          style={{
+                            fontFamily: "var(--font-ui)",
+                            fontSize: 11,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.08em",
+                            color: "var(--ink-faded)",
+                          }}
+                        >
+                          {lineage.alreadyInScope
+                            ? "Already here"
+                            : lineage.canAddToScope
+                            ? lineage.role
+                            : `${lineage.role} · no permission`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                {availableLineages.filter((l) => l.treeId !== treeId).length === 0 && (
+                  <div style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)" }}>
+                    You don&apos;t belong to any other lineages yet. Create one from your
+                    lineage foyer to bring {person.displayName.split(" ")[0]} along.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {conflictLoading && (
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)" }}>
+                Checking for possible duplicates in that lineage…
+              </div>
+            )}
+
+            {scopeConflict && !conflictLoading && (
+              <div
+                style={{
+                  border: "1px solid rgba(128,107,82,0.2)",
+                  borderRadius: 12,
+                  padding: 14,
+                  background: "rgba(245,238,228,0.72)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                {scopeConflict.existingScopedMatch ? (
+                  <div
+                    style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink)" }}
+                  >
+                    {person.displayName} is already in {scopeConflict.targetTree.name}.
+                  </div>
+                ) : scopeConflict.duplicateCandidates.length > 0 ? (
+                  <>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        color: "#8a5a1c",
+                      }}
+                    >
+                      Possible duplicates in {scopeConflict.targetTree.name}
+                    </div>
+                    <ul
+                      style={{
+                        margin: 0,
+                        paddingLeft: 18,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {scopeConflict.duplicateCandidates.map((candidate) => (
+                        <li
+                          key={candidate.personId}
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: 14,
+                            color: "var(--ink)",
+                          }}
+                        >
+                          <a
+                            href={`/trees/${scopeConflict.targetTree.id}/people/${candidate.personId}`}
+                            style={{ color: "var(--moss)", textDecoration: "underline" }}
+                          >
+                            {candidate.displayName}
+                          </a>
+                          {(candidate.birthDateText || candidate.deathDateText) && (
+                            <span
+                              style={{
+                                marginLeft: 8,
+                                fontFamily: "var(--font-ui)",
+                                fontSize: 12,
+                                color: "var(--ink-faded)",
+                              }}
+                            >
+                              {[candidate.birthDateText, candidate.deathDateText]
+                                .filter(Boolean)
+                                .join(" – ")}
+                            </span>
+                          )}
+                          {candidate.reasons.length > 0 && (
+                            <span
+                              style={{
+                                marginLeft: 8,
+                                fontFamily: "var(--font-ui)",
+                                fontSize: 11,
+                                color: "var(--ink-faded)",
+                              }}
+                            >
+                              ({candidate.reasons.join(", ")})
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 12,
+                        color: "var(--ink-faded)",
+                      }}
+                    >
+                      Review and merge from the person page in that lineage if any of these
+                      are the same person, or continue to add this shared record alongside
+                      them.
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--ink)" }}
+                  >
+                    No likely duplicates found in {scopeConflict.targetTree.name}.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {addLineageError && (
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "#8a2a1c" }}>
+                {addLineageError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                disabled={submittingScopeAdd}
+                onClick={closeAddLineageDialog}
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  background: "transparent",
+                  color: "var(--ink-faded)",
+                  border: "1px solid rgba(128,107,82,0.2)",
+                  borderRadius: 999,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !selectedTargetTreeId ||
+                  submittingScopeAdd ||
+                  conflictLoading ||
+                  (scopeConflict?.existingScopedMatch ?? false) ||
+                  !(scopeConflict?.canAddToScope ?? true)
+                }
+                onClick={confirmAddToLineage}
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  background: "var(--ink)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 999,
+                  padding: "8px 16px",
+                  cursor:
+                    !selectedTargetTreeId ||
+                    submittingScopeAdd ||
+                    conflictLoading ||
+                    (scopeConflict?.existingScopedMatch ?? false)
+                      ? "default"
+                      : "pointer",
+                  opacity:
+                    !selectedTargetTreeId ||
+                    (scopeConflict?.existingScopedMatch ?? false) ||
+                    !(scopeConflict?.canAddToScope ?? true)
+                      ? 0.55
+                      : 1,
+                }}
+              >
+                {submittingScopeAdd
+                  ? "Adding…"
+                  : scopeConflict?.duplicateCandidates.length
+                  ? "Add anyway"
+                  : "Add to lineage"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

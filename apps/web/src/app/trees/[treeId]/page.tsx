@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { AnimatePresence } from "framer-motion";
 import { TreeCanvas } from "@/components/tree/TreeCanvas";
@@ -45,7 +45,9 @@ interface TreeMemory {
 export default function TreePage() {
   const router = useRouter();
   const params = useParams<{ treeId: string }>();
+  const searchParams = useSearchParams();
   const { treeId } = params;
+  const focusPersonId = searchParams.get("focusPersonId");
   const { data: session, isPending } = useSession();
   const needsNormalization = !isCanonicalTreeId(treeId);
 
@@ -311,6 +313,7 @@ export default function TreePage() {
         people={people}
         relationships={relationships}
         currentUserPersonId={currentUserPersonId}
+        initialSelectedPersonId={focusPersonId}
         onDriftClick={() => setDriftOpen(true)}
         onPersonDetailClick={handlePersonDetail}
         onAddMemoryClick={() => setWizardOpen(true)}
