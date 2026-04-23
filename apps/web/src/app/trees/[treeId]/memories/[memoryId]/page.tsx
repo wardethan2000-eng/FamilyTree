@@ -425,6 +425,10 @@ export default function MemoryPage({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [addingMedia, setAddingMedia] = useState(false);
+  const [addMediaError, setAddMediaError] = useState<string | null>(null);
+  const [addMediaProgress, setAddMediaProgress] = useState<{ current: number; total: number } | null>(null);
+  const addMediaInputRef = useRef<HTMLInputElement | null>(null);
   const perspectiveComposerRef = useRef<HTMLDivElement | null>(null);
   const normalizingTreeId = !isCanonicalTreeId(treeId);
 
@@ -519,6 +523,76 @@ export default function MemoryPage({
     setEditPlaceLabel(memory?.place?.label ?? "");
     setEditError(null);
   }, [memory?.id]);
+
+  const handleAddMediaFiles = useCallback(
+    async (files: File[]) => {
+      if (!memory || files.length === 0) return;
+      setAddingMedia(true);
+      setAddMediaError(null);
+      setAddMediaProgress({ current: 0, total: files.length });
+      try {
+        const mediaIds: string[] = [];
+        for (let i = 0; i < files.length; i += 1) {
+          const file = files[i];
+          if (!file) continue;
+          setAddMediaProgress({ current: i + 1, total: files.length });
+          const presignRes = await fetch(`${API}/api/trees/${treeId}/media/presign`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type || "application/octet-stream",
+              sizeBytes: file.size,
+            }),
+          });
+          if (!presignRes.ok) {
+            const data = (await presignRes.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(data?.error ?? `Failed to prepare upload for ${file.name}.`);
+          }
+          const { mediaId, uploadUrl } = (await presignRes.json()) as {
+            mediaId: string;
+            uploadUrl: string;
+          };
+          const uploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+          if (!uploadRes.ok) {
+            throw new Error(`Failed to upload ${file.name}.`);
+          }
+          mediaIds.push(mediaId);
+        }
+
+        const attachRes = await fetch(
+          `${API}/api/trees/${treeId}/memories/${memory.id}/media`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mediaIds }),
+          },
+        );
+        if (!attachRes.ok) {
+          const data = (await attachRes.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error ?? "Failed to attach media to this memory.");
+        }
+        const { mediaItems } = (await attachRes.json()) as {
+          mediaItems: MemoryMediaItem[];
+        };
+        setMemory((current) => (current ? { ...current, mediaItems } : current));
+      } catch (error) {
+        setAddMediaError(
+          error instanceof Error ? error.message : "Failed to add media to this memory.",
+        );
+      } finally {
+        setAddingMedia(false);
+        setAddMediaProgress(null);
+      }
+    },
+    [memory, treeId],
+  );
 
   const setMemoryTreeVisibility = useCallback(
     async (visibility: TreeVisibilityLevel | null) => {
@@ -1222,6 +1296,44 @@ export default function MemoryPage({
                       {editingMemory ? "Close editor" : "Edit memory"}
                     </button>
                   )}
+                  {memory.viewerCanEdit && (
+                    <>
+                      <input
+                        ref={addMediaInputRef}
+                        type="file"
+                        accept="image/*,video/*"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files ?? []);
+                          event.target.value = "";
+                          if (files.length > 0) {
+                            void handleAddMediaFiles(files);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={addingMedia}
+                        onClick={() => addMediaInputRef.current?.click()}
+                        style={{
+                          borderRadius: 999,
+                          border: "1px solid var(--rule)",
+                          background: "transparent",
+                          color: "var(--ink)",
+                          cursor: addingMedia ? "wait" : "pointer",
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 13,
+                          padding: "10px 16px",
+                          opacity: addingMedia ? 0.6 : 1,
+                        }}
+                      >
+                        {addingMedia && addMediaProgress
+                          ? `Uploading ${addMediaProgress.current}/${addMediaProgress.total}…`
+                          : "Add photos & videos"}
+                      </button>
+                    </>
+                  )}
                   {memory.viewerCanAddPerspective && (
                     <button
                       type="button"
@@ -1258,6 +1370,19 @@ export default function MemoryPage({
                       Delete memory
                     </button>
                   )}
+                </div>
+              )}
+
+              {addMediaError && (
+                <div
+                  role="alert"
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    color: "rgba(180, 50, 50, 0.9)",
+                  }}
+                >
+                  {addMediaError}
                 </div>
               )}
 

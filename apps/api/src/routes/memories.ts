@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as schema from "@tessera/database";
 import {
   canManageTreeScope,
@@ -1059,6 +1059,105 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         .returning();
 
       return reply.send(updated);
+    },
+  );
+
+  app.post(
+    "/api/trees/:treeId/memories/:memoryId/media",
+    async (request, reply) => {
+      const session = await getSession(request.headers);
+      if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+      const { treeId, memoryId } = request.params as {
+        treeId: string;
+        memoryId: string;
+      };
+
+      const membership = await db.query.treeMemberships.findFirst({
+        where: (t) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
+      });
+      if (!membership) {
+        return reply.status(403).send({ error: "Not a member of this tree" });
+      }
+      if (membership.role === "viewer") {
+        return reply.status(403).send({ error: "Viewers cannot edit memories" });
+      }
+
+      const Body = z.object({
+        mediaIds: z.array(z.string().uuid()).min(1).max(24),
+      });
+      const parsed = Body.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: "Invalid request body" });
+      }
+
+      const inScope = await isMemoryInTreeScope(treeId, memoryId);
+      if (!inScope) {
+        return reply.status(404).send({ error: "Memory not found in this tree" });
+      }
+
+      const existingMax = await db
+        .select({ max: sql<number | null>`max(${schema.memoryMedia.sortOrder})` })
+        .from(schema.memoryMedia)
+        .where(eq(schema.memoryMedia.memoryId, memoryId));
+      const startIndex = (existingMax[0]?.max ?? -1) + 1;
+
+      const uniqueIds = [...new Set(parsed.data.mediaIds)];
+
+      const ownedMedia = await db.query.media.findMany({
+        where: (m, { inArray, eq: eqFn, and: andFn }) =>
+          andFn(inArray(m.id, uniqueIds), eqFn(m.uploadedByUserId, session.user.id)),
+        columns: { id: true },
+      });
+      if (ownedMedia.length !== uniqueIds.length) {
+        return reply.status(403).send({ error: "One or more media items are not yours to attach." });
+      }
+
+      const alreadyAttached = await db.query.memoryMedia.findMany({
+        where: (mm, { eq: eqFn, inArray, and: andFn, isNotNull }) =>
+          andFn(
+            eqFn(mm.memoryId, memoryId),
+            isNotNull(mm.mediaId),
+            inArray(mm.mediaId, uniqueIds),
+          ),
+        columns: { mediaId: true },
+      });
+      const alreadySet = new Set(alreadyAttached.map((row) => row.mediaId));
+      const toInsert = uniqueIds.filter((id) => !alreadySet.has(id));
+
+      if (toInsert.length > 0) {
+        await db.insert(schema.memoryMedia).values(
+          toInsert.map((mediaId, offset) => ({
+            memoryId,
+            mediaId,
+            sortOrder: startIndex + offset,
+          })),
+        );
+      }
+
+      await db
+        .update(schema.memories)
+        .set({ updatedAt: new Date() })
+        .where(eq(schema.memories.id, memoryId));
+
+      const refreshed = await db.query.memoryMedia.findMany({
+        where: (mm, { eq: eqFn }) => eqFn(mm.memoryId, memoryId),
+        orderBy: (mm, { asc }) => [asc(mm.sortOrder)],
+        with: { media: true },
+      });
+      const items = refreshed.map((item) => ({
+        id: item.id,
+        mediaId: item.mediaId,
+        mediaUrl: item.media?.objectKey ? mediaUrl(item.media.objectKey) : null,
+        mimeType: item.media?.mimeType ?? null,
+        linkedMediaProvider: item.linkedMediaProvider,
+        linkedMediaPreviewUrl: item.linkedMediaPreviewUrl,
+        linkedMediaOpenUrl: item.linkedMediaOpenUrl,
+        linkedMediaLabel: item.linkedMediaLabel,
+        sortOrder: item.sortOrder,
+      }));
+
+      return reply.send({ memoryId, mediaItems: items });
     },
   );
 
