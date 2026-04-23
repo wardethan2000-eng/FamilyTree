@@ -28,6 +28,21 @@ interface DriftModeProps {
   apiBase: string;
 }
 
+interface DriftFeedMemory {
+  id: string;
+  primaryPersonId: string;
+  primaryPerson: { id: string; name: string; portraitUrl: string | null } | null;
+  kind: ApiMemory["kind"];
+  title: string;
+  body?: string | null;
+  transcriptText?: string | null;
+  transcriptStatus?: ApiMemory["transcriptStatus"];
+  dateOfEventText?: string | null;
+  mediaUrl?: string | null;
+  mimeType?: string | null;
+  mediaItems?: ApiMemoryMediaItem[];
+}
+
 const PHOTO_DURATION_MS = 6000;
 const STORY_MIN_MS = 8000;
 const STORY_MAX_MS = 45000;
@@ -88,57 +103,87 @@ export function DriftMode({
   const startedAtRef = useRef<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const reduceMotion = useMemo(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
 
   useEffect(() => {
     const fetchAll = async () => {
       setIsLoading(true);
-      const byMemoryId = new Map<string, { memory: ApiMemory; person: ApiPerson }>();
       const peopleById = new Map(people.map((p) => [p.id, p]));
-      await Promise.all(
-        people.map(async (person) => {
-          try {
-            const res = await fetch(
-              `${apiBase}/api/trees/${treeId}/people/${person.id}`,
-              { credentials: "include" }
-            );
-            if (!res.ok) return;
-            const data = await res.json();
-            for (const memory of (data.memories ?? []) as ApiMemory[]) {
-              if (byMemoryId.has(memory.id)) continue;
-              const subject =
-                peopleById.get(memory.primaryPersonId) ?? person;
-              byMemoryId.set(memory.id, {
-                memory: { ...memory, personId: subject.id },
-                person: subject,
-              });
-            }
-          } catch {
-            // ignore individual failures
-          }
-        })
-      );
+      let feed: DriftFeedMemory[] = [];
 
-      const memoryEntries = Array.from(byMemoryId.values());
-      // Shuffle at memory granularity so multi-item memories stay together.
-      for (let i = memoryEntries.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [memoryEntries[i], memoryEntries[j]] = [
-          memoryEntries[j]!,
-          memoryEntries[i]!,
-        ];
+      try {
+        const res = await fetch(`${apiBase}/api/trees/${treeId}/drift`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { memories: DriftFeedMemory[] };
+          feed = data.memories ?? [];
+        }
+      } catch {
+        // fall through to legacy loader
+      }
+
+      // Legacy fallback: if the dedicated endpoint is unavailable for any
+      // reason, aggregate via per-person fetches so Drift still works.
+      if (feed.length === 0) {
+        const byMemoryId = new Map<string, DriftFeedMemory>();
+        await Promise.all(
+          people.map(async (person) => {
+            try {
+              const res = await fetch(
+                `${apiBase}/api/trees/${treeId}/people/${person.id}`,
+                { credentials: "include" }
+              );
+              if (!res.ok) return;
+              const data = await res.json();
+              for (const memory of (data.memories ?? []) as DriftFeedMemory[]) {
+                if (!byMemoryId.has(memory.id)) {
+                  byMemoryId.set(memory.id, memory);
+                }
+              }
+            } catch {
+              // ignore
+            }
+          })
+        );
+        feed = Array.from(byMemoryId.values());
+        // Shuffle once client-side since server didn't.
+        for (let i = feed.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [feed[i], feed[j]] = [feed[j]!, feed[i]!];
+        }
       }
 
       const flat: DriftItem[] = [];
-      for (const { memory, person } of memoryEntries) {
+      for (const memory of feed) {
+        const subject: ApiPerson =
+          (memory.primaryPerson && peopleById.get(memory.primaryPerson.id)) ??
+          peopleById.get(memory.primaryPersonId) ??
+          (memory.primaryPerson
+            ? ({
+                id: memory.primaryPerson.id,
+                name: memory.primaryPerson.name,
+                portraitUrl: memory.primaryPerson.portraitUrl,
+              } as ApiPerson)
+            : null) ??
+          people[0]!;
+        const memoryWithPerson: ApiMemory = {
+          ...memory,
+          personId: subject.id,
+        } as ApiMemory;
+
         const mediaItems = (memory.mediaItems ?? []).filter(
-          (item) => item.mediaUrl || item.linkedMediaPreviewUrl || item.linkedMediaOpenUrl,
+          (item) =>
+            item.mediaUrl || item.linkedMediaPreviewUrl || item.linkedMediaOpenUrl,
         );
         if (mediaItems.length === 0) {
-          // Text-only memory (story, etc.) — or a memory whose media failed to surface.
           flat.push({
             key: `${memory.id}:solo`,
-            memory,
-            person,
+            memory: memoryWithPerson,
+            person: subject,
             media: null,
             itemIndex: 0,
             itemCount: 1,
@@ -147,8 +192,8 @@ export function DriftMode({
           mediaItems.forEach((item, idx) => {
             flat.push({
               key: `${memory.id}:${item.id}`,
-              memory,
-              person,
+              memory: memoryWithPerson,
+              person: subject,
               media: item,
               itemIndex: idx,
               itemCount: mediaItems.length,
@@ -196,6 +241,40 @@ export function DriftMode({
     );
   }, [items.length]);
 
+  const jumpToNextMemory = useCallback(() => {
+    if (items.length === 0) return;
+    setProgress(0);
+    setCurrentIndex((i) => {
+      const currentMemoryId = items[i]?.memory.id;
+      for (let step = 1; step <= items.length; step += 1) {
+        const idx = (i + step) % items.length;
+        if (items[idx]?.memory.id !== currentMemoryId) return idx;
+      }
+      return i;
+    });
+  }, [items]);
+
+  const jumpToPrevMemory = useCallback(() => {
+    if (items.length === 0) return;
+    setProgress(0);
+    setCurrentIndex((i) => {
+      const currentMemoryId = items[i]?.memory.id;
+      for (let step = 1; step <= items.length; step += 1) {
+        const idx = (i - step + items.length) % items.length;
+        if (items[idx]?.memory.id !== currentMemoryId) {
+          // Jump to the first item of that memory.
+          const memoryId = items[idx]?.memory.id;
+          let first = idx;
+          while (first > 0 && items[first - 1]?.memory.id === memoryId) {
+            first -= 1;
+          }
+          return first;
+        }
+      }
+      return i;
+    });
+  }, [items]);
+
   // Timer + progress for photo/text/link kinds (video/audio drive their own).
   useEffect(() => {
     if (!isPlaying || items.length === 0 || !currentKind) return;
@@ -238,8 +317,14 @@ export function DriftMode({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight") advance();
-      if (e.key === "ArrowLeft") stepBack();
+      if (e.key === "ArrowRight") {
+        if (e.shiftKey) jumpToNextMemory();
+        else advance();
+      }
+      if (e.key === "ArrowLeft") {
+        if (e.shiftKey) jumpToPrevMemory();
+        else stepBack();
+      }
       if (e.key === " ") {
         e.preventDefault();
         setIsPlaying((p) => !p);
@@ -247,7 +332,7 @@ export function DriftMode({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [advance, stepBack, onClose]);
+  }, [advance, stepBack, jumpToNextMemory, jumpToPrevMemory, onClose]);
 
   const resolvedMediaUrl = getProxiedMediaUrl(current?.media?.mediaUrl ?? null);
   const resolvedLinkPreview = current?.media?.linkedMediaPreviewUrl ?? null;
@@ -455,16 +540,45 @@ export function DriftMode({
             }}
           >
             {currentKind === "image" && resolvedMediaUrl && (
-              <img
-                src={resolvedMediaUrl}
-                alt={current.memory.title}
+              <div
                 style={{
                   maxHeight: "62vh",
                   maxWidth: "100%",
-                  objectFit: "contain",
-                  display: "block",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
-              />
+              >
+                <motion.img
+                  src={resolvedMediaUrl}
+                  alt={current.memory.title}
+                  initial={
+                    reduceMotion
+                      ? { scale: 1 }
+                      : { scale: 1.02, x: 0, y: 0 }
+                  }
+                  animate={
+                    reduceMotion
+                      ? { scale: 1 }
+                      : {
+                          scale: 1.08,
+                          x: ((current.itemIndex % 2 === 0 ? 1 : -1) * 18),
+                          y: ((current.itemIndex % 3 === 0 ? -1 : 1) * 10),
+                        }
+                  }
+                  transition={{
+                    duration: PHOTO_DURATION_MS / 1000,
+                    ease: "linear",
+                  }}
+                  style={{
+                    maxHeight: "62vh",
+                    maxWidth: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+              </div>
             )}
 
             {currentKind === "video" && resolvedMediaUrl && (
