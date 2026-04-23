@@ -179,6 +179,16 @@ function serializeMemoryForPersonSurface<
   TMemory extends {
     id: string;
     media: { objectKey: string; mimeType: string } | null;
+    mediaItems?: Array<{
+      id: string;
+      mediaId: string | null;
+      media: { objectKey: string; mimeType: string } | null;
+      linkedMediaProvider: string | null;
+      linkedMediaPreviewUrl: string | null;
+      linkedMediaOpenUrl: string | null;
+      linkedMediaLabel: string | null;
+      sortOrder: number;
+    }>;
     place: {
       id: string;
       label: string;
@@ -205,10 +215,23 @@ function serializeMemoryForPersonSurface<
 ) {
   const isDirectSubject = memory.personTags.some((tag) => tag.personId === personId);
 
+  const mediaItems = (memory.mediaItems ?? []).map((item) => ({
+    id: item.id,
+    mediaId: item.mediaId,
+    mediaUrl: item.media ? mediaUrl(item.media.objectKey) : null,
+    mimeType: item.media?.mimeType ?? null,
+    linkedMediaProvider: item.linkedMediaProvider,
+    linkedMediaPreviewUrl: item.linkedMediaPreviewUrl,
+    linkedMediaOpenUrl: item.linkedMediaOpenUrl,
+    linkedMediaLabel: item.linkedMediaLabel,
+    sortOrder: item.sortOrder,
+  }));
+
   return {
     ...memory,
     mediaUrl: memory.media ? mediaUrl(memory.media.objectKey) : null,
     mimeType: memory.media?.mimeType ?? null,
+    mediaItems,
     place: serializePlace(memory.place),
     memoryContext: isDirectSubject ? "direct" : "contextual",
     memoryReasonLabel: isDirectSubject

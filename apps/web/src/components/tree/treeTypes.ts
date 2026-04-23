@@ -66,6 +66,18 @@ export interface ApiRelationship {
   endDateText?: string | null;
 }
 
+export interface ApiMemoryMediaItem {
+  id: string;
+  mediaId: string | null;
+  mediaUrl: string | null;
+  mimeType: string | null;
+  linkedMediaProvider: string | null;
+  linkedMediaPreviewUrl: string | null;
+  linkedMediaOpenUrl: string | null;
+  linkedMediaLabel: string | null;
+  sortOrder: number;
+}
+
 export interface ApiMemory {
   id: string;
   primaryPersonId: string;
@@ -80,6 +92,7 @@ export interface ApiMemory {
   dateOfEventText?: string | null;
   mediaUrl?: string | null;
   mimeType?: string | null;
+  mediaItems?: ApiMemoryMediaItem[];
   /** Convenience: set by the fetching component to the owning person's id */
   personId?: string;
 }
