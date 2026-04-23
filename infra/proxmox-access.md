@@ -197,7 +197,9 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 - Alternate checkout: `/home/ubuntu/FamilyTree`
 - Current feature deployment checkout: `/home/ubuntu/heirloom-feature-family-map`
 - Previous non-git live directory: `/home/ubuntu/heirloom-memory-pages-live`
-- Current live checkout: `/home/ubuntu/heirloom-media-fix-live`
+- Current live checkout: `/home/ubuntu/heirloom-atrium-immersive-live`
+- Previous live checkout: `/home/ubuntu/tessera-onboarding-live`
+- Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
 - Previous live checkout: `/home/ubuntu/heirloom-dashboard-redesign-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
 - Backup directory on data VM: `~/familytree-backups`
