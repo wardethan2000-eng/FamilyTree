@@ -134,6 +134,13 @@
       "when": 1777000000000,
       "tag": "0018_prompt_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1776932207290,
+      "tag": "0019_elder_capture_tokens",
+      "breakpoints": true
     }
   ]
 }

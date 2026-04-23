@@ -163,6 +163,8 @@ export default function PromptCampaignsPage() {
         </div>
       )}
 
+      <ElderContributorsPanel treeId={treeId} people={people} />
+
       {showCreate && (
         <CreateCampaignModal
           treeId={treeId}
@@ -835,4 +837,403 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
   width: "100%",
   boxSizing: "border-box",
+};
+
+interface ElderToken {
+  id: string;
+  email: string;
+  displayName: string | null;
+  familyLabel: string | null;
+  associatedPerson: { id: string; name: string } | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  lastUsedUserAgent: string | null;
+  revokedAt: string | null;
+}
+
+function ElderContributorsPanel({
+  treeId,
+  people,
+}: {
+  treeId: string;
+  people: Person[];
+}) {
+  const [tokens, setTokens] = useState<ElderToken[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [justMinted, setJustMinted] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!treeId) return;
+    setLoading(true);
+    const res = await fetch(`${API}/api/trees/${treeId}/elder-capture-tokens`, {
+      credentials: "include",
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { tokens: ElderToken[] };
+      setTokens(d.tokens);
+    }
+    setLoading(false);
+  }, [treeId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const active = tokens.filter((t) => !t.revokedAt);
+
+  return (
+    <section
+      style={{
+        marginTop: 36,
+        padding: 20,
+        borderRadius: 10,
+        border: "1px solid var(--rule)",
+        background: "var(--paper-deep)",
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
+        <div>
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              fontWeight: 400,
+              fontSize: 22,
+              color: "var(--ink)",
+            }}
+          >
+            Memory contributors
+          </h2>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              color: "var(--ink-faded)",
+              maxWidth: 540,
+              lineHeight: 1.5,
+            }}
+          >
+            Send a relative their own private memory page (PWA). They install it
+            once from email and can share photos, voice notes, and stories any
+            time — no login.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowInvite(true)}
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: 13,
+            background: "var(--moss)",
+            color: "var(--paper)",
+            border: "none",
+            borderRadius: 6,
+            padding: "8px 14px",
+            cursor: "pointer",
+          }}
+        >
+          Invite a contributor
+        </button>
+      </header>
+
+      {justMinted && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            background: "var(--paper)",
+            border: "1px solid var(--rule)",
+            borderRadius: 6,
+            fontFamily: "var(--font-ui)",
+            fontSize: 12,
+            color: "var(--ink-soft)",
+            wordBreak: "break-all",
+          }}
+        >
+          Invite sent. Their private link: <code>{justMinted}</code>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ fontFamily: "var(--font-ui)", color: "var(--ink-faded)" }}>Loading…</p>
+      ) : active.length === 0 ? (
+        <p style={{ fontFamily: "var(--font-ui)", color: "var(--ink-faded)", margin: 0 }}>
+          No contributors yet.
+        </p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          {active.map((t) => (
+            <li
+              key={t.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 12px",
+                background: "var(--paper)",
+                border: "1px solid var(--rule)",
+                borderRadius: 6,
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ color: "var(--ink)", fontWeight: 500 }}>
+                  {t.displayName ?? t.email}
+                </div>
+                <div style={{ color: "var(--ink-faded)", fontSize: 12 }}>
+                  {t.email}
+                  {t.associatedPerson && ` · about ${t.associatedPerson.name}`}
+                </div>
+              </div>
+              <div style={{ color: "var(--ink-faded)", fontSize: 12 }}>
+                {t.lastUsedAt
+                  ? `Last used ${new Date(t.lastUsedAt).toLocaleDateString()}`
+                  : "Not yet used"}
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm(`Revoke link for ${t.email}? They will no longer be able to use it.`)) return;
+                  const res = await fetch(
+                    `${API}/api/trees/${treeId}/elder-capture-tokens/${t.id}`,
+                    { method: "DELETE", credentials: "include" },
+                  );
+                  if (res.ok) await refresh();
+                }}
+                style={{
+                  background: "transparent",
+                  color: "#8B2F2F",
+                  border: "1px solid #C8A8A8",
+                  borderRadius: 4,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showInvite && (
+        <InviteContributorModal
+          treeId={treeId}
+          people={people}
+          onClose={() => setShowInvite(false)}
+          onMinted={(url) => {
+            setJustMinted(url);
+            setShowInvite(false);
+            void refresh();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function InviteContributorModal({
+  treeId,
+  people,
+  onClose,
+  onMinted,
+}: {
+  treeId: string;
+  people: Person[];
+  onClose: () => void;
+  onMinted: (url: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [associatedPersonId, setAssociatedPersonId] = useState("");
+  const [familyLabel, setFamilyLabel] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch(`${API}/api/trees/${treeId}/elder-capture-tokens`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email.trim(),
+        displayName: displayName.trim() || undefined,
+        associatedPersonId: associatedPersonId || undefined,
+        familyLabel: familyLabel.trim() || undefined,
+        sendInviteEmail: true,
+      }),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(err.error ?? "Could not create invite");
+      return;
+    }
+    const d = (await res.json()) as { url: string };
+    onMinted(d.url);
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(28, 25, 21, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 60,
+        padding: 16,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          background: "var(--paper-deep)",
+          border: "1px solid var(--rule)",
+          borderRadius: 10,
+          padding: 24,
+          width: "min(480px, 100%)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-display)",
+            fontWeight: 400,
+            fontSize: 22,
+            color: "var(--ink)",
+          }}
+        >
+          Invite a memory contributor
+        </h3>
+        <label style={modalLabelStyle}>
+          Their email
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={modalInputStyle}
+            placeholder="grandma@example.com"
+          />
+        </label>
+        <label style={modalLabelStyle}>
+          Their name (optional)
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            style={modalInputStyle}
+            placeholder="Mary Ward"
+          />
+        </label>
+        <label style={modalLabelStyle}>
+          About which person? (memories will be tagged to them)
+          <select
+            value={associatedPersonId}
+            onChange={(e) => setAssociatedPersonId(e.target.value)}
+            style={modalInputStyle}
+          >
+            <option value="">— choose a person —</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={modalLabelStyle}>
+          Family label (shown on their PWA, optional)
+          <input
+            value={familyLabel}
+            onChange={(e) => setFamilyLabel(e.target.value)}
+            style={modalInputStyle}
+            placeholder="The Wards"
+          />
+        </label>
+        {error && (
+          <p style={{ margin: 0, color: "#8B2F2F", fontFamily: "var(--font-ui)", fontSize: 13 }}>
+            {error}
+          </p>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" onClick={onClose} style={modalCancelStyle}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            style={{ ...modalSubmitStyle, opacity: submitting ? 0.6 : 1 }}
+          >
+            {submitting ? "Sending…" : "Send invite"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const modalLabelStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 4,
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  color: "var(--ink-soft)",
+};
+const modalInputStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 14,
+  background: "var(--paper)",
+  color: "var(--ink)",
+  border: "1px solid var(--rule)",
+  borderRadius: 4,
+  padding: "8px 10px",
+};
+const modalCancelStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  background: "transparent",
+  color: "var(--ink-soft)",
+  border: "1px solid var(--rule)",
+  borderRadius: 4,
+  padding: "8px 14px",
+  cursor: "pointer",
+};
+const modalSubmitStyle = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  background: "var(--moss)",
+  color: "var(--paper)",
+  border: "none",
+  borderRadius: 4,
+  padding: "8px 14px",
+  cursor: "pointer",
 };

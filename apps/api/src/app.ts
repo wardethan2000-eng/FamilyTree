@@ -11,6 +11,7 @@ import { memoriesPlugin } from "./routes/memories.js";
 import { relationshipsPlugin } from "./routes/relationships.js";
 import { promptsPlugin } from "./routes/prompts.js";
 import { promptCampaignsPlugin } from "./routes/prompt-campaigns.js";
+import { elderCapturePlugin } from "./routes/elder-capture.js";
 import { placesPlugin } from "./routes/places.js";
 import { importPlugin } from "./routes/import.js";
 import { curationPlugin } from "./routes/curation.js";
@@ -96,6 +97,7 @@ export function buildApp() {
   app.register(exportPlugin);
   app.register(promptsPlugin);
   app.register(promptCampaignsPlugin);
+  app.register(elderCapturePlugin);
   app.register(placesPlugin);
   app.register(importPlugin);
   app.register(curationPlugin);

@@ -7,6 +7,7 @@ import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
 import { mayEmailUser } from "./me.js";
+import { sendInstallEmail as sendElderInstallEmail } from "./elder-capture.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
@@ -150,6 +151,43 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
       await db.insert(schema.promptCampaignRecipients).values(
         dedupedEmails.map((email) => ({ campaignId: campaign.id, email })),
       );
+
+      // Auto-mint an elder capture token for any recipient that doesn't
+      // already have one for this tree, and email them the install link so
+      // every subsequent campaign question opens inside their PWA.
+      const tree = await db.query.trees.findFirst({
+        where: (t, { eq }) => eq(t.id, treeId),
+      });
+      const inviter = await db.query.users.findFirst({
+        where: (u, { eq }) => eq(u.id, session.user.id),
+      });
+      const inviterName = inviter?.name ?? inviter?.email ?? "A family member";
+      for (const email of dedupedEmails) {
+        const existing = await db.query.elderCaptureTokens.findFirst({
+          where: (t, { and, eq, isNull }) =>
+            and(eq(t.treeId, treeId), eq(t.email, email), isNull(t.revokedAt)),
+        });
+        if (!existing) {
+          const rawToken = randomBytes(32).toString("hex");
+          const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+          await db.insert(schema.elderCaptureTokens).values({
+            treeId,
+            email,
+            tokenHash,
+            associatedPersonId: parsed.data.toPersonId,
+            createdByUserId: session.user.id,
+          });
+          if (tree) {
+            void sendElderInstallEmail({
+              email,
+              rawToken,
+              treeName: tree.name,
+              familyLabel: null,
+              inviterName,
+            });
+          }
+        }
+      }
     }
 
     await db.insert(schema.promptCampaignQuestions).values(
@@ -380,25 +418,42 @@ async function processCampaignOnce(
       log.info({ campaignId: campaign.id, email }, "Recipient opted out; skipping");
       continue;
     }
-    const rawToken = generateToken();
-    const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-    const [link] = await db
-      .insert(schema.promptReplyLinks)
-      .values({
-        treeId: campaign.treeId,
-        promptId: prompt.id,
-        email,
-        tokenHash,
-        status: "pending",
-        createdByUserId: campaign.fromUserId,
-        expiresAt,
-      })
-      .returning();
-    if (!link) continue;
 
-    const replyUrl = `${WEB_URL}/prompts/reply?token=${encodeURIComponent(rawToken)}`;
+    // If an active elder capture token exists, link the email to the
+    // recipient's installed PWA inbox instead of minting a single-use reply
+    // link. The new prompt appears in their inbox automatically.
+    const elderToken = await db.query.elderCaptureTokens.findFirst({
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.treeId, campaign.treeId), eq(t.email, email), isNull(t.revokedAt)),
+    });
+
+    let createdLinkId: string | null = null;
+    let replyUrl: string;
+    {
+      const rawToken = generateToken();
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const [link] = await db
+        .insert(schema.promptReplyLinks)
+        .values({
+          treeId: campaign.treeId,
+          promptId: prompt.id,
+          email,
+          tokenHash,
+          status: "pending",
+          createdByUserId: campaign.fromUserId,
+          expiresAt,
+        })
+        .returning();
+      if (!link) continue;
+      createdLinkId = link.id;
+      replyUrl = `${WEB_URL}/prompts/reply?token=${encodeURIComponent(rawToken)}`;
+    }
+    const recipientHasPwa = !!elderToken;
     try {
+      const pwaTip = recipientHasPwa
+        ? `<p style="font-size: 13px; color: #847A66; margin: 0 0 18px;">Tip: this opens in your installed family memory page if you've already added it to your home screen.</p>`
+        : "";
       await mailer.sendMail({
         from: MAIL_FROM,
         to: email,
@@ -418,6 +473,7 @@ async function processCampaignOnce(
                 Share a story, voice note, photo, or document
               </a>
             </p>
+            ${pwaTip}
             <p style="font-size: 12px; color: #847A66; line-height: 1.6;">
               This link is private and expires in 14 days. You can reply or skip — another question will arrive in ${campaign.cadenceDays} day${campaign.cadenceDays === 1 ? "" : "s"}.
             </p>
@@ -431,9 +487,11 @@ async function processCampaignOnce(
         { err, campaignId: campaign.id, email },
         "Failed to send campaign email; revoking link",
       );
-      await db
-        .delete(schema.promptReplyLinks)
-        .where(eq(schema.promptReplyLinks.id, link.id));
+      if (createdLinkId) {
+        await db
+          .delete(schema.promptReplyLinks)
+          .where(eq(schema.promptReplyLinks.id, createdLinkId));
+      }
     }
   }
 

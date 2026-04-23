@@ -559,6 +559,40 @@ export const promptCampaignRecipients = pgTable(
   ],
 );
 
+export const elderCaptureTokens = pgTable(
+  "elder_capture_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 320 }).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    displayName: varchar("display_name", { length: 200 }),
+    associatedPersonId: uuid("associated_person_id").references(
+      () => people.id,
+      { onDelete: "set null" },
+    ),
+    familyLabel: varchar("family_label", { length: 200 }),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    lastUsedUserAgent: text("last_used_user_agent"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("elder_capture_tokens_tree_idx").on(table.treeId),
+    index("elder_capture_tokens_tree_email_idx").on(table.treeId, table.email),
+    uniqueIndex("elder_capture_tokens_token_hash_unique_idx").on(
+      table.tokenHash,
+    ),
+  ],
+);
+
 export const memories = pgTable(
   "memories",
   {
@@ -1181,6 +1215,24 @@ export const promptCampaignRecipientsRelations = relations(
     campaign: one(promptCampaigns, {
       fields: [promptCampaignRecipients.campaignId],
       references: [promptCampaigns.id],
+    }),
+  }),
+);
+
+export const elderCaptureTokensRelations = relations(
+  elderCaptureTokens,
+  ({ one }) => ({
+    tree: one(trees, {
+      fields: [elderCaptureTokens.treeId],
+      references: [trees.id],
+    }),
+    associatedPerson: one(people, {
+      fields: [elderCaptureTokens.associatedPersonId],
+      references: [people.id],
+    }),
+    createdBy: one(users, {
+      fields: [elderCaptureTokens.createdByUserId],
+      references: [users.id],
     }),
   }),
 );
