@@ -4,14 +4,11 @@ import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AtriumContextStrip } from "@/components/home/AtriumContextStrip";
 import { AtriumCoachmark } from "@/components/home/AtriumCoachmark";
-import { AtriumFamilyPresence } from "@/components/home/AtriumFamilyPresence";
-import { AtriumMemoryTrail } from "@/components/home/AtriumMemoryTrail";
 import { AtriumSkeleton } from "@/components/home/HomeSurfaceSkeletons";
-import { AtriumStage } from "@/components/home/AtriumStage";
 import { AtriumStartState } from "@/components/home/AtriumStartState";
-import { AtriumTodayBanner } from "@/components/home/AtriumTodayBanner";
+import { AtriumWalk } from "@/components/home/AtriumWalk";
+import type { WalkPace } from "@/components/home/useAtriumWalk";
 import type {
   TreeHomeArchiveSummary,
   TreeHomeCoverage,
@@ -65,6 +62,10 @@ function extractYear(text?: string | null): number | null {
   return match ? Number.parseInt(match[1]!, 10) : null;
 }
 
+function mapDeathYear(person: TreeHomePersonRecord): number | null {
+  return extractYear(person.deathDateText ?? null);
+}
+
 function mapHomePerson(person: TreeHomePersonRecord): Person {
   return {
     id: person.id,
@@ -72,7 +73,7 @@ function mapHomePerson(person: TreeHomePersonRecord): Person {
     portraitUrl: person.portraitUrl,
     essenceLine: person.essenceLine,
     birthYear: extractYear(person.birthDateText ?? null),
-    deathYear: extractYear(person.deathDateText ?? null),
+    deathYear: mapDeathYear(person),
     linkedUserId: person.linkedUserId,
   };
 }
@@ -129,6 +130,9 @@ export default function AtriumPage() {
   const [curationCount, setCurationCount] = useState(0);
   const [selectedEra, setSelectedEra] = useState<EraValue>("all");
 
+  const [pace, setPace] = useState<WalkPace>("lingering");
+  const [headerVisible, setHeaderVisible] = useState(true);
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "k") {
@@ -139,6 +143,33 @@ export default function AtriumPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  useEffect(() => {
+    if (memories.length === 0 || loading) return;
+
+    let hideTimer: ReturnType<typeof setTimeout>;
+
+    const scheduleHide = () => {
+      clearTimeout(hideTimer);
+      setHeaderVisible(true);
+      hideTimer = setTimeout(() => setHeaderVisible(false), 2500);
+    };
+
+    const onTopHover = (e: MouseEvent) => {
+      if (e.clientY < 24) {
+        clearTimeout(hideTimer);
+        setHeaderVisible(true);
+      }
+    };
+
+    scheduleHide();
+    window.addEventListener("mousemove", onTopHover);
+
+    return () => {
+      clearTimeout(hideTimer);
+      window.removeEventListener("mousemove", onTopHover);
+    };
+  }, [memories.length, loading]);
 
   const applyHomePayload = useCallback((data: TreeHomePayload) => {
     setTree(data.tree);
@@ -357,24 +388,6 @@ export default function AtriumPage() {
     }));
   }, [familyPresence, people]);
 
-  const familyNearbyPeople = useMemo(() => {
-    const focusId = familyPresence?.focusPersonId ?? activeFocusPersonId;
-    if (!focusId) return [];
-    return [...activeFocusIds]
-      .filter((id) => id !== focusId)
-      .slice(0, 8)
-      .map((id) => people.find((p) => p.id === id))
-      .filter((p): p is Person => Boolean(p))
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        portraitUrl: p.portraitUrl,
-        essenceLine: p.essenceLine,
-        birthYear: p.birthYear,
-        deathYear: p.deathYear,
-      }));
-  }, [familyPresence?.focusPersonId, activeFocusPersonId, activeFocusIds, people]);
-
   const familyFocusPerson = useMemo(() => {
     const focusId = familyPresence?.focusPersonId ?? activeFocusPersonId;
     if (!focusId) return null;
@@ -503,8 +516,10 @@ export default function AtriumPage() {
     >
       <header
         style={{
-          position: "sticky",
+          position: "fixed",
           top: 0,
+          left: 0,
+          right: 0,
           zIndex: 30,
           minHeight: 52,
           background: "rgba(246,241,231,0.92)",
@@ -515,6 +530,8 @@ export default function AtriumPage() {
           alignItems: "center",
           padding: "8px 16px",
           gap: 16,
+          transform: headerVisible ? "translateY(0)" : "translateY(-100%)",
+          transition: "transform 400ms cubic-bezier(0.22, 0.61, 0.36, 1)",
         }}
       >
         <div
@@ -586,6 +603,19 @@ export default function AtriumPage() {
             minWidth: 0,
           }}
         >
+          <button
+            type="button"
+            onClick={() => setPace((p) => (p === "lingering" ? "flowing" : "lingering"))}
+            style={{
+              ...headerButtonStyle,
+              fontSize: 11,
+              padding: "6px 10px",
+            }}
+            title={pace === "lingering" ? "Switch to flowing pace (shorter pauses)" : "Switch to lingering pace (full pauses)"}
+          >
+            {pace === "lingering" ? "☽ Lingering" : "≋ Flowing"}
+          </button>
+
           {curationCount > 0 && (
             <Link
               href={`/trees/${treeId}/curation`}
@@ -689,64 +719,46 @@ export default function AtriumPage() {
           onAddMemory={() => setWizardOpen(true)}
         />
       ) : (
-        <>
-          <AtriumTodayBanner
-            treeId={treeId}
-            today={today}
-            onStartPersonDrift={(personId) => openDrift({ personId })}
-            onStartRemembrance={(personId) =>
-              openDrift({ mode: "remembrance", personId })
-            }
-          />
-          <AtriumStage
-            treeName={tree?.name ?? "Family Archive"}
-            featuredMemory={activeFeaturedMemory}
-            branchCue={branchCue}
-            memoryHref={activeFeaturedMemory ? `/trees/${treeId}/memories/${activeFeaturedMemory.id}` : null}
-            branchHref={activeFocusPersonId ? `/trees/${treeId}/people/${activeFocusPersonId}` : null}
-            fullTreeHref={`/trees/${treeId}/tree`}
-            resurfacingCount={activeHeroCandidates.length}
-            onDrift={openDriftChooser}
-          />
-        </>
-      )}
-
-      <AtriumContextStrip
-        scaleLabel={formatArchiveScaleLabel(archiveSummary, homeStats, people.length)}
-        historicalLabel={formatArchiveHistoricalLabel(archiveSummary, coverage)}
-        branchCue={branchCue}
-      />
-
-      {memories.length > 0 && <SectionThreshold />}
-
-      {memories.length > 0 && (
-        <AtriumMemoryTrail
+        <AtriumWalk
+          treeId={treeId}
+          treeName={tree?.name ?? "Family Archive"}
+          featuredMemory={activeFeaturedMemory}
+          trailSections={trailSections}
+          today={today}
+          familyPresenceGroups={familyPresenceGroups}
+          focusPerson={familyFocusPerson ? {
+            id: familyFocusPerson.id,
+            name: familyFocusPerson.name,
+            portraitUrl: familyFocusPerson.portraitUrl,
+            essenceLine: familyFocusPerson.essenceLine,
+            birthYear: familyFocusPerson.birthYear,
+            deathYear: familyFocusPerson.deathYear,
+          } : null}
+          focusPersonName={familyFocusPersonName}
+          branchCue={branchCue}
+          archiveSummary={archiveSummary ? {
+            peopleCount: archiveSummary.peopleCount,
+            generationCount: archiveSummary.generationCount,
+            earliestYear: archiveSummary.earliestYear,
+            latestYear: archiveSummary.latestYear,
+            branchLabel: archiveSummary.branchLabel,
+          } : null}
           coverage={coverage}
-          sections={trailSections}
-          people={people}
-          selectedEra={selectedEra}
-          selectedEraLabel={selectedEraLabel}
-          onSelectEra={setSelectedEra}
+          people={people.map((p) => ({ id: p.id, name: p.name, portraitUrl: p.portraitUrl }))}
+          resurfacingCount={activeHeroCandidates.length}
+          memoryHref={activeFeaturedMemory ? `/trees/${treeId}/memories/${activeFeaturedMemory.id}` : null}
+          branchHref={activeFocusPersonId ? `/trees/${treeId}/people/${activeFocusPersonId}` : null}
+          fullTreeHref={`/trees/${treeId}/tree`}
+          pace={pace}
           onPersonClick={handlePersonClick}
           onMemoryClick={(memory) => {
             router.push(`/trees/${treeId}/memories/${memory.id}`);
           }}
-          openArchiveHref={`/trees/${treeId}/tree`}
-        />
-      )}
-
-      {memories.length > 0 && <SectionThreshold />}
-
-      {memories.length > 0 && (
-        <AtriumFamilyPresence
-          focusPerson={familyFocusPerson}
-          focusPersonName={familyFocusPersonName}
-          branchCue={branchCue}
-          nearbyPeople={familyNearbyPeople}
-          groups={familyPresenceGroups}
-          fullTreeHref={`/trees/${treeId}/tree`}
-          addPersonHref={`/trees/${treeId}/people/new`}
-          onPersonClick={handlePersonClick}
+          onDrift={openDriftChooser}
+          onStartPersonDrift={(personId) => openDrift({ personId })}
+          onStartRemembrance={(personId) =>
+            openDrift({ mode: "remembrance", personId })
+          }
         />
       )}
 
@@ -868,79 +880,4 @@ function getHeaderNavButtonStyle(active: boolean) {
     ...getHeaderNavItemStyle(active),
     cursor: "pointer",
   } as const;
-}
-
-function SectionThreshold() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        padding: "clamp(32px, 5vw, 56px) max(20px, 5vw) clamp(32px, 5vw, 56px) max(20px, 5vw)",
-      }}
-    >
-      <div
-        style={{
-          flex: 1,
-          height: 1,
-          background:
-            "linear-gradient(90deg, transparent 0%, rgba(176,139,62,0.24) 18%, rgba(176,139,62,0.24) 82%, transparent 100%)",
-        }}
-      />
-      <div
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: "rgba(176,139,62,0.38)",
-          boxShadow: "0 0 0 3px rgba(176,139,62,0.08)",
-          flexShrink: 0,
-        }}
-      />
-      <div
-        style={{
-          flex: 1,
-          height: 1,
-          background:
-            "linear-gradient(90deg, transparent 0%, rgba(176,139,62,0.24) 18%, rgba(176,139,62,0.24) 82%, transparent 100%)",
-        }}
-      />
-    </div>
-  );
-}
-
-function formatArchiveScaleLabel(
-  archiveSummary: TreeHomeArchiveSummary | null,
-  stats: TreeHomeStats | null,
-  peopleCount: number,
-) {
-  const resolvedPeopleCount = archiveSummary?.peopleCount ?? stats?.peopleCount ?? peopleCount;
-  const generationCount = archiveSummary?.generationCount ?? stats?.generationCount ?? 0;
-
-  if (resolvedPeopleCount === 0) return "No people have been added yet.";
-  if (generationCount > 0) {
-    return `${resolvedPeopleCount} ${resolvedPeopleCount === 1 ? "person" : "people"} across ${generationCount} ${generationCount === 1 ? "generation" : "generations"}`;
-  }
-  return `${resolvedPeopleCount} ${resolvedPeopleCount === 1 ? "person" : "people"} taking shape`;
-}
-
-function formatArchiveHistoricalLabel(
-  archiveSummary: TreeHomeArchiveSummary | null,
-  coverage: TreeHomeCoverage | null,
-) {
-  const earliestYear = archiveSummary?.earliestYear ?? coverage?.earliestYear ?? null;
-  const latestYear = archiveSummary?.latestYear ?? coverage?.latestYear ?? null;
-
-  if (earliestYear === null && latestYear === null) {
-    return "Dates are still gathering around the archive.";
-  }
-  if (earliestYear !== null && latestYear !== null) {
-    if (earliestYear === latestYear) {
-      return `Memories are currently centered on ${earliestYear}.`;
-    }
-    return `Memories stretch from ${earliestYear} to ${latestYear}.`;
-  }
-  const knownYear = earliestYear ?? latestYear;
-  return `Memories are currently anchored around ${knownYear}.`;
 }
