@@ -166,7 +166,7 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
       <Handle
         type="source"
         position={Position.Bottom}
-        style={{ opacity: 0, top: PORTRAIT_SIZE, bottom: "auto" }}
+        style={{ opacity: 0, bottom: 0, top: "auto" }}
       />
     </div>
   );

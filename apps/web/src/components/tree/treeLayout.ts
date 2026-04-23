@@ -16,7 +16,7 @@ const NODE_WIDTH = 112;
 const NODE_HEIGHT = 156;
 const PORTRAIT_SIZE = 64;
 const PORTRAIT_RADIUS = PORTRAIT_SIZE / 2;
-const GENERATION_GAP = 240;  // vertical distance between generation rows
+const GENERATION_GAP = 260;
 const EDIT_SLOT_GAP = 32;
 const ROW_GAP = 100;
 const SPOUSE_ATTACH_GAP = 144;
@@ -74,6 +74,15 @@ function getPortraitSideAnchor(
     x: center.x + (side === "right" ? PORTRAIT_RADIUS : -PORTRAIT_RADIUS),
     y: center.y,
   };
+}
+
+function getNodeBottomAnchor(
+  personId: string,
+  positions: Map<string, { x: number; y: number }>,
+) {
+  const pos = positions.get(personId);
+  if (!pos) return null;
+  return { x: pos.x + NODE_WIDTH / 2, y: pos.y + NODE_HEIGHT };
 }
 
 type RowToken = {
@@ -1904,10 +1913,10 @@ export function buildEdges(
     if (r.type === "parent_child") {
       const parentIds = [...(parentIdsByChild.get(r.toPersonId) ?? [])].sort();
       const hasFamilyUnion = parentIds.length === 2;
-      const sourceAnchor = getPortraitBottomAnchor(r.fromPersonId, positions);
+      const sourceAnchor = getNodeBottomAnchor(r.fromPersonId, positions);
       const targetAnchor = getPortraitTopAnchor(r.toPersonId, positions);
       const allParentAnchors = parentIds
-        .map((parentId) => getPortraitBottomAnchor(parentId, positions))
+        .map((parentId) => getNodeBottomAnchor(parentId, positions))
         .filter((value): value is { x: number; y: number } => Boolean(value));
       const unionX =
         hasFamilyUnion && allParentAnchors.length > 0
