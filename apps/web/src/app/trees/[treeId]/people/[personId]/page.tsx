@@ -648,7 +648,7 @@ export default function PersonPage({
       return;
     }
 
-    router.replace(`/trees/${treeId}`);
+    router.replace(`/trees/${treeId}/tree`);
   }
 
   async function uploadPortrait(file: File) {
@@ -1053,10 +1053,10 @@ export default function PersonPage({
       {/* Back nav */}
       <header style={{ padding: "16px 24px", borderBottom: "1px solid var(--rule)", display: "flex", alignItems: "center", gap: 16, background: "rgba(246,241,231,0.88)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
         <a
-          href={`/trees/${treeId}`}
+          href={`/trees/${treeId}/tree`}
           style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)", textDecoration: "none" }}
         >
-          ← Constellation
+          ← Family tree
         </a>
         <span style={{ color: "var(--rule)" }}>·</span>
         <span style={{ fontFamily: "var(--font-display)", fontSize: 17, color: "var(--ink-soft)" }}>
@@ -2767,7 +2767,7 @@ function BiographyDrawer({
               type="text"
               value={editForm.essenceLine}
               onChange={(event) => onChangeField("essenceLine", event.target.value)}
-              placeholder="Essence line (one sentence)"
+              placeholder="Short bio (one sentence)"
               style={inputStyle}
             />
           </div>

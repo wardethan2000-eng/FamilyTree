@@ -24,7 +24,25 @@ export default function OnboardingPage() {
       const saved = readOnboardingSession();
       if (saved.treeId) {
         router.replace(`/onboarding/person?treeId=${saved.treeId}`);
+        return;
       }
+      // If the user has a pending invitation and no saved tree in progress,
+      // redirect to the welcome fork so they don't accidentally create a
+      // second, empty archive.
+      void (async () => {
+        try {
+          const res = await fetch(`${API}/api/me/invitations`, {
+            credentials: "include",
+          });
+          if (!res.ok) return;
+          const invites = (await res.json()) as Array<{ id: string }>;
+          if (invites.length > 0) {
+            router.replace("/onboarding/welcome");
+          }
+        } catch {
+          // Non-fatal — continue to show the founder flow.
+        }
+      })();
     }
   }, [session, isPending, router]);
 
@@ -66,17 +84,17 @@ export default function OnboardingPage() {
             Step 1 of 4
           </p>
           <h1 className="text-2xl font-semibold text-stone-900">
-            Name your family tree
+            Give your archive a name
           </h1>
           <p className="text-sm text-stone-500">
-            Usually a surname — you can rename it any time.
+            Usually a surname, a line, or a framing — you can rename it any time.
           </p>
         </div>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
           <form onSubmit={handleCreate} className="space-y-4">
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-stone-700">Tree name</span>
+              <span className="text-sm font-medium text-stone-700">Archive name</span>
               <input
                 type="text"
                 value={name}
@@ -93,7 +111,7 @@ export default function OnboardingPage() {
               disabled={loading}
               className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50 transition-colors"
             >
-              {loading ? "Creating…" : "Create tree →"}
+              {loading ? "Creating…" : "Create archive →"}
             </button>
           </form>
         </div>

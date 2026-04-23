@@ -240,7 +240,7 @@ export default function InboxPage() {
         }}
       >
         <button
-          onClick={() => router.push(`/trees/${treeId}/atrium`)}
+          onClick={() => router.push(`/trees/${treeId}/home`)}
           style={{
             background: "none",
             border: "none",
@@ -264,7 +264,7 @@ export default function InboxPage() {
             flex: 1,
           }}
         >
-          Inbox
+          Messages
         </h1>
         <button
           onClick={() => setAskingOpen(true)}
@@ -313,7 +313,7 @@ export default function InboxPage() {
                 textTransform: "capitalize",
               }}
             >
-              {tab === "inbox" ? `My inbox${inbox.length ? ` (${inbox.filter((p) => p.status === "pending").length})` : ""}` : "All prompts"}
+              {tab === "inbox" ? `For you${inbox.length ? ` (${inbox.filter((p) => p.status === "pending").length})` : ""}` : "All requests"}
             </button>
           ))}
         </div>
@@ -354,7 +354,7 @@ export default function InboxPage() {
             <p style={{ fontSize: 16, marginBottom: 6 }}>
               {activeTab === "inbox"
                 ? "No questions waiting for you."
-                : "No prompts have been sent yet."}
+                : "No requests have been sent yet."}
             </p>
             <p style={{ fontSize: 14 }}>
               {activeTab === "inbox"

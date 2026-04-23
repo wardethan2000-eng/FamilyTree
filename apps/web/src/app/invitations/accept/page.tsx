@@ -111,11 +111,6 @@ function AcceptInvitationContent() {
       }
       const data: InvitationAcceptResult = await res.json();
       setAcceptResult(data);
-      if (data.linkedIdentity?.status !== "conflict") {
-        setTimeout(() => {
-          router.push(`/trees/${data.treeId}`);
-        }, 2000);
-      }
     } finally {
       setAccepting(false);
     }
@@ -218,14 +213,35 @@ function AcceptInvitationContent() {
             </>
           )}
 
+          {!identityConflict && (
+            <div style={welcomeFactsStyle}>
+              <p style={welcomeFactLabelStyle}>Your role</p>
+              <p style={welcomeFactValueStyle}>
+                {invitation.proposedRole === "steward"
+                  ? "Steward — you can curate memories and invite others"
+                  : invitation.proposedRole === "contributor"
+                  ? "Contributor — you can add memories and relatives"
+                  : invitation.proposedRole === "viewer"
+                  ? "Viewer — you can read memories shared with you"
+                  : invitation.proposedRole}
+              </p>
+              {invitation.linkedPersonName && (
+                <>
+                  <p style={{ ...welcomeFactLabelStyle, marginTop: 12 }}>Connected to</p>
+                  <p style={welcomeFactValueStyle}>{invitation.linkedPersonName}</p>
+                </>
+              )}
+            </div>
+          )}
+
           <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <a href={`/trees/${acceptResult.treeId}`} style={primaryBtnStyle}>
-              Continue to archive
+            <a href={`/trees/${acceptResult.treeId}/home`} style={primaryBtnStyle}>
+              {identityConflict ? "Continue" : "Explore Home"}
             </a>
             {!identityConflict && (
-              <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", margin: 0 }}>
-                Redirecting you automatically…
-              </p>
+              <a href={`/trees/${acceptResult.treeId}/home?openAddMemory=1`} style={secondaryBtnStyle}>
+                Add a memory
+              </a>
             )}
           </div>
         </div>
@@ -337,6 +353,31 @@ const cardStyle: CSSProperties = {
   padding: "48px 40px",
   maxWidth: 460,
   width: "100%",
+};
+
+const welcomeFactsStyle: CSSProperties = {
+  marginTop: 20,
+  padding: "14px 16px",
+  background: "var(--paper)",
+  border: "1px solid var(--rule)",
+  borderRadius: 8,
+};
+
+const welcomeFactLabelStyle: CSSProperties = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 11,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "var(--ink-faded)",
+  margin: 0,
+};
+
+const welcomeFactValueStyle: CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: 14,
+  color: "var(--ink)",
+  margin: "4px 0 0",
+  lineHeight: 1.5,
 };
 
 const messageBoxStyle: CSSProperties = {

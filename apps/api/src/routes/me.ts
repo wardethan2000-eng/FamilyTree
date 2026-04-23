@@ -52,6 +52,38 @@ export async function mayEmailUser(
 }
 
 export async function mePlugin(app: FastifyInstance) {
+  /** GET /api/me/invitations — list pending invitations for the signed-in user's email */
+  app.get("/api/me/invitations", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+    const email = session.user.email.toLowerCase();
+    const now = new Date();
+
+    const invites = await db.query.invitations.findMany({
+      where: (inv, { and, eq }) =>
+        and(eq(inv.email, email), eq(inv.status, "pending")),
+      with: { tree: true, invitedBy: true, linkedPerson: true },
+      orderBy: (inv, { desc }) => [desc(inv.createdAt)],
+    });
+
+    const live = invites.filter((inv) => inv.expiresAt > now);
+
+    return reply.send(
+      live.map((inv) => ({
+        id: inv.id,
+        treeId: inv.treeId,
+        treeName: inv.tree?.name ?? "Unknown",
+        invitedByName:
+          inv.invitedBy?.name ?? inv.invitedBy?.email ?? "Unknown",
+        invitedByEmail: inv.invitedBy?.email ?? null,
+        proposedRole: inv.proposedRole,
+        linkedPersonName: inv.linkedPerson?.displayName ?? null,
+        expiresAt: inv.expiresAt,
+        createdAt: inv.createdAt,
+      })),
+    );
+  });
+
   app.get("/api/me/notification-preferences", async (request, reply) => {
     const session = await getSession(request.headers);
     if (!session) return reply.status(401).send({ error: "Unauthorized" });

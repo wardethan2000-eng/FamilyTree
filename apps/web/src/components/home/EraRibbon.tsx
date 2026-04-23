@@ -60,7 +60,7 @@ export function EraRibbon({
               color: "var(--ink-faded)",
             }}
           >
-            Filter the atrium through the decades already present in the archive.
+            Filter Home through the decades already present in the archive.
           </span>
         </div>
 

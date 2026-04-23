@@ -97,10 +97,10 @@ export default function CurationPage() {
         setQueue(await res.json());
         setFetchError(null);
       } else {
-        setFetchError("Could not load curation queue.");
+        setFetchError("Could not load the review queue.");
       }
     } catch {
-      setFetchError("Network error — could not load curation queue.");
+      setFetchError("Network error — could not load the review queue.");
     }
     setLoading(false);
   }, [treeId]);
@@ -309,7 +309,7 @@ export default function CurationPage() {
     return (
       <main style={pageStyle}>
         <div style={{ maxWidth: 660, width: "100%", margin: "0 auto" }}>
-          <button onClick={() => router.push(`/trees/${treeId}/atrium`)} style={backBtnStyle}>← Back to archive</button>
+          <button onClick={() => router.push(`/trees/${treeId}/home`)} style={backBtnStyle}>← Back to archive</button>
           <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--rose, #b91c1c)", marginTop: 32 }}>
             {fetchError}
           </p>
@@ -336,13 +336,13 @@ export default function CurationPage() {
     <main style={pageStyle}>
       <div style={{ maxWidth: 660, width: "100%", margin: "0 auto" }}>
         <button
-          onClick={() => router.push(`/trees/${treeId}/atrium`)}
+          onClick={() => router.push(`/trees/${treeId}/home`)}
           style={backBtnStyle}
         >
           ← Back to archive
         </button>
 
-        <h1 style={headingStyle}>Memory curation</h1>
+        <h1 style={headingStyle}>Review queue</h1>
         <p style={subheadStyle}>
           Clean up missing metadata, then shape a person page into a calmer chapter by featuring and ordering direct memories.
         </p>

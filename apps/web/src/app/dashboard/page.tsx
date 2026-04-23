@@ -26,6 +26,18 @@ type DashboardTreeSummary = {
   isFoundedByYou: boolean;
 };
 
+type PendingInvite = {
+  id: string;
+  treeId: string;
+  treeName: string;
+  invitedByName: string;
+  invitedByEmail: string | null;
+  proposedRole: string;
+  linkedPersonName: string | null;
+  expiresAt: string;
+  createdAt: string;
+};
+
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,6 +45,7 @@ function DashboardContent() {
   const preferredTreeId = searchParams.get("treeId");
 
   const [summaries, setSummaries] = useState<DashboardTreeSummary[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [creatingLineage, setCreatingLineage] = useState(false);
@@ -54,14 +67,26 @@ function DashboardContent() {
       setLoadError(null);
 
       try {
-        const treesRes = await fetch(`${API}/api/trees`, { credentials: "include" });
+        const [treesRes, invitesRes] = await Promise.all([
+          fetch(`${API}/api/trees`, { credentials: "include" }),
+          fetch(`${API}/api/me/invitations`, { credentials: "include" }),
+        ]);
         if (!treesRes.ok) {
-          throw new Error("Could not load your archives.");
+          throw new Error("Your archives could not be loaded.");
         }
 
         const trees = (await treesRes.json()) as TreeMembership[];
+        const invites = invitesRes.ok
+          ? ((await invitesRes.json()) as PendingInvite[])
+          : [];
+        setPendingInvites(invites);
+
         if (trees.length === 0) {
-          router.replace("/onboarding");
+          if (invites.length > 0) {
+            setSummaries([]);
+            return;
+          }
+          router.replace("/onboarding/welcome");
           return;
         }
 
@@ -106,7 +131,7 @@ function DashboardContent() {
         setSummaries(nextSummaries);
       } catch (error) {
         setLoadError(
-          error instanceof Error ? error.message : "Could not load your archives.",
+          error instanceof Error ? error.message : "Your archives could not be loaded.",
         );
       } finally {
         setLoading(false);
@@ -120,7 +145,7 @@ function DashboardContent() {
     event.preventDefault();
     const trimmed = newLineageName.trim();
     if (!trimmed) {
-      setCreateError("Give this lineage a name before creating it.");
+      setCreateError("Give this archive a name before creating it.");
       return;
     }
     setSubmittingLineage(true);
@@ -133,13 +158,13 @@ function DashboardContent() {
         body: JSON.stringify({ name: trimmed }),
       });
       if (!res.ok) {
-        throw new Error("Could not create lineage.");
+        throw new Error("Could not create archive.");
       }
       const created = (await res.json()) as { id: string };
-      router.push(`/trees/${created.id}`);
+      router.push(`/trees/${created.id}/home`);
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "Could not create lineage.",
+        error instanceof Error ? error.message : "Could not create archive.",
       );
     } finally {
       setSubmittingLineage(false);
@@ -191,7 +216,7 @@ function DashboardContent() {
               color: "var(--ink)",
             }}
           >
-            This foyer could not be opened.
+            Your archives could not be loaded.
           </h1>
           <p
             style={{
@@ -252,7 +277,7 @@ function DashboardContent() {
               color: "var(--ink)",
             }}
           >
-            Your lineages
+            Your archives
           </div>
         </div>
 
@@ -274,7 +299,7 @@ function DashboardContent() {
               fontSize: 12,
             }}
           >
-            + Create lineage
+            + Start a new archive
           </button>
           <span
             style={{
@@ -337,7 +362,7 @@ function DashboardContent() {
               maxWidth: "14ch",
             }}
           >
-            Step between your family lineages.
+            Step between your family archives.
           </div>
           <div
             style={{
@@ -349,12 +374,75 @@ function DashboardContent() {
               color: "rgba(53,44,33,0.74)",
             }}
           >
-            You can belong to many lineages — the ones you founded and the ones you were
-            welcomed into. Shared relatives are the bridges between them. Open a lineage
-            to step inside it, or create a new one for a spouse, a maternal line, or a
+            You can belong to many archives — the ones you founded and the ones you were
+            welcomed into. Shared relatives are the bridges between them. Open an archive
+            to step inside it, or start a new one for a spouse, a maternal line, or a
             chosen family.
           </div>
         </section>
+
+        {pendingInvites.length > 0 && (
+          <section style={{ marginBottom: 34 }}>
+            <h2
+              style={{
+                margin: "0 0 12px",
+                fontFamily: "var(--font-display)",
+                fontSize: 22,
+                fontWeight: 400,
+                color: "var(--ink)",
+              }}
+            >
+              Pending invitations
+            </h2>
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              }}
+            >
+              {pendingInvites.map((invite) => (
+                <div
+                  key={invite.id}
+                  style={{
+                    border: "1px solid rgba(128,107,82,0.18)",
+                    background: "rgba(252,248,242,0.92)",
+                    borderRadius: 14,
+                    padding: "14px 16px",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 15,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    <strong>{invite.invitedByName}</strong> invited you to{" "}
+                    <em>{invite.treeName}</em>
+                    {invite.linkedPersonName
+                      ? ` as a contributor for ${invite.linkedPersonName}`
+                      : ""}
+                    .
+                  </p>
+                  <p
+                    style={{
+                      margin: "8px 0 0",
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 12,
+                      color: "var(--ink-faded)",
+                    }}
+                  >
+                    Check your inbox
+                    {invite.invitedByEmail ? ` for an email from ${invite.invitedByEmail}` : ""}
+                    , or ask them to resend the link.
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section
           style={{
@@ -364,12 +452,12 @@ function DashboardContent() {
             marginBottom: 36,
           }}
         >
-          <StatTile label="Lineages" value={`${summaries.length}`} />
+          <StatTile label="Archives" value={`${summaries.length}`} />
           <StatTile label="People" value={`${totalPeople}`} />
           <StatTile label="Memories" value={`${totalMemories}`} />
           <StatTile
-            label="Primary lineage"
-            value={primarySummary ? `${primarySummary.tree.name}` : "Lineage"}
+            label="Primary archive"
+            value={primarySummary ? `${primarySummary.tree.name}` : "Archive"}
           />
         </section>
 
@@ -381,7 +469,7 @@ function DashboardContent() {
               stats={primarySummary.stats}
               coverage={primarySummary.coverage}
               heroMemory={primarySummary.heroCandidates[0] ?? null}
-              href={`/trees/${primarySummary.tree.id}/atrium`}
+              href={`/trees/${primarySummary.tree.id}/home`}
               variant="primary"
             />
           </section>
@@ -424,13 +512,13 @@ function DashboardContent() {
                     color: "rgba(53,44,33,0.74)",
                   }}
                 >
-                  Enter the atrium to add the first memory, or start by shaping the family branch
+                  Open its Home to add the first memory, or start by shaping the family branch
                   it will belong to.
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <a
-                  href={`/trees/${primarySummary.tree.id}/atrium`}
+                  href={`/trees/${primarySummary.tree.id}/home`}
                   style={{
                     fontFamily: "var(--font-ui)",
                     fontSize: 13,
@@ -441,7 +529,7 @@ function DashboardContent() {
                     textDecoration: "none",
                   }}
                 >
-                  Open atrium
+                  Open Home
                 </a>
                 <a
                   href={`/trees/${primarySummary.tree.id}/people/new`}
@@ -484,7 +572,7 @@ function DashboardContent() {
                   color: "var(--ink)",
                 }}
               >
-                Other lineages
+                Other archives
               </h2>
               <span
                 style={{
@@ -531,7 +619,7 @@ function DashboardContent() {
                     stats={summary.stats}
                     coverage={summary.coverage}
                     heroMemory={summary.heroCandidates[0] ?? null}
-                    href={`/trees/${summary.tree.id}/atrium`}
+                    href={`/trees/${summary.tree.id}/home`}
                   />
                 </div>
               ))}
@@ -552,7 +640,7 @@ function DashboardContent() {
                 maxWidth: 720,
               }}
             >
-              Only one lineage is open right now. Create another for a spouse-family line,
+              Only one archive is open right now. Start another for a spouse-family line,
               a maternal branch, or a chosen family — shared relatives will become the bridges
               between them.
             </div>
@@ -602,7 +690,7 @@ function DashboardContent() {
                 color: "var(--ink)",
               }}
             >
-              Name a new lineage
+              Start a new archive
             </div>
             <div
               style={{
@@ -612,7 +700,7 @@ function DashboardContent() {
                 color: "rgba(53,44,33,0.72)",
               }}
             >
-              Lineages can be a family name like{" "}
+              An archive can be a family name like{" "}
               <em>Ward Family</em> or <em>Karsen Family</em>, a line like{" "}
               <em>Maternal Line</em>, or a framing like <em>Chosen Family</em>.
             </div>
@@ -674,7 +762,7 @@ function DashboardContent() {
                   cursor: submittingLineage ? "default" : "pointer",
                 }}
               >
-                {submittingLineage ? "Creating…" : "Create lineage"}
+                {submittingLineage ? "Creating…" : "Create archive"}
               </button>
             </div>
           </form>

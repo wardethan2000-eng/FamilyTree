@@ -242,7 +242,7 @@ export function PersonBanner({
                   onClick={() => { essenceSavedRef.current = false; setEditEssenceValue(essenceLine ?? ""); setEditingEssence(true); }}
                   style={{ fontFamily: "var(--font-body)", fontSize: 13, fontStyle: essenceLine ? "italic" : "normal", color: essenceLine ? "var(--ink-soft)" : "var(--ink-faded)", marginTop: 6, cursor: "text", lineHeight: 1.4 }}
                 >
-                  {essenceLine || "Add essence line…"}
+                  {essenceLine || "Add a short bio…"}
                 </div>
               )}
             </div>

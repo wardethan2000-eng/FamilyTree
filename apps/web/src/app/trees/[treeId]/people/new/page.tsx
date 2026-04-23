@@ -113,7 +113,7 @@ export default function NewPersonPage({
 
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">
-              Essence line
+              Short bio
             </label>
             <input
               type="text"

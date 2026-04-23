@@ -25,13 +25,13 @@ function OnboardingMemoryForm() {
       const saved = readOnboardingSession();
       // Guard: if memory was already saved, send them to the archive
       if (saved.memoryAdded && treeId) {
-        router.replace(`/trees/${treeId}/atrium`);
+        router.replace(`/trees/${treeId}/home`);
       }
     }
   }, [session, isPending, treeId, selfPersonId, router]);
 
   function atriumUrl() {
-    return `/trees/${treeId}/atrium`;
+    return `/trees/${treeId}/home`;
   }
 
   async function handleSubmit(e: React.FormEvent) {

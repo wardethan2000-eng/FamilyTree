@@ -269,10 +269,10 @@ export default function TreeSettingsPage() {
       {/* Header */}
       <div style={{ maxWidth: 640, width: "100%", margin: "0 auto" }}>
         <button
-          onClick={() => router.push(`/trees/${treeId}`)}
+          onClick={() => router.push(`/trees/${treeId}/home`)}
           style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 32, display: "flex", alignItems: "center", gap: 6 }}
         >
-          ← Back to {tree?.name ?? "The Constellation"}
+          ← Back to {tree?.name ?? "your archive"}
         </button>
 
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 400, color: "var(--ink)", margin: "0 0 4px" }}>

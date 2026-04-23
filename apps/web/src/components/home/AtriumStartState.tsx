@@ -73,7 +73,7 @@ export function AtriumStartState({
               color: "rgba(246,241,231,0.76)",
             }}
           >
-            This atrium is waiting for its first memory. Add a story, photo, or voice note so the
+            This Home is waiting for its first memory. Add a story, photo, or voice note so the
             archive has something living at its center, or add the first person so future memories
             have a branch to gather around.
           </p>

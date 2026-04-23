@@ -1277,16 +1277,17 @@ function TreeCanvasInner({
           }}
         >
           <div style={toolbarSegmentedStyle}>
-            <a href={`/trees/${treeId}/atrium`} style={toolbarNavItemStyle(false)}>
-              Atrium
+            <a href={`/trees/${treeId}/home`} style={toolbarNavItemStyle(false)}>
+              Home
             </a>
-            <a href={`/trees/${treeId}`} style={toolbarNavItemStyle(true)}>
-              Tree
+            <a href={`/trees/${treeId}/tree`} style={toolbarNavItemStyle(true)}>
+              Family tree
             </a>
             <button
               type="button"
               onClick={onDriftClick}
               style={toolbarNavButtonStyle(false)}
+              title="Explore by era"
             >
               Drift
             </button>
@@ -1353,8 +1354,8 @@ function TreeCanvasInner({
           <a
             href={`/trees/${treeId}/inbox`}
             style={toolbarIconButtonStyle}
-            title="Inbox"
-            aria-label="Inbox"
+            title="Messages"
+            aria-label="Messages"
           >
             <InboxIcon />
           </a>
@@ -1474,7 +1475,7 @@ function TreeCanvasInner({
                 />
               </label>
               <label style={{ display: "grid", gap: 5, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)" }}>
-                Essence (optional)
+                Short bio (optional)
                 <input
                   value={firstPersonForm.essenceLine}
                   onChange={(e) => setFirstPersonForm((f) => ({ ...f, essenceLine: e.target.value }))}
@@ -1878,7 +1879,7 @@ function TreeCanvasInner({
                   {showAdvancedForm && (
                     <>
                       <FormRow
-                        label="Essence line"
+                        label="Short bio"
                         value={createForm.essenceLine}
                         onChange={(value) =>
                           setCreateForm((s) => ({ ...s, essenceLine: value }))

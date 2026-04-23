@@ -6,5 +6,5 @@ export default async function FamilyMapPage({
   params: Promise<{ treeId: string }>;
 }) {
   const { treeId } = await params;
-  redirect(`/trees/${treeId}`);
+  redirect(`/trees/${treeId}/tree`);
 }

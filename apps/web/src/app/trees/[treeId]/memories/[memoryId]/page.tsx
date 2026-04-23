@@ -734,7 +734,7 @@ export default function MemoryPage({
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(data?.error ?? "Failed to delete memory.");
       }
-      router.push(`/trees/${treeId}`);
+      router.push(`/trees/${treeId}/home`);
     } catch (error) {
       setDeleting(false);
       setDeleteError(
@@ -881,11 +881,11 @@ export default function MemoryPage({
             background: "var(--paper-deep)",
           }}
         >
-          <a href={`/trees/${treeId}/atrium`} style={memoryNavItemStyle(false)}>
-            Atrium
+          <a href={`/trees/${treeId}/home`} style={memoryNavItemStyle(false)}>
+            Home
           </a>
-          <a href={`/trees/${treeId}`} style={memoryNavItemStyle(false)}>
-            Tree
+          <a href={`/trees/${treeId}/tree`} style={memoryNavItemStyle(false)}>
+            Family tree
           </a>
         </div>
         {memory.primaryPerson && (

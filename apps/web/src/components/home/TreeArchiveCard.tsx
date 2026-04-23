@@ -282,10 +282,10 @@ export function TreeArchiveCard({
               event.currentTarget.style.opacity = "1";
             }}
           >
-            Enter atrium →
+            Enter Home →
           </a>
           <a
-            href={href.replace(/\/atrium$/, "")}
+            href={href.replace(/\/home$/, "/tree").replace(/\/atrium$/, "/tree")}
             style={{
               fontFamily: "var(--font-ui)",
               fontSize: 13,
@@ -310,7 +310,7 @@ export function TreeArchiveCard({
               event.currentTarget.style.transform = "translateX(0)";
             }}
           >
-            Open constellation
+            Open family tree
           </a>
         </div>
       </div>
