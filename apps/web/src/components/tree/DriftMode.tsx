@@ -51,6 +51,122 @@ const MEDIA_MAX_MS = 60000;
 const DEFAULT_MEDIA_FALLBACK_MS = 15000;
 const DOCUMENT_CARD_MS = 8000;
 const SEEN_STORAGE_KEY_PREFIX = "tessera:drift:seen:";
+const BACKDROP_STORAGE_KEY = "tessera:drift:backdrop";
+
+type BackdropStyle =
+  | "blur-soft"
+  | "blur-heavy"
+  | "blur-dark"
+  | "blur-mono"
+  | "gradient"
+  | "ink"
+  | "none";
+
+type BackdropStyleDef = {
+  id: BackdropStyle;
+  label: string;
+  photoFilter: string | null;
+  photoBrightness: number;
+  blurPx: number;
+  saturate: number;
+  grayscale: number;
+  scale: number;
+  vignette: string | null;
+  useGradientWhenNoPhoto: boolean;
+};
+
+const BACKDROP_STYLES: BackdropStyleDef[] = [
+  {
+    id: "blur-soft",
+    label: "Blurred photo · soft",
+    photoFilter: null,
+    photoBrightness: 0.6,
+    blurPx: 48,
+    saturate: 1.2,
+    grayscale: 0,
+    scale: 1.12,
+    vignette:
+      "radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.4) 100%)",
+    useGradientWhenNoPhoto: true,
+  },
+  {
+    id: "blur-heavy",
+    label: "Blurred photo · heavy",
+    photoFilter: null,
+    photoBrightness: 0.55,
+    blurPx: 90,
+    saturate: 1.3,
+    grayscale: 0,
+    scale: 1.2,
+    vignette:
+      "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)",
+    useGradientWhenNoPhoto: true,
+  },
+  {
+    id: "blur-dark",
+    label: "Blurred photo · dark",
+    photoFilter: null,
+    photoBrightness: 0.3,
+    blurPx: 60,
+    saturate: 1.1,
+    grayscale: 0,
+    scale: 1.15,
+    vignette:
+      "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.6) 100%)",
+    useGradientWhenNoPhoto: true,
+  },
+  {
+    id: "blur-mono",
+    label: "Blurred photo · mono",
+    photoFilter: null,
+    photoBrightness: 0.5,
+    blurPx: 55,
+    saturate: 1,
+    grayscale: 1,
+    scale: 1.15,
+    vignette:
+      "radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.45) 100%)",
+    useGradientWhenNoPhoto: true,
+  },
+  {
+    id: "gradient",
+    label: "Kind-tinted gradient",
+    photoFilter: null,
+    photoBrightness: 0,
+    blurPx: 0,
+    saturate: 1,
+    grayscale: 0,
+    scale: 1,
+    vignette:
+      "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 100%)",
+    useGradientWhenNoPhoto: true,
+  },
+  {
+    id: "ink",
+    label: "Ink + vignette",
+    photoFilter: null,
+    photoBrightness: 0,
+    blurPx: 0,
+    saturate: 1,
+    grayscale: 0,
+    scale: 1,
+    vignette:
+      "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.4) 100%)",
+    useGradientWhenNoPhoto: false,
+  },
+  {
+    id: "none",
+    label: "Pure ink (no backdrop)",
+    photoFilter: null,
+    photoBrightness: 0,
+    blurPx: 0,
+    saturate: 1,
+    grayscale: 0,
+    scale: 1,
+    vignette: null,
+    useGradientWhenNoPhoto: false,
+  },
+];
 
 function loadSeenMap(treeId: string): Record<string, number> {
   if (typeof window === "undefined") return {};
@@ -123,6 +239,16 @@ export function DriftMode({
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [backdropStyle, setBackdropStyle] = useState<BackdropStyle>(() => {
+    if (typeof window === "undefined") return "blur-soft";
+    const stored = window.localStorage.getItem(BACKDROP_STORAGE_KEY);
+    return (BACKDROP_STYLES.find((s) => s.id === stored)?.id ??
+      "blur-soft") as BackdropStyle;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(BACKDROP_STORAGE_KEY, backdropStyle);
+  }, [backdropStyle]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number>(0);
@@ -422,6 +548,23 @@ export function DriftMode({
     return null;
   }, [current, currentKind]);
 
+  const activeBackdrop =
+    BACKDROP_STYLES.find((s) => s.id === backdropStyle) ?? BACKDROP_STYLES[0]!;
+
+  const showPhotoBackdrop =
+    backdropPhotoUrl != null &&
+    activeBackdrop.blurPx > 0 &&
+    backdropStyle !== "ink" &&
+    backdropStyle !== "none" &&
+    backdropStyle !== "gradient";
+
+  const rootBackground =
+    backdropStyle === "none"
+      ? "var(--ink)"
+      : activeBackdrop.useGradientWhenNoPhoto && !showPhotoBackdrop
+        ? gradientBackdrop
+        : "var(--ink)";
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -432,7 +575,7 @@ export function DriftMode({
         position: "fixed",
         inset: 0,
         zIndex: 60,
-        background: gradientBackdrop,
+        background: rootBackground,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -442,9 +585,9 @@ export function DriftMode({
     >
       {/* Backdrop: blurred copy of the current photo for cohesion + full-bleed feel */}
       <AnimatePresence mode="wait">
-        {backdropPhotoUrl && (
+        {showPhotoBackdrop && backdropPhotoUrl && (
           <motion.div
-            key={`backdrop:${backdropPhotoUrl}`}
+            key={`backdrop:${backdropStyle}:${backdropPhotoUrl}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -456,8 +599,8 @@ export function DriftMode({
               backgroundImage: `url(${backdropPhotoUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              filter: "blur(60px) saturate(1.25) brightness(0.55)",
-              transform: "scale(1.15)",
+              filter: `blur(${activeBackdrop.blurPx}px) saturate(${activeBackdrop.saturate}) brightness(${activeBackdrop.photoBrightness}) grayscale(${activeBackdrop.grayscale})`,
+              transform: `scale(${activeBackdrop.scale})`,
               pointerEvents: "none",
             }}
           />
@@ -466,16 +609,17 @@ export function DriftMode({
 
       {/* Vignette: darken edges so media always sits in a framed center.
           Kept very subtle. Sits above the backdrop but below content. */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 1,
-          pointerEvents: "none",
-          background:
-            "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.45) 100%)",
-        }}
-      />
+      {activeBackdrop.vignette && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 1,
+            pointerEvents: "none",
+            background: activeBackdrop.vignette,
+          }}
+        />
+      )}
       {/* Close */}
       <button
         onClick={onClose}
@@ -553,6 +697,35 @@ export function DriftMode({
         />
         {isPlaying ? "Playing" : "Paused"}
       </button>
+
+      {/* Backdrop style selector (dev-facing knob for trying looks) */}
+      <select
+        value={backdropStyle}
+        onChange={(e) => setBackdropStyle(e.target.value as BackdropStyle)}
+        aria-label="Backdrop style"
+        style={{
+          position: "absolute",
+          top: 20,
+          right: 140,
+          background: "rgba(10,10,10,0.5)",
+          border: "1px solid rgba(217,208,188,0.3)",
+          borderRadius: 20,
+          color: "var(--paper-deep)",
+          fontFamily: "var(--font-ui)",
+          fontSize: 12,
+          cursor: "pointer",
+          padding: "5px 12px",
+          zIndex: 10,
+          appearance: "none",
+          outline: "none",
+        }}
+      >
+        {BACKDROP_STYLES.map((s) => (
+          <option key={s.id} value={s.id} style={{ background: "#1a1a1a" }}>
+            {s.label}
+          </option>
+        ))}
+      </select>
 
       {/* Navigation zones */}
       <button
