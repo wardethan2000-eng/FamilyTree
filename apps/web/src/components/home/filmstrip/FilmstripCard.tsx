@@ -2,6 +2,7 @@
 
 import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory } from "../homeTypes";
+import { isVideoMemory } from "../homeUtils";
 
 export function FilmstripCard({
   memory,
@@ -15,6 +16,7 @@ export function FilmstripCard({
   index: number;
 }) {
   const mediaUrl = memory.mediaUrl ? getProxiedMediaUrl(memory.mediaUrl) : null;
+  const isVideo = isVideoMemory(memory);
   const isPhoto = memory.kind === "photo" && mediaUrl;
   const isVoice = memory.kind === "voice";
   const isDoc = memory.kind === "document" && mediaUrl;
@@ -68,18 +70,32 @@ export function FilmstripCard({
       >
         {isPhoto && mediaUrl && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={mediaUrl}
-              alt={memory.title}
-              onError={handleMediaError}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                filter: "sepia(8%) brightness(0.65)",
-              }}
-            />
+            {isVideo ? (
+              <video
+                src={mediaUrl}
+                muted
+                playsInline
+                autoPlay
+                loop
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              <img
+                src={mediaUrl}
+                alt={memory.title}
+                onError={handleMediaError}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  filter: "sepia(8%) brightness(0.65)",
+                }}
+              />
+            )}
             <div
               style={{
                 position: "absolute",

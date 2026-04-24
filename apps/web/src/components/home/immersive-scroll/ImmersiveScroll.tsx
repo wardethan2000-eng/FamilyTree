@@ -61,7 +61,8 @@ export function ImmersiveScroll({
   return (
     <div
       style={{
-        background: "#0f0d0a",
+        background:
+          "radial-gradient(ellipse at 10% 30%, rgba(176,139,62,0.05), transparent 50%), radial-gradient(ellipse at 90% 70%, rgba(78,93,66,0.05), transparent 50%), #0f0d0a",
         minHeight: "100vh",
       }}
     >

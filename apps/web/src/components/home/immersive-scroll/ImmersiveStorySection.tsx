@@ -17,8 +17,8 @@ export function ImmersiveStorySection({
     offset: ["start end", "end start"],
   });
 
-  const bgOpacity = useTransform(scrollYProgress, [0.1, 0.3], [0, 1]);
-  const contentOpacity = useTransform(scrollYProgress, [0.2, 0.35], [0, 1]);
+  const bgOpacity = useTransform(scrollYProgress, [0.05, 0.2], [0, 1]);
+  const contentOpacity = useTransform(scrollYProgress, [0.15, 0.28], [0, 1]);
   const contentY = useTransform(contentOpacity, [0, 1], [40, 0]);
 
   const truncatedBody =
@@ -29,7 +29,7 @@ export function ImmersiveStorySection({
   return (
     <div
       ref={sectionRef}
-      style={{ position: "relative", height: "280vh" }}
+      style={{ position: "relative", height: "160vh" }}
     >
       <div
         style={{

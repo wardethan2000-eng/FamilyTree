@@ -19,16 +19,16 @@ export function ImmersiveDocumentSection({
     offset: ["start end", "end start"],
   });
 
-  const scale = useTransform(scrollYProgress, [0.15, 0.4], [0.4, 1]);
-  const borderRadius = useTransform(scrollYProgress, [0.15, 0.4], [12, 4]);
-  const contentOpacity = useTransform(scrollYProgress, [0.25, 0.4], [0, 1]);
+  const scale = useTransform(scrollYProgress, [0.1, 0.3], [0.4, 1]);
+  const borderRadius = useTransform(scrollYProgress, [0.1, 0.3], [12, 4]);
+  const contentOpacity = useTransform(scrollYProgress, [0.2, 0.32], [0, 1]);
   const contentY = useTransform(contentOpacity, [0, 1], [30, 0]);
-  const cardOpacity = useTransform(scrollYProgress, [0, 0.15, 0.85, 1], [0, 1, 1, 0]);
+  const cardOpacity = useTransform(scrollYProgress, [0, 0.1, 0.88, 1], [0, 1, 1, 0]);
 
   return (
     <div
       ref={sectionRef}
-      style={{ position: "relative", height: "260vh" }}
+      style={{ position: "relative", height: "160vh" }}
     >
       <div
         style={{

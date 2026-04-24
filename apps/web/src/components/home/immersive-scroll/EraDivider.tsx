@@ -12,7 +12,7 @@ export function EraDivider({ label }: { label: string }) {
       ref={ref}
       style={{
         position: "relative",
-        height: "40vh",
+        height: "25vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

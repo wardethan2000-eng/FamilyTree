@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory } from "../homeTypes";
+import { isVideoMemory } from "../homeUtils";
 
 export interface CellSpan {
   colSpan: number;
@@ -29,6 +30,7 @@ export function GalleryCell({
   const inView = useInView(ref, { once: true, margin: "-10%" });
 
   const isPhoto = kind === "hero" || kind === "landscape" || kind === "portrait" || (kind === "standard" && mediaUrl);
+  const isVideoCell = isPhoto && isVideoMemory(memory);
   const isVoice = kind === "voice";
   const isStory = kind === "story";
 
@@ -52,23 +54,39 @@ export function GalleryCell({
             ? "var(--paper)"
             : "#1a1815",
         border: isStory ? "1px solid var(--rule)" : undefined,
-        transition: "box-shadow 200ms ease",
+        boxShadow: isPhoto
+          ? "0 0 40px rgba(0,0,0,0.4), inset 0 0 60px rgba(0,0,0,0.15)"
+          : "0 4px 16px rgba(0,0,0,0.15)",
       }}
     >
       {isPhoto && mediaUrl && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl}
-            alt={memory.title}
-            onError={handleMediaError}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: "sepia(8%) brightness(0.62)",
-            }}
-          />
+          {isVideoCell ? (
+            <video
+              src={mediaUrl}
+              muted
+              playsInline
+              autoPlay
+              loop
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <img
+              src={mediaUrl}
+              alt={memory.title}
+              onError={handleMediaError}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "sepia(8%) brightness(0.62)",
+              }}
+            />
+          )}
           <div
             style={{
               position: "absolute",

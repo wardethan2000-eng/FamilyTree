@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { getProxiedMediaUrl } from "@/lib/media-url";
 import type { TreeHomeMemory } from "../homeTypes";
+import { isVideoMemory } from "../homeUtils";
 
 export function GalleryExpandedView({
   memory,
@@ -15,6 +16,7 @@ export function GalleryExpandedView({
   href: string;
 }) {
   const mediaUrl = memory.mediaUrl ? getProxiedMediaUrl(memory.mediaUrl) : null;
+  const isVideo = isVideoMemory(memory);
   const usesMedia = Boolean(mediaUrl && (memory.kind === "photo" || memory.kind === "document"));
 
   return (
@@ -56,18 +58,31 @@ export function GalleryExpandedView({
       >
         {usesMedia && mediaUrl && (
           <a href={href} style={{ display: "block", width: "100%", textAlign: "center" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={mediaUrl}
-              alt={memory.title}
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-              style={{
-                maxHeight: "78vh",
-                maxWidth: "100%",
-                objectFit: "contain",
-                filter: memory.kind === "photo" ? "sepia(6%) brightness(0.72)" : undefined,
-              }}
-            />
+            {isVideo ? (
+              <video
+                src={mediaUrl}
+                controls
+                playsInline
+                autoPlay
+                style={{
+                  maxHeight: "78vh",
+                  maxWidth: "100%",
+                  objectFit: "contain",
+                }}
+              />
+            ) : (
+              <img
+                src={mediaUrl}
+                alt={memory.title}
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                style={{
+                  maxHeight: "78vh",
+                  maxWidth: "100%",
+                  objectFit: "contain",
+                  filter: memory.kind === "photo" ? "sepia(6%) brightness(0.72)" : undefined,
+                }}
+              />
+            )}
           </a>
         )}
 
@@ -93,7 +108,7 @@ export function GalleryExpandedView({
                 marginBottom: 8,
               }}
             >
-              {memory.kind === "photo" ? "Photo" : memory.kind === "voice" ? "Voice" : memory.kind === "document" ? "Document" : "Story"}
+              {isVideo ? "Video" : memory.kind === "photo" ? "Photo" : memory.kind === "voice" ? "Voice" : memory.kind === "document" ? "Document" : "Story"}
               {memory.dateOfEventText && ` · ${memory.dateOfEventText}`}
             </div>
             <div

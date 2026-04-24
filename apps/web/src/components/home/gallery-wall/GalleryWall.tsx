@@ -73,7 +73,8 @@ export function GalleryWall({
     <div
       style={{
         minHeight: "100vh",
-        background: "#0f0d0a",
+        background:
+          "radial-gradient(ellipse at 15% 20%, rgba(176,139,62,0.06), transparent 45%), radial-gradient(ellipse at 85% 60%, rgba(78,93,66,0.06), transparent 45%), radial-gradient(ellipse at 50% 80%, rgba(168,93,93,0.04), transparent 50%), #12100c",
         padding: "clamp(24px, 4vw, 48px)",
       }}
     >

@@ -17,7 +17,7 @@ export function ImmersiveVoiceSection({
     offset: ["start end", "end start"],
   });
 
-  const contentOpacity = useTransform(scrollYProgress, [0.15, 0.3], [0, 1]);
+  const contentOpacity = useTransform(scrollYProgress, [0.1, 0.22], [0, 1]);
   const contentY = useTransform(contentOpacity, [0, 1], [40, 0]);
 
   const transcript =
@@ -30,7 +30,7 @@ export function ImmersiveVoiceSection({
   return (
     <div
       ref={sectionRef}
-      style={{ position: "relative", height: "250vh" }}
+      style={{ position: "relative", height: "160vh" }}
     >
       <div
         style={{

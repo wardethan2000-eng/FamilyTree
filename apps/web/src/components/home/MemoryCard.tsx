@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory } from "./homeTypes";
-import { EASE, getVoiceTranscriptLabel } from "./homeUtils";
+import { EASE, getVoiceTranscriptLabel, isVideoMemory } from "./homeUtils";
 
 export function MemoryCard({
   memory,
@@ -17,6 +17,7 @@ export function MemoryCard({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const resolvedMediaUrl = getProxiedMediaUrl(memory.mediaUrl);
+  const isVideo = isVideoMemory(memory);
   const active = hovered || focused;
 
   return (
@@ -58,19 +59,32 @@ export function MemoryCard({
       >
         {memory.kind === "photo" && resolvedMediaUrl ? (
           <div style={{ height: "clamp(126px, 18vw, 156px)", overflow: "hidden", position: "relative" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resolvedMediaUrl}
-              alt={memory.title}
-              onError={handleMediaError}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transform: active ? "scale(1.03)" : "scale(1)",
-                transition: `transform 240ms ${EASE}`,
-              }}
-            />
+            {isVideo ? (
+              <video
+                src={resolvedMediaUrl}
+                muted
+                playsInline
+                preload="metadata"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              <img
+                src={resolvedMediaUrl}
+                alt={memory.title}
+                onError={handleMediaError}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transform: active ? "scale(1.03)" : "scale(1)",
+                  transition: `transform 240ms ${EASE}`,
+                }}
+              />
+            )}
           </div>
         ) : (
           <div

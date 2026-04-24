@@ -8,6 +8,10 @@ import type {
 
 export const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 
+export function isVideoMemory(memory: TreeHomeMemory): boolean {
+  return memory.mimeType?.startsWith("video/") ?? false;
+}
+
 export function extractYearFromText(text?: string | null): number | null {
   if (!text) return null;
   const match = text.match(/\b(\d{4})\b/);
