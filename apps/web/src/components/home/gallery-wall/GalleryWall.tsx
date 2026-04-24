@@ -95,7 +95,7 @@ export function GalleryWall({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(200px, 45vw), 1fr))",
           gap: "clamp(6px, 1vw, 12px)",
           gridAutoRows: "clamp(140px, 20vh, 240px)",
         }}

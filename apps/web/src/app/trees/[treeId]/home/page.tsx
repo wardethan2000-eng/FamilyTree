@@ -515,6 +515,7 @@ export default function AtriumPage() {
       }}
     >
       <header
+        className="tessera-header"
         style={{
           position: "fixed",
           top: 0,
@@ -569,6 +570,7 @@ export default function AtriumPage() {
         </div>
 
         <div
+          className="tessera-header-nav"
           style={{
             justifySelf: "center",
             display: "flex",
@@ -649,6 +651,7 @@ export default function AtriumPage() {
           {curationCount > 0 && (
             <Link
               href={`/trees/${treeId}/curation`}
+              className="tessera-header-curation"
               style={{
                 ...headerButtonStyle,
                 color: "var(--amber, #c97d1a)",
@@ -671,7 +674,7 @@ export default function AtriumPage() {
 
           <button type="button" onClick={() => setSearchOpen(true)} style={headerButtonStyle}>
             <span>⌕</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span className="tessera-header-search-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
               Search
               <kbd
                 style={{
@@ -844,6 +847,32 @@ export default function AtriumPage() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
       />
+
+      <style jsx>{`
+        @media (max-width: 900px) {
+          .tessera-header {
+            grid-template-columns: 1fr auto !important;
+            gap: 8px !important;
+            padding: 6px 12px !important;
+          }
+          .tessera-header-nav {
+            display: none !important;
+          }
+          .tessera-header-search-text {
+            display: none !important;
+          }
+          .tessera-header-curation {
+            display: none !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .tessera-header {
+            grid-template-columns: 1fr auto !important;
+            gap: 6px !important;
+            padding: 6px 10px !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }

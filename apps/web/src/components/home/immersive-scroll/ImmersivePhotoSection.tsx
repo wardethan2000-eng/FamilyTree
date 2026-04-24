@@ -584,6 +584,55 @@ export function ImmersivePhotoSection({
           </div>
         )}
 
+        <div className="immersive-mobile-context">
+          {memory.personName && (
+            <button
+              type="button"
+              onClick={() => memory.primaryPersonId && onPersonClick(memory.primaryPersonId)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                border: memory.primaryPersonId ? "1px solid rgba(246,241,231,0.14)" : "none",
+                borderRadius: 999,
+                background: memory.primaryPersonId ? "rgba(246,241,231,0.08)" : "transparent",
+                color: "rgba(246,241,231,0.80)",
+                padding: memory.primaryPersonId ? "6px 12px" : "0",
+                cursor: memory.primaryPersonId ? "pointer" : "default",
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+              }}
+            >
+              {memory.personName}
+              {memory.dateOfEventText && (
+                <span style={{ color: "rgba(246,241,231,0.40)", fontSize: 11 }}>· {memory.dateOfEventText}</span>
+              )}
+            </button>
+          )}
+          {relatedPeople.length > (memory.primaryPersonId ? 1 : 0) && (
+            <span style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "rgba(246,241,231,0.40)" }}>
+              +{relatedPeople.length - (memory.primaryPersonId ? 1 : 0)} others
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onMemoryClick(memory)}
+            style={{
+              border: "1px solid rgba(246,241,231,0.14)",
+              borderRadius: 999,
+              background: "rgba(246,241,231,0.08)",
+              color: "rgba(246,241,231,0.72)",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              marginLeft: "auto",
+            }}
+          >
+            Open
+          </button>
+        </div>
+
         <style jsx>{`
           .immersive-context-rail {
             opacity: 0;
@@ -598,12 +647,27 @@ export function ImmersivePhotoSection({
           .immersive-media-card {
             background: transparent;
           }
+          .immersive-mobile-context {
+            display: none;
+          }
           @media (max-width: 768px) {
             .immersive-context-rail {
               display: none !important;
             }
             .immersive-media-card {
               width: 100% !important;
+            }
+            .immersive-mobile-context {
+              display: flex;
+              position: absolute;
+              bottom: 0;
+              left: 0;
+              right: 0;
+              z-index: 5;
+              align-items: center;
+              gap: 10;
+              padding: 14px 16px;
+              background: linear-gradient(180deg, transparent 0%, rgba(13,11,8,0.85) 30%);
             }
           }
         `}</style>

@@ -62,30 +62,67 @@ export function GalleryCell({
       {isPhoto && mediaUrl && (
         <>
           {isVideoCell ? (
-            <video
-              src={mediaUrl}
-              muted
-              playsInline
-              autoPlay
-              loop
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
+            <>
+              <video
+                src={mediaUrl}
+                aria-hidden="true"
+                muted
+                playsInline
+                autoPlay
+                loop
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  filter: "blur(28px) brightness(0.4) saturate(0.4)",
+                  transform: "scale(1.06)",
+                }}
+              />
+              <video
+                src={mediaUrl}
+                muted
+                playsInline
+                autoPlay
+                loop
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                }}
+              />
+            </>
           ) : (
-            <img
-              src={mediaUrl}
-              alt={memory.title}
-              onError={handleMediaError}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                filter: "sepia(8%) brightness(0.62)",
-              }}
-            />
+            <>
+              <img
+                src={mediaUrl}
+                alt=""
+                aria-hidden="true"
+                onError={handleMediaError}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  filter: "blur(28px) brightness(0.4) saturate(0.4)",
+                  transform: "scale(1.06)",
+                }}
+              />
+              <img
+                src={mediaUrl}
+                alt={memory.title}
+                onError={handleMediaError}
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                }}
+              />
+            </>
           )}
           <div
             style={{

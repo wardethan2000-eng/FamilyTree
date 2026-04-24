@@ -710,8 +710,8 @@ function WallLabel({
             display: "grid",
             gap: 18,
             alignItems: "start",
-            gridTemplateColumns: mediaUrl && memory.kind === "photo"
-              ? "minmax(200px, 280px) minmax(0, 1fr)"
+              gridTemplateColumns: mediaUrl && memory.kind === "photo"
+              ? "minmax(min(120px, 40vw), 280px) minmax(0, 1fr)"
               : "minmax(0, 1fr)",
           }}
         >
