@@ -130,8 +130,8 @@ These were the non-obvious parts:
 
 At the time this was last updated, the running app processes were launched from:
 
-- API: `/home/ubuntu/heirloom-decade-rail-live/apps/api`
-- Web: `/home/ubuntu/heirloom-decade-rail-live/apps/web`
+- API: `/home/ubuntu/heirloom-immersive-scroll-live/apps/api`
+- Web: `/home/ubuntu/heirloom-immersive-scroll-live/apps/web`
 
 Local health checks:
 
@@ -152,10 +152,10 @@ To confirm the working directories:
 ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 ```
 
-Current verified live pids after media-fix deployment:
+Current verified live pids after immersive-scroll-fix deployment:
 
-- API listener pid: `91275`
-- Web listener pid: `88813`
+- API listener pid: `99139`
+- Web listener pid: `99140`
 
 ## Historical Startup Shape On The App VM
 
@@ -257,8 +257,8 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 - Current live checkout: `/home/ubuntu/heirloom-decade-rail-live`
 - Previous live checkout: `/home/ubuntu/tessera-onboarding-live`
 - Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
-- Previous live checkout: `/home/ubuntu/heirloom-dashboard-redesign-live`
-- Current live checkout: `/home/ubuntu/heirloom-decade-rail-live`
+- Current live checkout: `/home/ubuntu/heirloom-immersive-scroll-live`
+- Previous live checkout: `/home/ubuntu/heirloom-decade-rail-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
 - Backup directory on data VM: `~/familytree-backups`
 
