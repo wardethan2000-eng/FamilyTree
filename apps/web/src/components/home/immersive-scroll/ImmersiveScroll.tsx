@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useRef } from "react";
-import { motion, useScroll, useTransform, useInView } from "framer-motion";
-import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
+import { useMemo } from "react";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 import type { AtriumSharedProps } from "../AtriumModeRouter";
 import type { TreeHomeMemory } from "../homeTypes";
 import { ImmersivePhotoSection } from "./ImmersivePhotoSection";
@@ -13,13 +12,11 @@ import { EraDivider } from "./EraDivider";
 
 export function ImmersiveScroll({
   treeId,
-  treeName,
   featuredMemory,
   trailSections,
   people,
   onPersonClick,
   onMemoryClick,
-  onDrift,
 }: AtriumSharedProps) {
   const allMemories = useMemo(() => {
     const result: TreeHomeMemory[] = [];
@@ -81,6 +78,9 @@ export function ImmersiveScroll({
               memory={memory}
               mediaUrl={getProxiedMediaUrl(memory.mediaUrl)!}
               href={href}
+              people={people}
+              onPersonClick={onPersonClick}
+              onMemoryClick={onMemoryClick}
             />
           );
         }
