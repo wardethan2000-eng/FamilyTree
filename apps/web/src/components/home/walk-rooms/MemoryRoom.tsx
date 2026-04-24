@@ -219,17 +219,19 @@ function PhotoMemoryRoom({
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        background: "#1c1915",
+        background: "#141210",
         textDecoration: "none",
         color: "inherit",
         overflow: "hidden",
+        padding: "clamp(24px, 4vw, 48px) max(20px, 4vw)",
       }}
     >
       <div
         style={{
           position: "relative",
-          width: "min(92vw, 1100px)",
-          maxHeight: "72vh",
+          width: "100%",
+          maxWidth: 980,
+          maxHeight: "55vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -242,12 +244,23 @@ function PhotoMemoryRoom({
           alt={memory.title}
           onError={handleMediaError}
           style={{
-            maxHeight: "72vh",
+            maxHeight: "55vh",
             maxWidth: "100%",
+            width: "auto",
+            height: "auto",
             objectFit: "contain",
-            filter: "sepia(10%) brightness(0.75)",
-            animation: "kenBurnsSlow 60s ease-in-out infinite",
+            filter: "sepia(8%) brightness(0.78)",
+            animation: "kenBurnsSlow 80s ease-in-out infinite",
             willChange: "transform",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(20,18,16,0.50) 100%)",
+            pointerEvents: "none",
           }}
         />
       </div>

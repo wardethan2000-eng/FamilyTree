@@ -29,7 +29,7 @@ interface UseAtriumWalkReturn {
   direction: WalkDirection;
 }
 
-const TRANSITION_MS = 1200;
+const TRANSITION_MS = 1000;
 const WHEEL_DEBOUNCE_MS = 150;
 const WHEEL_THRESHOLD_PX = 50;
 const TOUCH_THRESHOLD_PX = 50;

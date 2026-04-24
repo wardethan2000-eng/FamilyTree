@@ -63,18 +63,21 @@ interface AtriumWalkProps {
   onStartRemembrance: (personId: string) => void;
 }
 
-const TRANSITION_DURATION = 1.2;
+const TRANSITION_DURATION = 1.0;
 const TRANSITION_EASE = [0.22, 0.61, 0.36, 1] as const;
 
 const roomVariants = {
-  enter: () => ({
+  enter: (direction: "forward" | "backward" | null) => ({
     opacity: 0,
+    scale: direction === "backward" ? 0.985 : 1.015,
   }),
   center: {
     opacity: 1,
+    scale: 1,
   },
-  exit: () => ({
+  exit: (direction: "forward" | "backward" | null) => ({
     opacity: 0,
+    scale: direction === "forward" ? 0.985 : 1.015,
   }),
 };
 
@@ -313,29 +316,29 @@ export function AtriumWalk({
         background: "var(--paper)",
       }}
     >
-      <AnimatePresence mode="popLayout" custom={direction}>
-        {currentRoom && (
-          <motion.div
-            key={currentRoom.id}
-            custom={direction}
-            variants={roomVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{
-              duration: isTransitioning ? TRANSITION_DURATION : 0,
-              ease: TRANSITION_EASE,
-            }}
-            style={{
-              position: "absolute",
-              inset: 0,
-              overflowY: "auto",
-            }}
-          >
-            {renderRoom(currentRoom)}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <AnimatePresence mode="sync" initial={false} custom={direction}>
+            {currentRoom && (
+              <motion.div
+                key={currentRoom.id}
+                custom={direction}
+                variants={roomVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{
+                  duration: TRANSITION_DURATION,
+                  ease: TRANSITION_EASE,
+                }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  overflowY: "auto",
+                }}
+              >
+                {renderRoom(currentRoom)}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
       {totalRooms > 1 && (
         <WalkProgress
