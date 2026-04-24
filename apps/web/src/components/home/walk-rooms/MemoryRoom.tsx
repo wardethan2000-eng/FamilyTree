@@ -217,7 +217,7 @@ function PhotoMemoryRoom({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "flex-end",
+        justifyContent: "center",
         minHeight: "100vh",
         background: "#1c1915",
         textDecoration: "none",
@@ -225,37 +225,38 @@ function PhotoMemoryRoom({
         overflow: "hidden",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={mediaUrl}
-        alt={memory.title}
-        onError={handleMediaError}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          filter: "sepia(14%) brightness(0.65)",
-          animation: "kenBurnsSlow 30s ease-in-out infinite",
-          willChange: "transform",
-        }}
-      />
       <div
         style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(180deg, rgba(28,25,21,0.10) 0%, rgba(28,25,21,0.08) 40%, rgba(28,25,21,0.70) 100%)",
+          position: "relative",
+          width: "min(92vw, 1100px)",
+          maxHeight: "72vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
         }}
-      />
-
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={mediaUrl}
+          alt={memory.title}
+          onError={handleMediaError}
+          style={{
+            maxHeight: "72vh",
+            maxWidth: "100%",
+            objectFit: "contain",
+            filter: "sepia(10%) brightness(0.75)",
+            animation: "kenBurnsSlow 60s ease-in-out infinite",
+            willChange: "transform",
+          }}
+        />
+      </div>
       <div
         style={{
           position: "relative",
           width: "100%",
           maxWidth: 900,
-          padding: "clamp(32px, 6vw, 72px) max(20px, 5vw) clamp(36px, 7vw, 72px)",
+          padding: "clamp(20px, 3vw, 36px) max(20px, 5vw) clamp(36px, 7vw, 72px)",
         }}
       >
         <div

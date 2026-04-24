@@ -63,21 +63,18 @@ interface AtriumWalkProps {
   onStartRemembrance: (personId: string) => void;
 }
 
-const TRANSITION_DURATION = 0.7;
+const TRANSITION_DURATION = 1.2;
 const TRANSITION_EASE = [0.22, 0.61, 0.36, 1] as const;
 
 const roomVariants = {
-  enter: (direction: "forward" | "backward" | null) => ({
+  enter: () => ({
     opacity: 0,
-    y: direction === "backward" ? -20 : 30,
   }),
   center: {
     opacity: 1,
-    y: 0,
   },
-  exit: (direction: "forward" | "backward" | null) => ({
+  exit: () => ({
     opacity: 0,
-    y: direction === "forward" ? -20 : 30,
   }),
 };
 
@@ -313,9 +310,10 @@ export function AtriumWalk({
         minHeight: "100vh",
         overflow: "hidden",
         touchAction: "pan-y",
+        background: "var(--paper)",
       }}
     >
-      <AnimatePresence mode="wait" custom={direction}>
+      <AnimatePresence mode="popLayout" custom={direction}>
         {currentRoom && (
           <motion.div
             key={currentRoom.id}

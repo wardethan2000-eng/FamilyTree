@@ -79,18 +79,27 @@ export function FoyerRoom({
     >
       {usesMedia && mediaUrl ? (
         <>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "#1c1915",
+            }}
+          />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={mediaUrl}
             alt={featuredMemory?.title ?? treeName}
             style={{
               position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: "sepia(18%) brightness(0.6)",
-              animation: "kenBurns 40s ease-in-out infinite",
+              top: "8vh",
+              left: "50%",
+              transform: "translateX(-50%)",
+              maxHeight: "72vh",
+              maxWidth: "88vw",
+              objectFit: "contain",
+              filter: "sepia(14%) brightness(0.7)",
+              animation: "kenBurns 60s ease-in-out infinite",
               willChange: "transform",
             }}
           />
@@ -99,7 +108,7 @@ export function FoyerRoom({
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(96deg, rgba(28,25,21,0.92) 0%, rgba(28,25,21,0.72) 42%, rgba(28,25,21,0.48) 100%), linear-gradient(180deg, rgba(28,25,21,0.16) 0%, rgba(28,25,21,0.5) 100%)",
+                "radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(28,25,21,0.55) 100%), linear-gradient(180deg, rgba(28,25,21,0.3) 0%, rgba(28,25,21,0.08) 30%, rgba(28,25,21,0.08) 50%, rgba(28,25,21,0.70) 100%)",
             }}
           />
         </>
