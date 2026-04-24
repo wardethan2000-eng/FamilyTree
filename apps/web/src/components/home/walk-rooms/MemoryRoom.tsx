@@ -219,139 +219,111 @@ function PhotoMemoryRoom({
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        background: "#141210",
+        background: "#0f0d0a",
         textDecoration: "none",
         color: "inherit",
         overflow: "hidden",
-        padding: "clamp(24px, 4vw, 48px) max(20px, 4vw)",
       }}
     >
+      {/* Photo: hero, the experience */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={mediaUrl}
+        alt={memory.title}
+        onError={handleMediaError}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          filter: "sepia(10%) brightness(0.55)",
+          animation: "kenBurnsSlow 80s ease-in-out infinite",
+          willChange: "transform",
+        }}
+      />
+
+      {/* Cinematic vignette: dark edges, soft center */}
       <div
         style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: 980,
-          maxHeight: "55vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(ellipse at 50% 40%, rgba(15,13,10,0.10) 0%, rgba(15,13,10,0.55) 55%, rgba(15,13,10,0.92) 100%), linear-gradient(180deg, rgba(15,13,10,0.35) 0%, rgba(15,13,10,0.05) 35%, rgba(15,13,10,0.05) 55%, rgba(15,13,10,0.80) 100%)",
+          pointerEvents: "none",
         }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={mediaUrl}
-          alt={memory.title}
-          onError={handleMediaError}
-          style={{
-            maxHeight: "55vh",
-            maxWidth: "100%",
-            width: "auto",
-            height: "auto",
-            objectFit: "contain",
-            filter: "sepia(8%) brightness(0.78)",
-            animation: "kenBurnsSlow 80s ease-in-out infinite",
-            willChange: "transform",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(20,18,16,0.50) 100%)",
-            pointerEvents: "none",
-          }}
-        />
-      </div>
+      />
+
+      {/* Caption: bottom-left, minimal, elegant */}
       <div
         style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: 900,
-          padding: "clamp(20px, 3vw, 36px) max(20px, 5vw) clamp(36px, 7vw, 72px)",
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "clamp(28px, 5vw, 56px) max(24px, 5vw)",
+          background: "linear-gradient(180deg, transparent 0%, rgba(15,13,10,0.85) 40%)",
+          pointerEvents: "none",
         }}
       >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            color: "rgba(246,241,231,0.56)",
-          }}
-        >
-          <span>Photo</span>
-          {memory.dateOfEventText && (
-            <>
-              <span style={{ opacity: 0.42 }}>·</span>
-              <span>{memory.dateOfEventText}</span>
-            </>
-          )}
-          {mediaCount > 1 && (
-            <>
-              <span style={{ opacity: 0.42 }}>·</span>
-              <span>{mediaCount} items</span>
-            </>
-          )}
-        </div>
-
-        <div
-          style={{
-            marginTop: 18,
-            fontFamily: "var(--font-display)",
-            fontSize: "clamp(32px, 6vw, 64px)",
-            lineHeight: 0.98,
-            color: "rgba(246,241,231,0.97)",
-            maxWidth: "13ch",
-            textWrap: "balance",
-          }}
-        >
-          {memory.title}
-        </div>
-
-        <div
-          style={{
-            marginTop: 16,
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          {memory.personName && (
-            <NamePlate light personName={memory.personName} portraitUrl={memory.personPortraitUrl} />
-          )}
-          {relatedPeople.length > 0 &&
-            relatedPeople.slice(0, 3).map((person) => (
-              <NamePlate
-                key={person.id}
-                light
-                personName={person.name}
-                portraitUrl={person.portraitUrl}
-                onClick={() => onPersonClick(person.id)}
-              />
-            ))}
-        </div>
-
-        {excerpt && (
-          <p
+        <div style={{ maxWidth: 760, pointerEvents: "auto" }}>
+          {/* Meta line */}
+          <div
             style={{
-              margin: "18px 0 0",
-              maxWidth: "56ch",
-              fontFamily: "var(--font-body)",
-              fontSize: 17,
-              lineHeight: 1.82,
-              color: "rgba(246,241,231,0.80)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              textTransform: "uppercase",
+              letterSpacing: "0.14em",
+              color: "rgba(246,241,231,0.40)",
+              marginBottom: 10,
             }}
           >
-            {excerpt}
-          </p>
-        )}
+            <span>Photo</span>
+            {memory.dateOfEventText && (
+              <>
+                <span>·</span>
+                <span>{memory.dateOfEventText}</span>
+              </>
+            )}
+            {mediaCount > 1 && (
+              <>
+                <span>·</span>
+                <span>{mediaCount} items</span>
+              </>
+            )}
+          </div>
+
+          {/* Title */}
+          <div
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "clamp(22px, 3.2vw, 40px)",
+              lineHeight: 1.15,
+              color: "rgba(246,241,231,0.95)",
+              maxWidth: "22ch",
+              textWrap: "balance",
+            }}
+          >
+            {memory.title}
+          </div>
+
+          {/* Person */}
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            {memory.personName && (
+              <NamePlate light personName={memory.personName} portraitUrl={memory.personPortraitUrl} />
+            )}
+          </div>
+        </div>
       </div>
     </Link>
   );

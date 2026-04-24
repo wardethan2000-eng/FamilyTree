@@ -5,7 +5,6 @@ import { useMemo } from "react";
 import type { TreeHomeCoverage, TreeHomeMemory, TreeHomeMemoryTrailSection, TreeHomeTodayHighlights } from "./homeTypes";
 import { useAtriumWalk, type WalkPace, type WalkRoom } from "./useAtriumWalk";
 import { FoyerRoom } from "./walk-rooms/FoyerRoom";
-import { HallwayRoom } from "./walk-rooms/HallwayRoom";
 import { MemoryRoom } from "./walk-rooms/MemoryRoom";
 import { AnteroomRoom } from "./walk-rooms/AnteroomRoom";
 import { DisplayCaseRoom } from "./walk-rooms/DisplayCaseRoom";
@@ -162,34 +161,13 @@ export function AtriumWalk({
       data: featuredMemory,
     });
 
-    for (let sectionIdx = 0; sectionIdx < trailSections.length; sectionIdx++) {
-      const section = trailSections[sectionIdx]!;
-
-      if (sectionIdx > 0) {
+    for (const section of trailSections) {
+      for (const memory of section.memories) {
         result.push({
-          id: `hallway:${section.id}`,
-          type: "hallway",
-          data: { title: section.title, description: section.description },
+          id: `memory:${memory.id}`,
+          type: "memory",
+          data: memory,
         });
-      }
-
-      const isWidening =
-        sectionIdx === trailSections.length - 1 && section.memories.length >= 3;
-
-      if (isWidening) {
-        result.push({
-          id: `display:${section.id}`,
-          type: "display-case",
-          data: section,
-        });
-      } else {
-        for (const memory of section.memories) {
-          result.push({
-            id: `memory:${memory.id}`,
-            type: "memory",
-            data: memory,
-          });
-        }
       }
     }
 
@@ -250,14 +228,7 @@ export function AtriumWalk({
         );
 
       case "hallway": {
-        const hallData = room.data as { title: string; description: string };
-        return (
-          <HallwayRoom
-            title={hallData.title}
-            description={hallData.description}
-            pace={pace}
-          />
-        );
+        return null;
       }
 
       case "memory": {

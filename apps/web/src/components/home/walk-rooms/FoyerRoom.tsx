@@ -73,44 +73,35 @@ export function FoyerRoom({
       style={{
         position: "relative",
         minHeight: "100vh",
+        background: "#0f0d0a",
         overflow: "hidden",
-        background: "#1c1915",
       }}
     >
       {usesMedia && mediaUrl ? (
         <>
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "#141210",
-            }}
-          />
+          {/* Photo: the experience */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={mediaUrl}
             alt={featuredMemory?.title ?? treeName}
             style={{
               position: "absolute",
-              top: "10vh",
-              left: "50%",
-              transform: "translateX(-50%)",
-              maxHeight: "55vh",
-              maxWidth: "80vw",
-              width: "auto",
-              height: "auto",
-              objectFit: "contain",
-              filter: "sepia(12%) brightness(0.72)",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "sepia(12%) brightness(0.55)",
               animation: "kenBurns 80s ease-in-out infinite",
               willChange: "transform",
             }}
           />
+          {/* Cinematic vignette */}
           <div
             style={{
               position: "absolute",
               inset: 0,
               background:
-                "radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(20,18,16,0.65) 100%), linear-gradient(180deg, rgba(20,18,16,0.45) 0%, rgba(20,18,16,0.08) 25%, rgba(20,18,16,0.06) 50%, rgba(20,18,16,0.75) 100%)",
+                "radial-gradient(ellipse at 50% 40%, rgba(15,13,10,0.10) 0%, rgba(15,13,10,0.55) 55%, rgba(15,13,10,0.92) 100%), linear-gradient(180deg, rgba(15,13,10,0.45) 0%, rgba(15,13,10,0.05) 35%, rgba(15,13,10,0.05) 55%, rgba(15,13,10,0.85) 100%)",
             }}
           />
         </>
@@ -125,45 +116,45 @@ export function FoyerRoom({
         />
       )}
 
+      {/* Context overlay — bottom-left caption style */}
       <div
         style={{
-          position: "relative",
-          padding: "clamp(28px, 6vw, 56px) max(20px, 5vw) clamp(36px, 7vw, 72px)",
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "flex-end",
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "clamp(32px, 5vw, 64px) max(24px, 5vw)",
+          background: "linear-gradient(180deg, transparent 0%, rgba(15,13,10,0.85) 40%)",
         }}
       >
         <div style={{ maxWidth: 760 }}>
+          {/* Meta chip */}
           <div
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 10,
-              padding: "8px 12px",
-              borderRadius: 999,
-              background: "rgba(246,241,231,0.08)",
-              backdropFilter: "blur(10px)",
+              gap: 8,
               fontFamily: "var(--font-ui)",
               fontSize: 11,
-              color: "rgba(246,241,231,0.62)",
               textTransform: "uppercase",
               letterSpacing: "0.12em",
+              color: "rgba(246,241,231,0.40)",
+              marginBottom: 10,
             }}
           >
-            <span>Featured memory</span>
-            <span style={{ opacity: 0.55 }}>·</span>
+            <span>Featured</span>
+            <span>·</span>
             <span>{treeName}</span>
           </div>
 
           <div
             style={{
-              marginTop: 16,
               fontFamily: "var(--font-display)",
-              fontSize: "clamp(34px, 6vw, 58px)",
-              lineHeight: 1.02,
+              fontSize: "clamp(28px, 5vw, 52px)",
+              lineHeight: 1.08,
               color: "rgba(246,241,231,0.96)",
-              maxWidth: "15ch",
+              maxWidth: "18ch",
+              textWrap: "balance",
             }}
           >
             {featuredMemory?.title ?? treeName}
@@ -171,14 +162,14 @@ export function FoyerRoom({
 
           <div
             style={{
-              marginTop: 12,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
+              marginTop: 10,
               fontFamily: "var(--font-ui)",
               fontSize: 13,
-              color: "rgba(246,241,231,0.72)",
+              color: "rgba(246,241,231,0.50)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
             }}
           >
             {(featuredMemory?.personName || featuredMemory?.dateOfEventText) && (
@@ -188,38 +179,31 @@ export function FoyerRoom({
                 {featuredMemory?.dateOfEventText ?? ""}
               </span>
             )}
-            <span
-              style={{
-                padding: "5px 10px",
-                borderRadius: 999,
-                background: "rgba(246,241,231,0.08)",
-              }}
-            >
-              {branchCue}
-            </span>
+            <span>{branchCue}</span>
           </div>
 
           {excerpt && (
             <p
               style={{
-                margin: "18px 0 0",
-                maxWidth: "60ch",
+                margin: "12px 0 0",
+                maxWidth: "55ch",
                 fontFamily: "var(--font-body)",
-                fontSize: 16,
-                lineHeight: 1.8,
-                color: "rgba(246,241,231,0.8)",
+                fontSize: 15,
+                lineHeight: 1.7,
+                color: "rgba(246,241,231,0.55)",
               }}
             >
               {excerpt}
             </p>
           )}
 
+          {/* Action row */}
           <div
             style={{
-              marginTop: 26,
+              marginTop: 20,
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: 10,
               flexWrap: "wrap",
             }}
           >
@@ -228,82 +212,46 @@ export function FoyerRoom({
                 href={memoryHref}
                 style={{
                   fontFamily: "var(--font-ui)",
-                  fontSize: 14,
-                  fontWeight: 600,
+                  fontSize: 13,
+                  fontWeight: 500,
                   color: "var(--ink)",
-                  background: "rgba(246,241,231,0.95)",
+                  background: "rgba(246,241,231,0.92)",
                   borderRadius: 999,
-                  padding: "12px 18px",
+                  padding: "10px 16px",
                   textDecoration: "none",
-                  transition: `background 200ms ${EASE}, border-color 200ms ${EASE}`,
+                  transition: `background 200ms ${EASE}`,
                 }}
               >
                 Continue with this memory
               </Link>
             )}
-
-            {branchHref && (
-              <Link
-                href={branchHref}
-                style={{
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 14,
-                  color: "rgba(246,241,231,0.9)",
-                  background: "rgba(246,241,231,0.08)",
-                  border: "1px solid rgba(246,241,231,0.18)",
-                  borderRadius: 999,
-                  padding: "12px 18px",
-                  textDecoration: "none",
-                  transition: `background 200ms ${EASE}, border-color 200ms ${EASE}`,
-                }}
-              >
-                Follow this branch
-              </Link>
-            )}
-
-            <Link
-              href={fullTreeHref}
+            <button
+              type="button"
+              onClick={onDrift}
               style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 14,
-                color: "rgba(246,241,231,0.9)",
+                border: "none",
                 background: "rgba(246,241,231,0.08)",
-                border: "1px solid rgba(246,241,231,0.18)",
+                padding: "10px 16px",
                 borderRadius: 999,
-                padding: "12px 18px",
-                textDecoration: "none",
-                transition: `background 200ms ${EASE}, border-color 200ms ${EASE}`,
+                cursor: "pointer",
+                fontFamily: "var(--font-display)",
+                fontSize: 14,
+                fontStyle: "italic",
+                color: "rgba(246,241,231,0.68)",
+                transition: `background 200ms ${EASE}`,
               }}
             >
-              Open full tree
-            </Link>
+              Drift through the archive
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={onDrift}
-            style={{
-              marginTop: 16,
-              border: "none",
-              background: "none",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "var(--font-display)",
-              fontSize: 16,
-              fontStyle: "italic",
-              color: "rgba(246,241,231,0.76)",
-            }}
-          >
-            Drift through the archive
-          </button>
 
           {resurfacingCount > 1 && (
             <div
               style={{
-                marginTop: 18,
+                marginTop: 12,
                 fontFamily: "var(--font-ui)",
-                fontSize: 12,
-                color: "rgba(246,241,231,0.58)",
+                fontSize: 11,
+                color: "rgba(246,241,231,0.35)",
               }}
             >
               Quietly resurfacing from {resurfacingCount} featured memories.
@@ -312,24 +260,24 @@ export function FoyerRoom({
         </div>
       </div>
 
+      {/* Context tooltip — top-right, minimal */}
       <div
         style={{
           position: "absolute",
-          bottom: "clamp(24px, 4vw, 48px)",
-          right: "max(20px, 5vw)",
+          top: "clamp(20px, 3vw, 40px)",
+          right: "max(20px, 4vw)",
           opacity: contextVisible ? 1 : 0,
-          transform: contextVisible ? "translateY(0)" : "translateY(8px)",
+          transform: contextVisible ? "translateY(0)" : "translateY(6px)",
           transition: `opacity 700ms ${EASE}, transform 700ms ${EASE}`,
           pointerEvents: contextVisible ? "auto" : "none",
-          maxWidth: 440,
-          padding: "14px 18px",
-          borderRadius: 12,
+          maxWidth: 360,
+          padding: "10px 14px",
+          borderRadius: 10,
           background: "rgba(246,241,231,0.92)",
           backdropFilter: "blur(8px)",
-          border: "1px solid rgba(176,139,62,0.18)",
           fontFamily: "var(--font-body)",
-          fontSize: 14,
-          lineHeight: 1.65,
+          fontSize: 13,
+          lineHeight: 1.6,
           color: "var(--ink-soft)",
         }}
       >
