@@ -7,8 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { AtriumCoachmark } from "@/components/home/AtriumCoachmark";
 import { AtriumSkeleton } from "@/components/home/HomeSurfaceSkeletons";
 import { AtriumStartState } from "@/components/home/AtriumStartState";
-import { AtriumWalk } from "@/components/home/AtriumWalk";
-import type { WalkPace } from "@/components/home/useAtriumWalk";
+import { AtriumModeRouter, type AtriumMode } from "@/components/home/AtriumModeRouter";
 import type {
   TreeHomeArchiveSummary,
   TreeHomeCoverage,
@@ -130,7 +129,7 @@ export default function AtriumPage() {
   const [curationCount, setCurationCount] = useState(0);
   const [selectedEra, setSelectedEra] = useState<EraValue>("all");
 
-  const [pace, setPace] = useState<WalkPace>("lingering");
+  const [mode, setMode] = useState<AtriumMode>("scroll");
   const [headerVisible, setHeaderVisible] = useState(true);
 
   useEffect(() => {
@@ -605,15 +604,45 @@ export default function AtriumPage() {
         >
           <button
             type="button"
-            onClick={() => setPace((p) => (p === "lingering" ? "flowing" : "lingering"))}
+            onClick={() => setMode("scroll")}
             style={{
               ...headerButtonStyle,
               fontSize: 11,
               padding: "6px 10px",
+              background: mode === "scroll" ? "var(--moss)" : "var(--paper-deep)",
+              color: mode === "scroll" ? "#fff" : "var(--ink-faded)",
+              border: mode === "scroll" ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
             }}
-            title={pace === "lingering" ? "Switch to flowing pace (shorter pauses)" : "Switch to lingering pace (full pauses)"}
           >
-            {pace === "lingering" ? "☽ Lingering" : "≋ Flowing"}
+            Scroll
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("gallery")}
+            style={{
+              ...headerButtonStyle,
+              fontSize: 11,
+              padding: "6px 10px",
+              background: mode === "gallery" ? "var(--moss)" : "var(--paper-deep)",
+              color: mode === "gallery" ? "#fff" : "var(--ink-faded)",
+              border: mode === "gallery" ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
+            }}
+          >
+            Gallery
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("filmstrip")}
+            style={{
+              ...headerButtonStyle,
+              fontSize: 11,
+              padding: "6px 10px",
+              background: mode === "filmstrip" ? "var(--moss)" : "var(--paper-deep)",
+              color: mode === "filmstrip" ? "#fff" : "var(--ink-faded)",
+              border: mode === "filmstrip" ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
+            }}
+          >
+            Filmstrip
           </button>
 
           {curationCount > 0 && (
@@ -719,7 +748,8 @@ export default function AtriumPage() {
           onAddMemory={() => setWizardOpen(true)}
         />
       ) : (
-        <AtriumWalk
+        <AtriumModeRouter
+          mode={mode}
           treeId={treeId}
           treeName={tree?.name ?? "Family Archive"}
           featuredMemory={activeFeaturedMemory}
@@ -749,7 +779,6 @@ export default function AtriumPage() {
           memoryHref={activeFeaturedMemory ? `/trees/${treeId}/memories/${activeFeaturedMemory.id}` : null}
           branchHref={activeFocusPersonId ? `/trees/${treeId}/people/${activeFocusPersonId}` : null}
           fullTreeHref={`/trees/${treeId}/tree`}
-          pace={pace}
           onPersonClick={handlePersonClick}
           onMemoryClick={(memory) => {
             router.push(`/trees/${treeId}/memories/${memory.id}`);
