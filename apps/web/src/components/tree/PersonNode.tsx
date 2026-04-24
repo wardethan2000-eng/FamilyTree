@@ -1,10 +1,19 @@
 "use client";
 
-import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { memo, useMemo } from "react";
+import { Handle, Position, useViewport, type NodeProps } from "@xyflow/react";
 import type { PersonFlowNode } from "./treeTypes";
 import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import { NODE_HEIGHT, NODE_WIDTH, PORTRAIT_SIZE } from "./treeLayout";
+
+type ZoomLevel = "very-low" | "low" | "medium" | "high";
+
+function getZoomLevel(zoom: number): ZoomLevel {
+  if (zoom < 0.3) return "very-low";
+  if (zoom < 0.6) return "low";
+  if (zoom < 1.0) return "medium";
+  return "high";
+}
 
 function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
   const {
@@ -18,6 +27,9 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
     isDimmed,
     decadeRelevance,
   } = data;
+
+  const viewport = useViewport();
+  const zoomLevel = useMemo(() => getZoomLevel(Math.round(viewport.zoom * 10) / 10), [viewport.zoom]);
 
   const initials = name
     .split(" ")
@@ -45,11 +57,153 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
 
   const resolvedPortraitUrl = getProxiedMediaUrl(portraitUrl);
 
+  if (zoomLevel === "very-low") {
+    return (
+      <div
+        style={{
+          position: "relative",
+          transition: "opacity var(--duration-focus) var(--ease-tessera), transform var(--duration-camera) var(--ease-tessera)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 2,
+          width: 48,
+          userSelect: "none",
+          opacity: combinedOpacity,
+          filter: isDimmed ? "saturate(0.75)" : "none",
+          transform: `scale(${decadeScale})`,
+          transformOrigin: "center top",
+        }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: "50%",
+            background: isFocused
+              ? "var(--ink)"
+              : isYou
+                ? "var(--moss)"
+                : "var(--rule)",
+            boxShadow: isDimmed
+              ? "none"
+              : isYou
+                ? "0 0 8px rgba(78,93,66,0.5)"
+                : isFocused
+                  ? "0 0 10px rgba(28,25,21,0.35)"
+                  : "0 0 6px rgba(212,190,159,0.4)",
+            transition: "box-shadow var(--duration-micro) var(--ease-tessera), background var(--duration-focus) var(--ease-tessera)",
+          }}
+        />
+        <div
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 8,
+            color: isDimmed ? "var(--ink-faded)" : "var(--ink)",
+            textAlign: "center",
+            lineHeight: 1.2,
+            maxWidth: 64,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {name.split(" ")[0]}
+        </div>
+        <Handle type="target" position={Position.Top} style={{ opacity: 0, top: 0, bottom: "auto" }} />
+        <Handle type="source" position={Position.Bottom} style={{ opacity: 0, bottom: 0, top: "auto" }} />
+      </div>
+    );
+  }
+
+  if (zoomLevel === "low") {
+    return (
+      <div
+        style={{
+          position: "relative",
+          transition: "opacity var(--duration-focus) var(--ease-tessera), transform var(--duration-camera) var(--ease-tessera)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 4,
+          width: 74,
+          userSelect: "none",
+          opacity: combinedOpacity,
+          filter: isDimmed ? "saturate(0.75)" : "none",
+          transform: `scale(${decadeScale})`,
+          transformOrigin: "center top",
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            overflow: "hidden",
+            flexShrink: 0,
+            background: "var(--paper-deep)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            ...ringStyle,
+            boxShadow: isDimmed
+              ? "none"
+              : isYou
+                ? "0 0 10px rgba(78,93,66,0.5)"
+                : isFocused
+                  ? "0 0 12px rgba(28,25,21,0.25)"
+                  : "0 0 8px rgba(212,190,159,0.35)",
+            transition: "box-shadow var(--duration-micro) var(--ease-tessera), border-color var(--duration-focus) var(--ease-tessera)",
+          }}
+        >
+          {resolvedPortraitUrl ? (
+            <img
+              src={resolvedPortraitUrl}
+              alt={name}
+              onError={handleMediaError}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 14,
+                color: "var(--ink-faded)",
+                fontWeight: 400,
+              }}
+            >
+              {initials}
+            </span>
+          )}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 11,
+            color: "var(--ink)",
+            textAlign: "center",
+            lineHeight: 1.25,
+            maxWidth: 74,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {name}
+        </div>
+        <Handle type="target" position={Position.Top} style={{ opacity: 0, top: 0, bottom: "auto" }} />
+        <Handle type="source" position={Position.Bottom} style={{ opacity: 0, bottom: 0, top: "auto" }} />
+      </div>
+    );
+  }
+
+  const showEssence = zoomLevel === "high" && essenceLine;
+
   return (
     <div
       style={{
         position: "relative",
-        transition: "opacity 500ms cubic-bezier(0.22, 0.61, 0.36, 1), transform 600ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+        transition: "opacity var(--duration-focus) var(--ease-tessera), transform var(--duration-camera) var(--ease-tessera)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -63,7 +217,6 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
         transformOrigin: "center top",
       }}
     >
-      {/* Portrait circle */}
       <div
         style={{
           width: PORTRAIT_SIZE,
@@ -77,8 +230,12 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
           justifyContent: "center",
           ...ringStyle,
           transition:
-            "box-shadow 150ms cubic-bezier(0.22, 0.61, 0.36, 1), border-color 500ms cubic-bezier(0.22, 0.61, 0.36, 1)",
-          boxShadow: isFocused ? "0 0 0 4px rgba(212,190,159,0.28)" : "none",
+            "box-shadow var(--duration-micro) var(--ease-tessera), border-color var(--duration-focus) var(--ease-tessera)",
+          boxShadow: isFocused
+            ? "0 0 0 4px rgba(212,190,159,0.28), 0 0 14px rgba(212,190,159,0.3)"
+            : isYou
+              ? "0 0 10px rgba(78,93,66,0.45)"
+              : "0 0 8px rgba(212,190,159,0.25)",
         }}
       >
         {resolvedPortraitUrl ? (
@@ -102,7 +259,6 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
         )}
       </div>
 
-      {/* Name */}
       <div
         style={{
           fontFamily: "var(--font-display)",
@@ -122,7 +278,6 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
         {name}
       </div>
 
-      {/* Dates */}
       {dateLabel && (
         <div
           style={{
@@ -137,7 +292,6 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
         </div>
       )}
 
-      {/* Essence line — only at higher zoom, shown via CSS class from parent */}
       {essenceLine && (
         <div
           className="essence-line"
@@ -152,6 +306,9 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             minHeight: 12,
+            opacity: showEssence ? 1 : 0,
+            transition: "opacity var(--duration-focus) var(--ease-tessera)",
+            height: showEssence ? undefined : 0,
           }}
         >
           {essenceLine.slice(0, 40)}

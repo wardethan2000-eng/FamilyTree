@@ -22,6 +22,12 @@
 
   /* Shadow */
   --shadow:      rgba(28, 25, 21, 0.08);
+
+  /* Motion durations */
+  --duration-micro:    200ms;
+  --duration-focus:    500ms;
+  --duration-camera:   600ms;
+  --duration-arrival:  800ms;
 }
 
 @theme inline {
@@ -134,8 +140,10 @@ body {
   stroke: var(--rule);
 }
 
-.react-flow__background {
-  background: var(--paper);
+/* ─── Zoom-level-of-detail ───────────────────────────────────────────────── */
+
+.react-flow__viewport {
+  background: transparent;
 }
 
 /* Remove ReactFlow attribution */

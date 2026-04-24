@@ -474,7 +474,7 @@ export function MemoryLightbox({
                           ? "var(--moss)"
                           : "rgba(246,241,231,0.3)"
                         : "rgba(246,241,231,0.25)",
-                      transition: "background 400ms",
+                      transition: "background var(--duration-focus)",
                       animation: playing ? `wavePulse ${0.6 + (i % 5) * 0.1}s ease-in-out infinite alternate` : "none",
                     }}
                   />
@@ -672,7 +672,7 @@ export function MemoryLightbox({
                   m.kind === "photo" && m.mediaUrl
                     ? "none"
                     : "rgba(246,241,231,0.08)",
-                transition: "border-color 200ms",
+                transition: "border-color var(--duration-micro)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -728,7 +728,7 @@ function NavArrow({
         color: disabled ? "rgba(246,241,231,0.15)" : "rgba(246,241,231,0.7)",
         fontFamily: "var(--font-ui)",
         fontSize: 18,
-        transition: "background 150ms",
+        transition: "background var(--duration-micro)",
         zIndex: 5,
       }}
     >

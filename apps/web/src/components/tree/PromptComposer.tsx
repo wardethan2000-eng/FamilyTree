@@ -307,7 +307,7 @@ export function PromptComposer({
                       border: `1.5px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
                       background: selected ? "rgba(78,93,66,0.07)" : "var(--paper)",
                       cursor: "pointer",
-                      transition: "all 200ms",
+                      transition: "all var(--duration-micro)",
                     }}
                   >
                     <div
@@ -664,6 +664,6 @@ const textAreaStyle = {
   color: "var(--ink)",
   resize: "vertical" as const,
   outline: "none",
-  transition: "border-color 200ms",
+  transition: "border-color var(--duration-micro)",
   boxSizing: "border-box" as const,
 };

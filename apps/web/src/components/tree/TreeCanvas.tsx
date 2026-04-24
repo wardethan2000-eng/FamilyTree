@@ -4,7 +4,6 @@ import { getApiBase } from "@/lib/api-base";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BaseEdge,
-  Background,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -174,10 +173,33 @@ function TreeCanvasInner({
   });
   const [firstPersonError, setFirstPersonError] = useState<string | null>(null);
   const [creatingFirstPerson, setCreatingFirstPerson] = useState(false);
+  const [toolbarVisible, setToolbarVisible] = useState(true);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const toolbarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const didInitializeLineageRef = useRef(false);
+
+  const resetToolbarTimer = useCallback(() => {
+    setToolbarVisible(true);
+    if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+    if (!editMode) {
+      toolbarTimerRef.current = setTimeout(() => setToolbarVisible(false), 3000);
+    }
+  }, [editMode]);
+
+  useEffect(() => {
+    if (editMode) {
+      setToolbarVisible(true);
+      if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+      return;
+    }
+    resetToolbarTimer();
+    return () => {
+      if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+    };
+  }, [editMode, resetToolbarTimer]);
 
   const immediateFocusIds = useMemo(
     () => getConstellationFocusIds(selectedPersonId, relationships),
@@ -1153,6 +1175,16 @@ function TreeCanvasInner({
 
   return (
     <div ref={rootRef} style={{ width: "100%", height: "100%", position: "relative", background: CANVAS_BACKGROUND }}>
+      <svg aria-hidden="true" style={{ position: "absolute", width: 0, height: 0 }}>
+        <filter id="paper-grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" stitchTiles="stitch" result="noise" />
+          <feColorMatrix type="saturate" values="0" in="noise" result="gray" />
+          <feComponentTransfer in="gray" result="grain">
+            <feFuncA type="linear" slope="0.06" />
+          </feComponentTransfer>
+          <feBlend in="SourceGraphic" in2="grain" mode="multiply" />
+        </filter>
+      </svg>
       <div
         aria-hidden="true"
         style={{
@@ -1162,10 +1194,37 @@ function TreeCanvasInner({
           backgroundImage:
             "radial-gradient(circle at 8% 14%, rgba(177,165,145,0.22) 0 1px, transparent 1.5px), radial-gradient(circle at 22% 30%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 39% 12%, rgba(177,165,145,0.16) 0 1px, transparent 1.5px), radial-gradient(circle at 61% 22%, rgba(177,165,145,0.2) 0 1px, transparent 1.5px), radial-gradient(circle at 74% 38%, rgba(177,165,145,0.14) 0 1px, transparent 1.5px), radial-gradient(circle at 90% 16%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 14% 62%, rgba(177,165,145,0.16) 0 1px, transparent 1.5px), radial-gradient(circle at 31% 74%, rgba(177,165,145,0.14) 0 1px, transparent 1.5px), radial-gradient(circle at 53% 66%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 79% 70%, rgba(177,165,145,0.15) 0 1px, transparent 1.5px)",
           opacity: 0.75,
+          filter: "url(#paper-grain)",
         }}
       />
-      {/* Canvas header */}
       <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background: "radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(28,25,21,0.08) 100%)",
+          zIndex: 2,
+        }}
+      />
+      {/* Auto-show toolbar zone — thin strip at top that makes toolbar reappear on hover */}
+      <div
+        aria-hidden="true"
+        onMouseMove={() => { resetToolbarTimer(); }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 44,
+          zIndex: 11,
+          pointerEvents: toolbarVisible ? "none" : "auto",
+        }}
+      />
+      {/* Canvas header — auto-hides after inactivity */}
+      <div
+        onMouseEnter={() => { resetToolbarTimer(); }}
+        onMouseMove={() => { resetToolbarTimer(); }}
         style={{
           position: "absolute",
           top: 0,
@@ -1181,6 +1240,9 @@ function TreeCanvasInner({
           alignItems: "center",
           padding: "8px 20px",
           gap: 16,
+          opacity: toolbarVisible ? 1 : 0.15,
+          pointerEvents: toolbarVisible ? "auto" : "none",
+          transition: `opacity var(--duration-focus) var(--ease-tessera)`,
         }}
       >
         <div
@@ -1301,10 +1363,8 @@ function TreeCanvasInner({
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-end",
-            flexWrap: "wrap",
             gap: 8,
             minWidth: 0,
-            maxWidth: "min(100%, 980px)",
           }}
         >
           {onAddMemoryClick && (
@@ -1316,59 +1376,127 @@ function TreeCanvasInner({
             </button>
           )}
 
-          {onSearchClick && (
-            <button
-              onClick={onSearchClick}
-              style={{
-                ...toolbarButtonStyle,
-              }}
-            >
-              <span>⌕</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                Search
-                <kbd
+          {(() => {
+            const overflowActions = [
+              ...(onSearchClick ? [{ label: "Search", action: onSearchClick, shortcut: "⌘K" }] : []),
+              ...(onRequestMemoryClick ? [{ label: "Request a memory", action: onRequestMemoryClick }] : []),
+              { label: "Messages", action: undefined, href: `/trees/${treeId}/inbox` },
+              { label: "Settings", action: undefined, href: `/trees/${treeId}/settings` },
+            ];
+            if (overflowActions.length === 0) return null;
+            return (
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setActionsMenuOpen((v) => !v)}
                   style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 10,
-                    background: "var(--paper)",
-                    border: "1px solid var(--rule)",
-                    borderRadius: 3,
-                    padding: "1px 4px",
-                    color: "var(--ink-faded)",
+                    ...toolbarButtonStyle,
+                    padding: "8px 10px",
+                    minWidth: 36,
+                    justifyContent: "center",
                   }}
                 >
-                  ⌘K
-                </kbd>
-              </span>
-            </button>
-          )}
-
-          {onRequestMemoryClick && (
-            <button
-              onClick={onRequestMemoryClick}
-              style={toolbarButtonStyle}
-            >
-              Request a memory
-            </button>
-          )}
-
-          <a
-            href={`/trees/${treeId}/inbox`}
-            style={toolbarIconButtonStyle}
-            title="Messages"
-            aria-label="Messages"
-          >
-            <InboxIcon />
-          </a>
-
-          <a
-            href={`/trees/${treeId}/settings`}
-            style={toolbarIconButtonStyle}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <GearIcon />
-          </a>
+                  ⋯
+                </button>
+                {actionsMenuOpen && (
+                  <>
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 18 }}
+                      onClick={() => setActionsMenuOpen(false)}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 6px)",
+                        right: 0,
+                        zIndex: 19,
+                        minWidth: 160,
+                        background: "rgba(246,241,231,0.96)",
+                        border: "1px solid var(--rule)",
+                        borderRadius: 10,
+                        boxShadow: "0 12px 32px rgba(28,25,21,0.1)",
+                        backdropFilter: "blur(12px)",
+                        padding: "6px 4px",
+                      }}
+                    >
+                      {overflowActions.map((item) => {
+                        const inner = (
+                          <>
+                            {item.label}
+                            {item.shortcut && (
+                              <kbd
+                                style={{
+                                  fontFamily: "var(--font-ui)",
+                                  fontSize: 10,
+                                  background: "var(--paper)",
+                                  border: "1px solid var(--rule)",
+                                  borderRadius: 3,
+                                  padding: "1px 4px",
+                                  color: "var(--ink-faded)",
+                                  marginLeft: 8,
+                                }}
+                              >
+                                {item.shortcut}
+                              </kbd>
+                            )}
+                          </>
+                        );
+                        if (item.href) {
+                          return (
+                            <a
+                              key={item.label}
+                              href={item.href}
+                              style={{
+                                display: "block",
+                                width: "100%",
+                                textAlign: "left",
+                                fontFamily: "var(--font-ui)",
+                                fontSize: 12,
+                                color: "var(--ink-soft)",
+                                background: "transparent",
+                                border: "none",
+                                borderRadius: 6,
+                                padding: "7px 10px",
+                                cursor: "pointer",
+                                textDecoration: "none",
+                              }}
+                            >
+                              {inner}
+                            </a>
+                          );
+                        }
+                        return (
+                          <button
+                            key={item.label}
+                            type="button"
+                            onClick={() => {
+                              setActionsMenuOpen(false);
+                              item.action?.();
+                            }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              textAlign: "left",
+                              fontFamily: "var(--font-ui)",
+                              fontSize: 12,
+                              color: "var(--ink-soft)",
+                              background: "transparent",
+                              border: "none",
+                              borderRadius: 6,
+                              padding: "7px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {inner}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -1657,14 +1785,7 @@ function TreeCanvasInner({
         maxZoom={2.5}
         style={{ background: "transparent", paddingTop: CANVAS_TOP_PADDING }}
         proOptions={{ hideAttribution: true }}
-      >
-        <Background
-          style={{ background: "transparent" }}
-          gap={44}
-          size={1}
-          color="rgba(177,165,145,0.22)"
-        />
-      </ReactFlow>
+      />
 
       {projectedParentPlaceholderGroups.length > 0 && (
         <div

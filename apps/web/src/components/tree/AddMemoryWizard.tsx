@@ -61,7 +61,7 @@ const KIND_OPTIONS: { id: MemoryKind; icon: string; label: string; description: 
   { id: "other", icon: "◇", label: "Other", description: "Another kind of memory" },
 ];
 
-const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+const EASE = "var(--ease-tessera)";
 
 export function AddMemoryWizard({
   treeId,
@@ -278,7 +278,7 @@ export function AddMemoryWizard({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        animation: `fadeIn 200ms ${EASE}`,
+        animation: `fadeIn var(--duration-micro) ${EASE}`,
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -291,7 +291,7 @@ export function AddMemoryWizard({
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 20px 60px rgba(28,25,21,0.2)",
-          animation: `bloom 300ms ${EASE}`,
+          animation: `bloom var(--duration-micro) ${EASE}`,
         }}
       >
         {/* Header */}
@@ -378,7 +378,7 @@ export function AddMemoryWizard({
                 height: 3,
                 borderRadius: 2,
                 background: s <= step ? "var(--moss)" : "var(--rule)",
-                transition: `background 300ms ${EASE}`,
+                transition: `background var(--duration-micro) ${EASE}`,
               }}
             />
           ))}
@@ -416,7 +416,7 @@ export function AddMemoryWizard({
                       alignItems: "center",
                       gap: 12,
                       textAlign: "left",
-                      transition: `border-color 150ms, background 150ms`,
+                      transition: `border-color var(--duration-micro), background var(--duration-micro)`,
                     }}
                   >
                     <span
@@ -730,7 +730,7 @@ export function AddMemoryWizard({
                     textAlign: "center",
                     cursor: "pointer",
                     background: step2.files.length > 0 ? "rgba(78,93,66,0.06)" : "none",
-                    transition: "border-color 150ms, background 150ms",
+                    transition: "border-color var(--duration-micro), background var(--duration-micro)",
                   }}
                 >
                   {step2.files.length > 0 ? (
@@ -973,7 +973,7 @@ export function AddMemoryWizard({
                   borderRadius: 6,
                   padding: "9px 20px",
                   cursor: canProceedStep2() ? "pointer" : "default",
-                  transition: "background 150ms",
+                  transition: "background var(--duration-micro)",
                 }}
               >
                 Continue →
@@ -1057,7 +1057,7 @@ export function AddMemoryWizard({
                           flexDirection: "column",
                           alignItems: "center",
                           gap: 6,
-                          transition: "border-color 150ms, background 150ms",
+                          transition: "border-color var(--duration-micro), background var(--duration-micro)",
                         }}
                       >
                         <div
@@ -1469,7 +1469,7 @@ export function AddMemoryWizard({
                       ? "default"
                       : "pointer",
                   minWidth: 120,
-                  transition: "background 150ms",
+                  transition: "background var(--duration-micro)",
                 }}
               >
                 {submitting ? (uploadProgress ?? "Saving…") : "Save memory"}

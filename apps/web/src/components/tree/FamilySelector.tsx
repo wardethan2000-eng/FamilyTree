@@ -66,7 +66,7 @@ export function FamilySelector({
           alignItems: "center",
           gap: 4,
           boxShadow: "none",
-          transition: "background 220ms cubic-bezier(0.22,0.61,0.36,1), border-color 220ms cubic-bezier(0.22,0.61,0.36,1)",
+          transition: "background var(--duration-micro) var(--ease-tessera), border-color var(--duration-micro) var(--ease-tessera)",
         }}
       >
         {activeLabel}

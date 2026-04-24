@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+const EASE = "var(--ease-tessera)";
 
 interface DecadeRailProps {
   decades: number[];
@@ -102,7 +102,7 @@ export function DecadeRail({
             background: "var(--rule)",
             transform: "translateX(-50%)",
             opacity: activeDecade !== null ? 0.4 : 0.2,
-            transition: `opacity 400ms ${EASE}`,
+            transition: `opacity var(--duration-focus) ${EASE}`,
           }}
         />
 
@@ -183,7 +183,7 @@ export function DecadeRail({
                 color,
                 letterSpacing,
                 opacity,
-                transition: `all 400ms ${EASE}`,
+                transition: `all var(--duration-focus) ${EASE}`,
                 position: "relative",
                 zIndex: isActive ? 2 : 1,
                 lineHeight: 1,
@@ -201,7 +201,7 @@ export function DecadeRail({
                     height: 5,
                     borderRadius: "50%",
                     background: "var(--moss)",
-                    transition: `opacity 300ms ${EASE}`,
+                    transition: `opacity var(--duration-micro) ${EASE}`,
                   }}
                 />
               )}

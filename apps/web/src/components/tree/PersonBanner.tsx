@@ -7,7 +7,7 @@ import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import { getApiBase } from "@/lib/api-base";
 
 const API = getApiBase();
-const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+const EASE = "var(--ease-tessera)";
 
 const MONTHS = [
   "", "January", "February", "March", "April", "May", "June",
@@ -322,7 +322,7 @@ export function PersonBanner({
                       key={kind}
                       type="button"
                       onClick={() => onAddRelation(person.id, kind)}
-                      style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-soft)", background: "transparent", border: "1px solid var(--rule)", borderRadius: 999, padding: "4px 10px", cursor: "pointer", transition: `all 150ms ${EASE}` }}
+                      style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-soft)", background: "transparent", border: "1px solid var(--rule)", borderRadius: 999, padding: "4px 10px", cursor: "pointer", transition: `all var(--duration-micro) ${EASE}` }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--paper-deep)"; e.currentTarget.style.borderColor = "var(--moss)"; e.currentTarget.style.color = "var(--moss)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "var(--rule)"; e.currentTarget.style.color = "var(--ink-soft)"; }}
                     >+ {kind}</button>
@@ -337,7 +337,7 @@ export function PersonBanner({
               style={{
                 fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--paper)", background: "var(--ink)",
                 border: "none", borderRadius: 4, padding: "10px 0", cursor: "pointer", letterSpacing: "0.02em",
-                width: "100%", transition: `background 150ms ${EASE}`,
+                width: "100%", transition: `background var(--duration-micro) ${EASE}`,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--ink-soft)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "var(--ink)")}
@@ -364,7 +364,7 @@ export function PersonBanner({
                       fontFamily: "var(--font-ui)", fontSize: 12, textAlign: "center",
                       color: "var(--moss)", background: "transparent", border: "1px solid var(--moss)",
                       borderRadius: 4, padding: "8px 10px", cursor: "pointer", textDecoration: "none",
-                      transition: `all 150ms ${EASE}`,
+                      transition: `all var(--duration-micro) ${EASE}`,
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--moss)"; e.currentTarget.style.color = "var(--paper)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--moss)"; }}
@@ -425,7 +425,7 @@ function DateRow({
           background: isOpen ? "rgba(78,93,66,0.05)" : "transparent", border: isOpen ? "1px solid rgba(78,93,66,0.3)" : "1px dashed var(--rule)",
           borderRadius: 6, padding: "6px 10px", cursor: "pointer", width: "100%", textAlign: "left",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          transition: `all 150ms ${EASE}`,
+          transition: `all var(--duration-micro) ${EASE}`,
         }}
       >
         <span>{displayValue}</span>

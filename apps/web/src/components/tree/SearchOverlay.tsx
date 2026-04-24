@@ -48,7 +48,7 @@ const KIND_ICON: Record<MemoryKind, string> = {
   other: "◇",
 };
 
-const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+const EASE = "var(--ease-tessera)";
 
 function normalize(s: string) {
   return s.toLowerCase().replace(/['']/g, "'");
@@ -153,7 +153,7 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
         flexDirection: "column",
         alignItems: "center",
         paddingTop: "12vh",
-        animation: `fadeIn 180ms ${EASE}`,
+        animation: `fadeIn var(--duration-micro) ${EASE}`,
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -164,7 +164,7 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
           border: "1px solid var(--rule)",
           borderRadius: 12,
           boxShadow: "0 24px 80px rgba(28,25,21,0.25)",
-          animation: `bloom 250ms ${EASE}`,
+          animation: `bloom var(--duration-micro) ${EASE}`,
           overflow: "hidden",
           maxHeight: "72vh",
           display: "flex",
@@ -263,7 +263,7 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
                 padding: "10px 14px 8px",
                 cursor: "pointer",
                 textTransform: "capitalize",
-                transition: "color 150ms, border-color 150ms",
+                transition: "color var(--duration-micro), border-color var(--duration-micro)",
               }}
             >
               {t}
@@ -318,7 +318,7 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
                         gap: 12,
                         textAlign: "left",
                         borderRadius: 0,
-                        transition: "background 100ms",
+                        transition: "background var(--duration-micro)",
                       }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.background = "var(--paper-deep)";
@@ -434,7 +434,7 @@ export function SearchOverlay({ treeId, people, memories, open, onClose }: Searc
                         alignItems: "center",
                         gap: 12,
                         textAlign: "left",
-                        transition: "background 100ms",
+                        transition: "background var(--duration-micro)",
                       }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.background = "var(--paper-deep)";

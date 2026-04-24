@@ -222,24 +222,47 @@ Navigation between sheets uses the same gentle zoom/crossfade that already works
 
 Impact per effort ranking:
 
-| # | Improvement | Effort | Impact |
-|---|------------|-------|--------|
-| C | Zoom-level-of-detail | hours | ★★★★★ |
-| G | Arrival sequence | days | ★★★★★ |
-| A | Replace dot grid | hours | ★★★★☆ |
-| B | Canvas vignette | hours | ★★★★☆ |
-| K | Momentum camera | days | ★★★★★ |
-| E | Soften toolbar | hours | ★★★★☆ |
-| F | Node halos | hours | ★★★★☆ |
-| J | Cluster glow | days | ★★★★☆ |
-| L | Family labels at low zoom | hours | ★★★★☆ |
-| H | Depth-of-field on dim | hours | ★★★☆☆ |
-| M | Custom viewport intercepts | days | ★★★★★ |
-| O | Zoom-through transition | weeks | ★★★★★ |
-| N | Ambient drift | days | ★★★☆☆ |
-| I | Breathing edges | days | ★★★☆☆ |
-| D | Standardize durations | hours | ★★★☆☆ |
-| R | Dark constellation mode | weeks | ★★★★★ |
+| # | Improvement | Effort | Impact | Status |
+|---|------------|-------|--------|--------|
+| C | Zoom-level-of-detail | hours | ★★★★★ | ✅ Done |
+| G | Arrival sequence | days | ★★★★★ | |
+| A | Replace dot grid | hours | ★★★★☆ | ✅ Done (organic noise SVG filter) |
+| B | Canvas vignette | hours | ★★★★☆ | ✅ Done |
+| K | Momentum camera | days | ★★★★★ | |
+| E | Soften toolbar | hours | ★★★★☆ | ✅ Done (auto-hide + ...) |
+| F | Node halos | hours | ★★★★☆ | ✅ Done |
+| J | Cluster glow | days | ★★★★☆ | |
+| L | Family labels at low zoom | hours | ★★★★☆ | |
+| H | Depth-of-field on dim | hours | ★★★☆☆ | |
+| M | Custom viewport intercepts | days | ★★★★★ | |
+| O | Zoom-through transition | weeks | ★★★★★ | |
+| N | Ambient drift | days | ★★★☆☆ | |
+| I | Breathing edges | days | ★★★☆☆ | |
+| D | Standardize durations | hours | ★★★☆☆ | ✅ Done (CSS tokens) |
+| R | Dark constellation mode | weeks | ★★★★★ | |
+
+### Implementation Notes
+
+**A. Organic noise background** — Replaced React Flow `<Background>` dot grid with an SVG `feTurbulence` filter (`#paper-grain`) applied to the existing decorative dot-pattern overlay. The filter adds subtle paper-like grain using `fractalNoise` with `baseFrequency=0.65`, 4 octaves, and `slope=0.06` for the alpha channel.
+
+**B. Canvas vignette** — Added a `radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(28,25,21,0.08) 100%)` overlay div with `zIndex: 2` and `pointerEvents: none`.
+
+**C. Zoom-level-of-detail** — PersonNode now uses `useViewport()` from `@xyflow/react` (debounced to 1-decimal rounding via `useMemo`) to determine a zoom level tier (`very-low` < 0.3, `low` < 0.6, `medium` < 1.0, `high` ≥ 1.0). Each tier renders a different node:
+- `very-low`: 18px glowing dot + first name only, 48px container
+- `low`: 36px portrait + name (no dates), 74px container
+- `medium`: full current node (portrait, name, dates, no essence)
+- `high`: full node with essence line visible
+
+Essence line uses `opacity` transition rather than conditional rendering for smooth fade.
+
+**D. Duration tokens** — Added `--duration-micro: 200ms`, `--duration-focus: 500ms`, `--duration-camera: 600ms`, `--duration-arrival: 800ms` to `:root` in globals.css. Updated PersonNode, DecadeRail, PersonBanner, FamilySelector, SearchOverlay, CinematicPersonOverlay, AddMemoryWizard, DriftChooserSheet, MemoryLightbox, and PromptComposer to use `var(--duration-*)` and `var(--ease-tessera)` instead of hardcoded values. Keyframe animations left as-is (CSS `animation` shorthand doesn't reliably support `var()` for durations).
+
+**E. Toolbar softening** — Three changes:
+1. Auto-hide: toolbar fades to 15% opacity after 3 seconds of inactivity. Edit mode disables auto-hide. Moving mouse to top 44px strip reveals the toolbar. Hovering the toolbar resets the timer.
+2. Secondary actions collapsed: Search, Request a memory, Messages, and Settings are now in a "⋯" dropdown menu. Only "+ Add memory" and "⋯" remain in the right section.
+3. Removed `flexWrap: "wrap"` and `maxWidth: "min(100%, 980px)"` from the right section for a cleaner layout.
+
+**F. Node halos** — Portrait circles now have subtle warm box-shadow at rest: `0 0 8px rgba(212,190,159,0.25)` for default, `0 0 10px rgba(78,93,66,0.45)` for "is you", and `0 0 0 4px rgba(212,190,159,0.28), 0 0 14px rgba(212,190,159,0.3)` for focused.
 
 ---
 

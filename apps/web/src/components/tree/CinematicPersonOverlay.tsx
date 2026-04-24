@@ -189,7 +189,7 @@ export function CinematicPersonOverlay({
                 padding: "11px 28px",
                 cursor: "pointer",
                 letterSpacing: "0.02em",
-                transition: "background 150ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+                transition: "background var(--duration-micro) var(--ease-tessera)",
               }}
               onMouseEnter={(e) =>
                 (e.currentTarget.style.background = "var(--ink-soft)")

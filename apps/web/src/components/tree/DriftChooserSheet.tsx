@@ -330,7 +330,7 @@ function ChoiceRow({
         display: "flex",
         flexDirection: "column",
         gap: 4,
-        transition: "border-color 150ms, background 150ms",
+        transition: "border-color var(--duration-micro), background var(--duration-micro)",
       }}
     >
       <span
