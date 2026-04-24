@@ -33,9 +33,7 @@ export function ImmersivePhotoSection({
   });
 
   const scale = useTransform(scrollYProgress, [0.1, 0.35], [0.35, 1]);
-  const borderRadius = useTransform(scrollYProgress, [0.1, 0.35], [16, 0]);
-  const captionOpacity = useTransform(scrollYProgress, [0.35, 0.48], [0, 1]);
-  const captionY = useTransform(captionOpacity, [0, 1], [20, 0]);
+  const borderRadius = useTransform(scrollYProgress, [0.1, 0.35], [16, 6]);
   const vignetteOpacity = useTransform(scrollYProgress, [0.15, 0.35], [0, 1]);
   const cardOpacity = useTransform(scrollYProgress, [0, 0.1, 0.88, 1], [0, 1, 1, 0]);
   const contextOpacity = useTransform(scrollYProgress, [0.44, 0.56, 0.80, 0.92], [0, 1, 1, 0]);
@@ -43,11 +41,13 @@ export function ImmersivePhotoSection({
 
   const isVideo = isVideoMemory(memory);
   const relatedPeople = getRelatedPeople(memory, people);
+  const commentary = getMemoryCommentary(memory);
   const mediaCount = memory.mediaItems?.length ?? (memory.mediaUrl ? 1 : 0);
 
   return (
     <div
       ref={sectionRef}
+      className="immersive-photo-section"
       style={{ position: "relative", height: "180vh" }}
     >
       <div
@@ -55,9 +55,6 @@ export function ImmersivePhotoSection({
           position: "sticky",
           top: 0,
           height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
           overflow: "hidden",
           background: "#0f0d0a",
         }}
@@ -84,7 +81,8 @@ export function ImmersivePhotoSection({
             />
           </div>
         ) : (
-          <motion.div
+          <div
+            aria-hidden
             style={{
               position: "absolute",
               inset: "-20%",
@@ -104,152 +102,168 @@ export function ImmersivePhotoSection({
             position: "absolute",
             inset: 0,
             background:
-              "radial-gradient(ellipse at 30% 40%, rgba(176,139,62,0.08), transparent 55%), " +
-              "radial-gradient(ellipse at 70% 60%, rgba(78,93,66,0.06), transparent 50%), " +
-              "rgba(15,13,10,0.72)",
+              "radial-gradient(ellipse at 35% 50%, rgba(176,139,62,0.06), transparent 55%), " +
+              "radial-gradient(ellipse at 75% 40%, rgba(78,93,66,0.05), transparent 45%), " +
+              "rgba(15,13,10,0.68)",
             zIndex: 1,
           }}
         />
 
-        <motion.a
-          href={href}
-          aria-label={`Open ${memory.title}`}
+        <div
+          className="immersive-layout"
           style={{
-            display: "block",
             position: "relative",
             zIndex: 2,
-            width: "100%",
-            height: "100%",
-            scale,
-            borderRadius,
-            opacity: cardOpacity,
-            overflow: "hidden",
-            textDecoration: "none",
-            color: "inherit",
+            display: "grid",
+            gridTemplateColumns: "1fr clamp(200px, 22vw, 300px)",
+            height: "100vh",
+            alignItems: "center",
           }}
         >
-          {isVideo ? (
-            <video
-              src={mediaUrl}
-              muted
-              playsInline
-              autoPlay
-              loop
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={mediaUrl}
-              alt={memory.title}
-              onError={handleMediaError}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                filter: "sepia(6%) brightness(0.72)",
-              }}
-            />
-          )}
-
-          <motion.div
-            aria-hidden
+          <motion.a
+            href={href}
+            aria-label={`Open ${memory.title}`}
+            className="immersive-media-frame"
             style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(15,13,10,0.65) 100%), " +
-                "linear-gradient(180deg, rgba(15,13,10,0.18) 0%, rgba(15,13,10,0.04) 35%, rgba(15,13,10,0.04) 55%, rgba(15,13,10,0.82) 100%)",
-              opacity: vignetteOpacity,
-              pointerEvents: "none",
-            }}
-          />
-
-          <motion.div
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              padding: "clamp(28px, 5vw, 64px) max(24px, 5vw)",
-              opacity: captionOpacity,
-              y: captionY,
+              display: "block",
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              scale,
+              borderRadius,
+              opacity: cardOpacity,
+              overflow: "hidden",
+              textDecoration: "none",
+              color: "inherit",
             }}
           >
-            <div style={{ maxWidth: 640 }}>
-              <div
+            {isVideo ? (
+              <video
+                src={mediaUrl}
+                muted
+                playsInline
+                autoPlay
+                loop
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 11,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.14em",
-                  color: "rgba(246,241,231,0.40)",
-                  marginBottom: 10,
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
                 }}
-              >
-                <span>{isVideo ? "Video" : "Photo"}</span>
-                {mediaCount > 1 && (
-                  <>
-                    <span style={{ opacity: 0.42 }}>·</span>
-                    <span>{mediaCount} items</span>
-                  </>
-                )}
-                {memory.dateOfEventText && (
-                  <>
-                    <span style={{ opacity: 0.42 }}>·</span>
-                    <span>{memory.dateOfEventText}</span>
-                  </>
-                )}
-              </div>
+              />
+            ) : (
+              <>
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    backgroundImage: `url(${mediaUrl})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    filter: "blur(2px) brightness(0.35)",
+                  }}
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={mediaUrl}
+                  alt={memory.title}
+                  onError={handleMediaError}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    filter: "sepia(6%) brightness(0.88)",
+                  }}
+                />
+              </>
+            )}
 
-              <div
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(24px, 4vw, 48px)",
-                  lineHeight: 1.12,
-                  color: "rgba(246,241,231,0.95)",
-                  maxWidth: "18ch",
-                  textWrap: "balance",
-                }}
-              >
-                {memory.title}
-              </div>
+            <motion.div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(15,13,10,0.55) 100%), " +
+                  "linear-gradient(180deg, rgba(15,13,10,0.14) 0%, rgba(15,13,10,0.02) 30%, rgba(15,13,10,0.02) 60%, rgba(15,13,10,0.75) 100%)",
+                opacity: vignetteOpacity,
+                pointerEvents: "none",
+              }}
+            />
 
-              {memory.personName && (
+            <motion.div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: "clamp(28px, 5vw, 64px) clamp(28px, 4vw, 56px)",
+                zIndex: 3,
+              }}
+            >
+              <div style={{ maxWidth: 580 }}>
                 <div
                   style={{
-                    marginTop: 8,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
                     fontFamily: "var(--font-ui)",
-                    fontSize: 14,
-                    color: "rgba(246,241,231,0.50)",
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.14em",
+                    color: "rgba(246,241,231,0.40)",
+                    marginBottom: 10,
                   }}
                 >
-                  {memory.personName}
+                  <span>{isVideo ? "Video" : "Photo"}</span>
+                  {mediaCount > 1 && (
+                    <>
+                      <span style={{ opacity: 0.42 }}>·</span>
+                      <span>{mediaCount} items</span>
+                    </>
+                  )}
+                  {memory.dateOfEventText && (
+                    <>
+                      <span style={{ opacity: 0.42 }}>·</span>
+                      <span>{memory.dateOfEventText}</span>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.a>
 
-        {(relatedPeople.length > 0 || memory.primaryPersonId) && (
-          <motion.div
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "clamp(22px, 3.5vw, 44px)",
+                    lineHeight: 1.12,
+                    color: "rgba(246,241,231,0.95)",
+                    maxWidth: "16ch",
+                    textWrap: "balance",
+                  }}
+                >
+                  {memory.title}
+                </div>
+              </div>
+            </motion.div>
+          </motion.a>
+
+          <motion.aside
             className="immersive-context-rail"
             style={{
-              position: "absolute",
-              zIndex: 3,
-              right: "clamp(16px, 3vw, 48px)",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "clamp(140px, 12vw, 220px)",
               opacity: contextOpacity,
               x: contextX,
+              height: "100vh",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              padding: "clamp(20px, 3vw, 40px) clamp(14px, 2vw, 28px)",
+              gap: 16,
               pointerEvents: "auto",
             }}
           >
@@ -262,26 +276,25 @@ export function ImmersivePhotoSection({
                   alignItems: "center",
                   gap: 10,
                   width: "100%",
-                  border: "1px solid rgba(246,241,231,0.12)",
-                  borderRadius: 12,
-                  background: "rgba(15,13,10,0.52)",
-                  backdropFilter: "blur(16px)",
+                  border: "1px solid rgba(246,241,231,0.10)",
+                  borderRadius: 10,
+                  background: "rgba(15,13,10,0.48)",
+                  backdropFilter: "blur(14px)",
                   color: "rgba(246,241,231,0.85)",
                   padding: "10px 12px",
                   cursor: "pointer",
-                  marginBottom: relatedPeople.length > 0 ? 12 : 0,
                   fontFamily: "var(--font-ui)",
-                  fontSize: 12,
+                  fontSize: 13,
                   textAlign: "left",
                   transition: "background 200ms, border-color 200ms",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(246,241,231,0.12)";
-                  e.currentTarget.style.borderColor = "rgba(246,241,231,0.24)";
+                  e.currentTarget.style.background = "rgba(246,241,231,0.10)";
+                  e.currentTarget.style.borderColor = "rgba(246,241,231,0.22)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(15,13,10,0.52)";
-                  e.currentTarget.style.borderColor = "rgba(246,241,231,0.12)";
+                  e.currentTarget.style.background = "rgba(15,13,10,0.48)";
+                  e.currentTarget.style.borderColor = "rgba(246,241,231,0.10)";
                 }}
               >
                 {memory.personPortraitUrl ? (
@@ -289,40 +302,47 @@ export function ImmersivePhotoSection({
                   <img
                     src={memory.personPortraitUrl}
                     alt={memory.personName ?? ""}
-                    style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                    style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
                   />
                 ) : (
                   <div
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 30,
+                      height: 30,
                       borderRadius: "50%",
-                      background: "rgba(246,241,231,0.10)",
+                      background: "rgba(246,241,231,0.08)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontFamily: "var(--font-display)",
-                      fontSize: 12,
-                      color: "rgba(246,241,231,0.60)",
+                      fontSize: 13,
+                      color: "rgba(246,241,231,0.55)",
                       flexShrink: 0,
                     }}
                   >
                     {memory.personName?.charAt(0) ?? "?"}
                   </div>
                 )}
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {memory.personName ?? "View person"}
-                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+                    {memory.personName ?? "View person"}
+                  </div>
+                  {memory.dateOfEventText && (
+                    <div style={{ fontSize: 11, color: "rgba(246,241,231,0.40)", marginTop: 2 }}>
+                      {memory.dateOfEventText}
+                    </div>
+                  )}
+                </div>
               </button>
             )}
 
             {relatedPeople.length > 0 && (
               <div
                 style={{
-                  border: "1px solid rgba(246,241,231,0.08)",
-                  borderRadius: 12,
-                  background: "rgba(15,13,10,0.44)",
-                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(246,241,231,0.07)",
+                  borderRadius: 10,
+                  background: "rgba(15,13,10,0.38)",
+                  backdropFilter: "blur(10px)",
                   padding: "10px 10px 8px",
                 }}
               >
@@ -332,14 +352,14 @@ export function ImmersivePhotoSection({
                     fontSize: 9,
                     textTransform: "uppercase",
                     letterSpacing: "0.12em",
-                    color: "rgba(246,241,231,0.32)",
+                    color: "rgba(246,241,231,0.28)",
                     marginBottom: 6,
                   }}
                 >
-                  People in frame
+                  Tagged
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {relatedPeople.slice(0, 4).map((person) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {relatedPeople.slice(0, 5).map((person) => (
                     <button
                       key={person.id}
                       type="button"
@@ -349,10 +369,10 @@ export function ImmersivePhotoSection({
                         alignItems: "center",
                         gap: 8,
                         border: "none",
-                        borderRadius: 8,
+                        borderRadius: 6,
                         background: "transparent",
-                        color: "rgba(246,241,231,0.68)",
-                        padding: "4px 6px",
+                        color: "rgba(246,241,231,0.62)",
+                        padding: "5px 6px",
                         cursor: "pointer",
                         fontFamily: "var(--font-ui)",
                         fontSize: 12,
@@ -361,11 +381,11 @@ export function ImmersivePhotoSection({
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = "rgba(246,241,231,0.08)";
-                        e.currentTarget.style.color = "rgba(246,241,231,0.95)";
+                        e.currentTarget.style.color = "rgba(246,241,231,0.92)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = "rgba(246,241,231,0.68)";
+                        e.currentTarget.style.color = "rgba(246,241,231,0.62)";
                       }}
                     >
                       {person.portraitUrl ? (
@@ -381,13 +401,13 @@ export function ImmersivePhotoSection({
                             width: 22,
                             height: 22,
                             borderRadius: "50%",
-                            background: "rgba(246,241,231,0.08)",
+                            background: "rgba(246,241,231,0.06)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontFamily: "var(--font-display)",
                             fontSize: 10,
-                            color: "rgba(246,241,231,0.42)",
+                            color: "rgba(246,241,231,0.35)",
                             flexShrink: 0,
                           }}
                         >
@@ -402,17 +422,91 @@ export function ImmersivePhotoSection({
                 </div>
               </div>
             )}
-          </motion.div>
-        )}
+
+            {commentary && (
+              <div
+                style={{
+                  border: "1px solid rgba(246,241,231,0.07)",
+                  borderRadius: 10,
+                  background: "rgba(15,13,10,0.32)",
+                  backdropFilter: "blur(8px)",
+                  padding: "10px 12px",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 9,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                    color: "rgba(246,241,231,0.28)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Context
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 13,
+                    lineHeight: 1.65,
+                    color: "rgba(246,241,231,0.58)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 6,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {commentary}
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onMemoryClick(memory)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                width: "100%",
+                border: "1px solid rgba(246,241,231,0.10)",
+                borderRadius: 10,
+                background: "rgba(246,241,231,0.06)",
+                color: "rgba(246,241,231,0.72)",
+                padding: "9px 14px",
+                cursor: "pointer",
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                letterSpacing: "0.04em",
+                transition: "background 200ms, color 200ms",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(246,241,231,0.14)";
+                e.currentTarget.style.color = "rgba(246,241,231,0.95)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(246,241,231,0.06)";
+                e.currentTarget.style.color = "rgba(246,241,231,0.72)";
+              }}
+            >
+              Open memory
+            </button>
+          </motion.aside>
+        </div>
 
         <style jsx>{`
-          @media (max-width: 900px) {
-            .immersive-context-rail {
-              right: 12px !important;
-              width: clamp(120px, 40vw, 180px) !important;
+          @media (max-width: 1024px) {
+            .immersive-layout {
+              grid-template-columns: 1fr clamp(160px, 18vw, 240px) !important;
             }
           }
-          @media (max-width: 640px) {
+          @media (max-width: 768px) {
+            .immersive-layout {
+              grid-template-columns: 1fr !important;
+            }
             .immersive-context-rail {
               display: none !important;
             }
@@ -433,6 +527,15 @@ function getRelatedPeople(memory: TreeHomeMemory, people: TrailPerson[]) {
     .map((personId) => people.find((person) => person.id === personId))
     .filter((person): person is TrailPerson => Boolean(person))
     .slice(0, 5);
+}
+
+function getMemoryCommentary(memory: TreeHomeMemory): string | null {
+  const text =
+    memory.kind === "voice"
+      ? memory.transcriptText?.trim() || memory.body?.trim()
+      : memory.body?.trim() || memory.transcriptText?.trim();
+  if (!text) return null;
+  return text.length > 380 ? `${text.slice(0, 377).trimEnd()}...` : text;
 }
 
 function handleMediaError(e: React.SyntheticEvent<HTMLImageElement>) {
