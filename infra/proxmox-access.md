@@ -4,10 +4,55 @@ This is the practical runbook for reaching the Tessera VMs and the currently dep
 
 Do not commit passwords, tokens, or new private keys into this repo. This file documents hostnames, users, key paths, and the deployment shape that was verified during setup.
 
+## Tailscale Access (Remote / Off-Local-Network)
+
+Both VMs and the Proxmox host are joined to the same Tailscale network (`wardethan2000@`). Use these IPs when off your home network:
+
+| Device | Tailscale IP | LAN IP |
+|--------|-------------|--------|
+| app VM (`familytree-app`) | `100.96.74.16` | `192.168.68.110` |
+| Proxmox host (`proxmox-homelab`) | `100.120.201.97` | `192.168.68.50` |
+| Data VM | (not yet joined) | `192.168.68.111` |
+
+SSH to the app VM over Tailscale:
+
+```bash
+ssh -i ~/.ssh/proxmox_key ubuntu@100.96.74.16
+```
+
+Note: the `proxmox-homelab` Tailscale IP (`100.120.201.97`) routes to the Proxmox **host**, not the app VM. Use `100.96.74.16` for the app VM.
+
+## Cloudflare Tunnel (Public Access)
+
+The app is publicly accessible at **https://tessera.family** via a Cloudflare Tunnel (`cloudflared`) running as a systemd service on the app VM.
+
+- Tunnel name: `tessera.family`
+- Tunnel ID: `67b9835c-fa9f-4fa1-a2b3-f1df843ed336`
+- Service URL: `http://localhost:3000` (HTTP, not HTTPS — the origin is plain HTTP)
+- cloudflared runs as `cloudflared.service` (systemd, enabled)
+
+Architecture: **single-domain** — all traffic goes through `tessera.family`. The Next.js app proxies `/api/*` to the API server at `localhost:4000` via `afterFiles` rewrites in `next.config.ts`. No separate `api.tessera.family` hostname.
+
+Env vars for public access:
+
+- `API_BASE_URL=https://tessera.family` (better-auth baseURL)
+- `TRUSTED_ORIGINS=https://tessera.family,...`
+- `WEB_URL=https://tessera.family`
+- `NEXT_PUBLIC_API_URL=` (empty — forces relative `/api/...` calls)
+- `API_PROXY_URL=http://localhost:4000` (used by Next.js rewrite destination)
+
+Manage the tunnel at: **dash.cloudflare.com → Zero Trust → Networks → Tunnels → tessera.family**
+
+Check tunnel status:
+
+```bash
+ssh -i ~/.ssh/proxmox_key ubuntu@100.96.74.16 'sudo systemctl status cloudflared'
+```
+
 ## Topology
 
-- Proxmox host: `192.168.68.50`
-- App VM: `familytree-app` at `192.168.68.110`
+- Proxmox host: `192.168.68.50` / Tailscale `100.120.201.97`
+- App VM: `familytree-app` at `192.168.68.110` / Tailscale `100.96.74.16`
 - Data VM: `familytree-data` at `192.168.68.111`
 
 Verified Proxmox VM IDs:
@@ -40,7 +85,11 @@ Important discovery:
 - The same local key works directly against the VM:
 
 ```bash
+# Local network
 ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110
+
+# Remote (Tailscale)
+ssh -i ~/.ssh/proxmox_key ubuntu@100.96.74.16
 ```
 
 ### Data VM
@@ -74,13 +123,14 @@ These were the non-obvious parts:
 
 At the time this was last updated, the running app processes were launched from:
 
-- API: `/home/ubuntu/heirloom-dashboard-redesign-live/apps/api`
-- Web: `/home/ubuntu/heirloom-dashboard-redesign-live/apps/web`
+- API: `/home/ubuntu/heirloom-decade-rail-live/apps/api`
+- Web: `/home/ubuntu/heirloom-decade-rail-live/apps/web`
 
 Local health checks:
 
 - Web: `http://192.168.68.110:3000`
-- API: `http://192.168.68.110:4000/health`
+- API: `http://192.168.68.110:4000/api/auth/get-session`
+- Public: `https://tessera.family`
 
 Quick verification:
 
@@ -197,7 +247,7 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 - Alternate checkout: `/home/ubuntu/FamilyTree`
 - Current feature deployment checkout: `/home/ubuntu/heirloom-feature-family-map`
 - Previous non-git live directory: `/home/ubuntu/heirloom-memory-pages-live`
-- Current live checkout: `/home/ubuntu/heirloom-atrium-immersive-live`
+- Current live checkout: `/home/ubuntu/heirloom-decade-rail-live`
 - Previous live checkout: `/home/ubuntu/tessera-onboarding-live`
 - Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
 - Previous live checkout: `/home/ubuntu/heirloom-dashboard-redesign-live`
