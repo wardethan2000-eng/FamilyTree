@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import type { TreeHomeMemory } from "../homeTypes";
 import { isVideoMemory } from "../homeUtils";
@@ -9,6 +9,101 @@ interface TrailPerson {
   id: string;
   name: string;
   portraitUrl: string | null;
+}
+
+interface DominantColors {
+  primary: string;
+  secondary: string;
+  tertiary: string;
+}
+
+const FALLBACK_COLORS: DominantColors = {
+  primary: "rgba(176,139,62,0.18)",
+  secondary: "rgba(78,93,66,0.10)",
+  tertiary: "rgba(138,92,58,0.10)",
+};
+
+function useDominantColors(src: string | null, isVideo: boolean): DominantColors {
+  const [colors, setColors] = useState<DominantColors>(FALLBACK_COLORS);
+  const extractedRef = useRef<string | null>(null);
+
+  const extract = useCallback(() => {
+    if (isVideo || !src) return;
+    if (extractedRef.current === src) return;
+    extractedRef.current = src;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const size = 48;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+
+        const buckets: Array<[number, number, number, number]> = [];
+        for (let i = 0; i < data.length; i += 16) {
+          const r = data[i]!;
+          const g = data[i + 1]!;
+          const b = data[i + 2]!;
+          const a = data[i + 3]!;
+          if (a < 100) continue;
+          const lum = r * 0.299 + g * 0.587 + b * 0.114;
+          if (lum < 15 || lum > 245) continue;
+          buckets.push([r, g, b, lum]);
+        }
+
+        if (buckets.length < 10) return;
+
+        const weighted = buckets
+            .map(([r, g, b, lum]) => {
+              const centrality = 1 - Math.abs(lum - 128) / 128;
+              const sat = Math.max(r, g, b) - Math.min(r, g, b);
+              const weight = (0.3 + sat / 255 * 0.5) * (0.4 + centrality * 0.6);
+              return { r, g, b, weight: weight };
+            })
+            .sort((a, b) => b.weight - a.weight);
+
+        const topThird = Math.max(10, Math.floor(weighted.length * 0.3));
+        const midStart = Math.floor(weighted.length * 0.3);
+        const midEnd = Math.floor(weighted.length * 0.6);
+
+        const avgChannel = (slice: typeof weighted, ch: "r" | "g" | "b") => {
+          const totalW = slice.reduce((s, p) => s + p.weight, 0);
+          return Math.round(slice.reduce((s, p) => s + p[ch] * p.weight, 0) / totalW);
+        };
+
+        const topSlice = weighted.slice(0, topThird);
+        const midSlice = weighted.slice(midStart, midEnd);
+        const bottomSlice = weighted.slice(midEnd);
+
+        const rgba = (slice: typeof weighted, alpha: number) => {
+          if (slice.length === 0) return `rgba(140,120,80,${alpha})`;
+          return `rgba(${avgChannel(slice, "r")},${avgChannel(slice, "g")},${avgChannel(slice, "b")},${alpha})`;
+        };
+
+        setColors({
+          primary: rgba(topSlice, 0.22),
+          secondary: midSlice.length > 0 ? rgba(midSlice, 0.14) : rgba(topSlice, 0.10),
+          tertiary: bottomSlice.length > 0 ? rgba(bottomSlice, 0.10) : rgba(topSlice, 0.08),
+        });
+      } catch {
+        // CORS or canvas error – keep fallback
+      }
+    };
+    img.src = src;
+  }, [src, isVideo]);
+
+  // Extract on mount and when src changes
+  if (typeof window !== "undefined" && src && !isVideo && extractedRef.current !== src) {
+    extract();
+  }
+
+  return colors;
 }
 
 export function ImmersivePhotoSection({
@@ -43,6 +138,7 @@ export function ImmersivePhotoSection({
   const relatedPeople = getRelatedPeople(memory, people);
   const commentary = getMemoryCommentary(memory);
   const mediaCount = memory.mediaItems?.length ?? (memory.mediaUrl ? 1 : 0);
+  const colors = useDominantColors(isVideo ? null : mediaUrl, isVideo);
 
   return (
     <div
@@ -56,45 +152,22 @@ export function ImmersivePhotoSection({
           top: 0,
           height: "100vh",
           overflow: "hidden",
-          background: "#0f0d0a",
+          background: "#0d0b08",
         }}
       >
-        {isVideo ? (
-          <div
-            style={{
-              position: "absolute",
-              inset: "-20%",
-              overflow: "hidden",
-              filter: "blur(50px) saturate(0.5) brightness(0.35)",
-              transform: "scale(1.2)",
-              zIndex: 0,
-            }}
-          >
-            <video
-              src={mediaUrl}
-              muted
-              playsInline
-              autoPlay
-              loop
-              aria-hidden="true"
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </div>
-        ) : (
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              inset: "-20%",
-              backgroundImage: `url(${mediaUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              filter: "blur(50px) saturate(0.5) brightness(0.35)",
-              transform: "scale(1.2)",
-              zIndex: 0,
-            }}
-          />
-        )}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              `radial-gradient(ellipse at 28% 45%, ${colors.primary}, transparent 52%), ` +
+              `radial-gradient(ellipse at 72% 38%, ${colors.secondary}, transparent 48%), ` +
+              `radial-gradient(ellipse at 55% 85%, ${colors.tertiary}, transparent 50%), ` +
+              "#0d0b08",
+            transition: "background 1.8s cubic-bezier(0.22, 0.61, 0.36, 1)",
+          }}
+        />
 
         <div
           aria-hidden
@@ -102,10 +175,23 @@ export function ImmersivePhotoSection({
             position: "absolute",
             inset: 0,
             background:
-              "radial-gradient(ellipse at 35% 50%, rgba(176,139,62,0.06), transparent 55%), " +
-              "radial-gradient(ellipse at 75% 40%, rgba(78,93,66,0.05), transparent 45%), " +
-              "rgba(15,13,10,0.68)",
-            zIndex: 1,
+              "radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(13,11,8,0.45) 100%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px), " +
+              "linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+            mixBlendMode: "soft-light",
+            opacity: 0.6,
+            pointerEvents: "none",
           }}
         />
 
@@ -153,36 +239,19 @@ export function ImmersivePhotoSection({
                 }}
               />
             ) : (
-              <>
-                <div
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    backgroundImage: `url(${mediaUrl})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    filter: "blur(2px) brightness(0.35)",
-                  }}
-                />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={mediaUrl}
-                  alt={memory.title}
-                  onError={handleMediaError}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    filter: "sepia(6%) brightness(0.88)",
-                  }}
-                />
-              </>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={mediaUrl}
+                alt={memory.title}
+                onError={handleMediaError}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                }}
+              />
             )}
 
             <motion.div
@@ -191,8 +260,8 @@ export function ImmersivePhotoSection({
                 position: "absolute",
                 inset: 0,
                 background:
-                  "radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(15,13,10,0.55) 100%), " +
-                  "linear-gradient(180deg, rgba(15,13,10,0.14) 0%, rgba(15,13,10,0.02) 30%, rgba(15,13,10,0.02) 60%, rgba(15,13,10,0.75) 100%)",
+                  "radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(13,11,8,0.6) 100%), " +
+                  "linear-gradient(180deg, rgba(13,11,8,0.12) 0%, transparent 30%, transparent 55%, rgba(13,11,8,0.8) 100%)",
                 opacity: vignetteOpacity,
                 pointerEvents: "none",
               }}
@@ -278,7 +347,7 @@ export function ImmersivePhotoSection({
                   width: "100%",
                   border: "1px solid rgba(246,241,231,0.10)",
                   borderRadius: 10,
-                  background: "rgba(15,13,10,0.48)",
+                  background: "rgba(13,11,8,0.48)",
                   backdropFilter: "blur(14px)",
                   color: "rgba(246,241,231,0.85)",
                   padding: "10px 12px",
@@ -293,7 +362,7 @@ export function ImmersivePhotoSection({
                   e.currentTarget.style.borderColor = "rgba(246,241,231,0.22)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(15,13,10,0.48)";
+                  e.currentTarget.style.background = "rgba(13,11,8,0.48)";
                   e.currentTarget.style.borderColor = "rgba(246,241,231,0.10)";
                 }}
               >
@@ -341,7 +410,7 @@ export function ImmersivePhotoSection({
                 style={{
                   border: "1px solid rgba(246,241,231,0.07)",
                   borderRadius: 10,
-                  background: "rgba(15,13,10,0.38)",
+                  background: "rgba(13,11,8,0.38)",
                   backdropFilter: "blur(10px)",
                   padding: "10px 10px 8px",
                 }}
@@ -428,7 +497,7 @@ export function ImmersivePhotoSection({
                 style={{
                   border: "1px solid rgba(246,241,231,0.07)",
                   borderRadius: 10,
-                  background: "rgba(15,13,10,0.32)",
+                  background: "rgba(13,11,8,0.32)",
                   backdropFilter: "blur(8px)",
                   padding: "10px 12px",
                 }}
