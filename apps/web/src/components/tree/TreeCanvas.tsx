@@ -178,7 +178,7 @@ function TreeCanvasInner({
   const [creatingFirstPerson, setCreatingFirstPerson] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
-  const [arrivalPhase, setArrivalPhase] = useState<"entering" | "resolving" | "complete">("entering");
+  const [arrivalPhase, setArrivalPhase] = useState<"entering" | "resolving" | "complete" | "pre">("pre");
   const [grainTileDataUrl, setGrainTileDataUrl] = useState<string | null>(null);
   const didArriveRef = useRef(false);
   const toolbarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -343,30 +343,35 @@ function TreeCanvasInner({
 
   useEffect(() => {
     if (people.length === 0) {
-      setArrivalPhase("complete");
+      setArrivalPhase("pre");
       return;
     }
 
-    const isReturning = didArriveRef.current;
+    if (arrivalPhase !== "pre" && arrivalPhase !== "entering") return;
+
+    const isFirstVisit = !didArriveRef.current;
     didArriveRef.current = true;
 
     setArrivalPhase("entering");
 
     const setupTimer = setTimeout(() => {
-      if (!isReturning && currentUserPersonId && layoutRef.current.has(currentUserPersonId)) {
+      if (isFirstVisit && currentUserPersonId && layoutRef.current.has(currentUserPersonId)) {
         const pos = layoutRef.current.get(currentUserPersonId)!;
         reactFlow.setCenter(pos.x + 48, pos.y + 65, { duration: 0, zoom: 0.9 });
       } else {
         reactFlow.fitView({ duration: 0, padding: 0.12 });
       }
 
+      const resolveDelay = isFirstVisit ? 300 : 100;
+      const completeDelay = isFirstVisit ? 1100 : 700;
+
       const resolveTimer = setTimeout(() => {
         setArrivalPhase("resolving");
         momentumCamera.fitViewSmooth({
-          duration: isReturning ? 500 : 800,
+          duration: isFirstVisit ? 800 : 500,
           padding: 0.12,
         });
-      }, isReturning ? 50 : 100);
+      }, resolveDelay);
 
       const completeTimer = setTimeout(() => {
         setArrivalPhase("complete");
@@ -379,7 +384,7 @@ function TreeCanvasInner({
             }
           }, 100);
         }
-      }, isReturning ? 600 : 1000);
+      }, completeDelay);
 
       return () => {
         clearTimeout(resolveTimer);
@@ -389,7 +394,7 @@ function TreeCanvasInner({
 
     return () => clearTimeout(setupTimer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [people.length]);
+  }, [people.length, arrivalPhase]);
 
   const availableDecades = useMemo(() => getAvailableDecades(people), [people]);
 
@@ -1302,8 +1307,8 @@ function TreeCanvasInner({
           zIndex: 0,
         }}
       />
-      {/* Arrival blur overlay */}
-      {arrivalPhase !== "complete" && (
+      {/* Arrival overlay — solid parchment fade, no backdrop-filter */}
+      {arrivalPhase !== "complete" && arrivalPhase !== "pre" && (
         <div
           aria-hidden="true"
           style={{
@@ -1312,11 +1317,9 @@ function TreeCanvasInner({
             pointerEvents: "none",
             zIndex: 50,
             background: arrivalPhase === "entering"
-              ? "rgba(246,241,231,0.65)"
+              ? "rgba(246,241,231,0.92)"
               : "rgba(246,241,231,0)",
-            backdropFilter: arrivalPhase === "entering" ? "blur(4px)" : "blur(0px)",
-            WebkitBackdropFilter: arrivalPhase === "entering" ? "blur(4px)" : "blur(0px)",
-            transition: "background 800ms var(--ease-tessera), backdrop-filter 800ms var(--ease-tessera), -webkit-backdrop-filter 800ms var(--ease-tessera)",
+            transition: "background 800ms var(--ease-tessera)",
           }}
         />
       )}
