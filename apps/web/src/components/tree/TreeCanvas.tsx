@@ -325,13 +325,6 @@ function TreeCanvasInner({
       setArrivalPhase("complete");
       return;
     }
-    if (initialSelectedPersonId && people.some((p) => p.id === initialSelectedPersonId)) {
-      setArrivalPhase("complete");
-      const timer = setTimeout(() => {
-        momentumCamera.fitViewSmooth({ duration: 600, padding: 0.12 });
-      }, 120);
-      return () => clearTimeout(timer);
-    }
 
     const isReturning = didArriveRef.current;
     didArriveRef.current = true;
@@ -356,6 +349,15 @@ function TreeCanvasInner({
 
       const completeTimer = setTimeout(() => {
         setArrivalPhase("complete");
+        if (initialSelectedPersonId && people.some((p) => p.id === initialSelectedPersonId)) {
+          setTimeout(() => {
+            const focusIds = getLineageFocusIds(initialSelectedPersonId, relationships, "household");
+            const bounds = getFocusBoundsForIds(focusIds, layoutRef.current);
+            if (bounds) {
+              momentumCamera.fitBoundsSmooth(bounds, { duration: 600, padding: 0.22 });
+            }
+          }, 100);
+        }
       }, isReturning ? 600 : 1000);
 
       return () => {
@@ -1262,9 +1264,9 @@ function TreeCanvasInner({
   }, [resetRelationshipEditorDrafts, selectedPersonId]);
 
   return (
-    <div ref={rootRef} style={{ width: "100%", height: "100%", position: "relative", background: CANVAS_BACKGROUND }}>
+    <div ref={rootRef} style={{ width: "100%", height: "100%", position: "relative", background: CANVAS_BACKGROUND, filter: "url(#paper-grain)" }}>
       <svg aria-hidden="true" style={{ position: "absolute", width: 0, height: 0 }}>
-        <filter id="paper-grain">
+        <filter id="paper-grain" x="0" y="0" width="100%" height="100%">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" stitchTiles="stitch" result="noise" />
           <feColorMatrix type="saturate" values="0" in="noise" result="gray" />
           <feComponentTransfer in="gray" result="grain">
@@ -1273,19 +1275,6 @@ function TreeCanvasInner({
           <feBlend in="SourceGraphic" in2="grain" mode="multiply" />
         </filter>
       </svg>
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          backgroundImage:
-            "radial-gradient(circle at 8% 14%, rgba(177,165,145,0.22) 0 1px, transparent 1.5px), radial-gradient(circle at 22% 30%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 39% 12%, rgba(177,165,145,0.16) 0 1px, transparent 1.5px), radial-gradient(circle at 61% 22%, rgba(177,165,145,0.2) 0 1px, transparent 1.5px), radial-gradient(circle at 74% 38%, rgba(177,165,145,0.14) 0 1px, transparent 1.5px), radial-gradient(circle at 90% 16%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 14% 62%, rgba(177,165,145,0.16) 0 1px, transparent 1.5px), radial-gradient(circle at 31% 74%, rgba(177,165,145,0.14) 0 1px, transparent 1.5px), radial-gradient(circle at 53% 66%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 79% 70%, rgba(177,165,145,0.15) 0 1px, transparent 1.5px)",
-          opacity: 0.75,
-          filter: "url(#paper-grain)",
-          mixBlendMode: "multiply",
-        }}
-      />
       <div
         aria-hidden="true"
         style={{

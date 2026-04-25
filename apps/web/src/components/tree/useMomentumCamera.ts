@@ -115,7 +115,6 @@ export function useMomentumCamera(
 
         reactFlow.setViewport(
           { x: nextX, y: nextY, zoom: nextZoom },
-          { duration: 400 },
         );
       } else {
         const deltaX = e.deltaX * 0.8;
@@ -126,7 +125,6 @@ export function useMomentumCamera(
             y: viewport.y - deltaY,
             zoom: viewport.zoom,
           },
-          { duration: 200 },
         );
       }
     },
