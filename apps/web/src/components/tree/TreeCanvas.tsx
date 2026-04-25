@@ -1303,7 +1303,7 @@ function TreeCanvasInner({
     if (!isDark) return null;
     const particles: Array<{ x: number; y: number; size: number; opacity: number; duration: number; delay: number }> = [];
     const seen = new Set<string>();
-    for (let i = 0; i < 55; i++) {
+    for (let i = 0; i < 82; i++) {
       const x = ((i * 7919 + 3571) % 10000) / 100;
       const y = ((i * 6271 + 4237) % 10000) / 100;
       const key = `${x.toFixed(1)},${y.toFixed(1)}`;
@@ -1561,6 +1561,7 @@ function TreeCanvasInner({
             const overflowActions = [
               ...(onSearchClick ? [{ label: "Search", action: onSearchClick, shortcut: "⌘K" }] : []),
               ...(onRequestMemoryClick ? [{ label: "Request a memory", action: onRequestMemoryClick }] : []),
+              { label: isDark ? "Light mode" : "Dark mode", action: toggleTheme },
               { label: "Messages", action: undefined, href: `/trees/${treeId}/inbox` },
               { label: "Settings", action: undefined, href: `/trees/${treeId}/settings` },
             ];
@@ -1679,43 +1680,7 @@ function TreeCanvasInner({
                 )}
               </div>
             );
-          })()}
-          
-          {onRequestMemoryClick && (
-            <button
-              onClick={onRequestMemoryClick}
-              style={toolbarButtonStyle}
-            >
-              Request a memory
-            </button>
-          )}
-          
-          <a
-            href={`/trees/${treeId}/inbox`}
-            style={toolbarIconButtonStyle}
-            title="Messages"
-            aria-label="Messages"
-          >
-            <InboxIcon />
-          </a>
-          
-          <button
-            onClick={toggleTheme}
-            style={toolbarIconButtonStyle}
-            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {isDark ? "☀" : "☾"}
-          </button>
-          
-          <a
-            href={`/trees/${treeId}/settings`}
-            style={toolbarIconButtonStyle}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <GearIcon />
-          </a>
+           })()}
         </div>
       </div>
 
