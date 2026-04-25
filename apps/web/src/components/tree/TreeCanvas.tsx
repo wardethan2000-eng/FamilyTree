@@ -336,17 +336,10 @@ function TreeCanvasInner({
     const isReturning = didArriveRef.current;
     didArriveRef.current = true;
 
-    if (isReturning) {
-      setArrivalPhase("complete");
-      const timer = setTimeout(() => {
-        momentumCamera.fitViewSmooth({ duration: 600, padding: 0.12 });
-      }, 120);
-      return () => clearTimeout(timer);
-    }
-
     setArrivalPhase("entering");
+
     const setupTimer = setTimeout(() => {
-      if (currentUserPersonId && layoutRef.current.has(currentUserPersonId)) {
+      if (!isReturning && currentUserPersonId && layoutRef.current.has(currentUserPersonId)) {
         const pos = layoutRef.current.get(currentUserPersonId)!;
         reactFlow.setCenter(pos.x + 48, pos.y + 65, { duration: 0, zoom: 0.9 });
       } else {
@@ -355,12 +348,15 @@ function TreeCanvasInner({
 
       const resolveTimer = setTimeout(() => {
         setArrivalPhase("resolving");
-        momentumCamera.fitViewSmooth({ duration: 800, padding: 0.12 });
-      }, 100);
+        momentumCamera.fitViewSmooth({
+          duration: isReturning ? 500 : 800,
+          padding: 0.12,
+        });
+      }, isReturning ? 50 : 100);
 
       const completeTimer = setTimeout(() => {
         setArrivalPhase("complete");
-      }, 1000);
+      }, isReturning ? 600 : 1000);
 
       return () => {
         clearTimeout(resolveTimer);
@@ -1272,7 +1268,7 @@ function TreeCanvasInner({
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" stitchTiles="stitch" result="noise" />
           <feColorMatrix type="saturate" values="0" in="noise" result="gray" />
           <feComponentTransfer in="gray" result="grain">
-            <feFuncA type="linear" slope="0.06" />
+            <feFuncA type="linear" slope="0.18" />
           </feComponentTransfer>
           <feBlend in="SourceGraphic" in2="grain" mode="multiply" />
         </filter>
@@ -1287,6 +1283,7 @@ function TreeCanvasInner({
             "radial-gradient(circle at 8% 14%, rgba(177,165,145,0.22) 0 1px, transparent 1.5px), radial-gradient(circle at 22% 30%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 39% 12%, rgba(177,165,145,0.16) 0 1px, transparent 1.5px), radial-gradient(circle at 61% 22%, rgba(177,165,145,0.2) 0 1px, transparent 1.5px), radial-gradient(circle at 74% 38%, rgba(177,165,145,0.14) 0 1px, transparent 1.5px), radial-gradient(circle at 90% 16%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 14% 62%, rgba(177,165,145,0.16) 0 1px, transparent 1.5px), radial-gradient(circle at 31% 74%, rgba(177,165,145,0.14) 0 1px, transparent 1.5px), radial-gradient(circle at 53% 66%, rgba(177,165,145,0.18) 0 1px, transparent 1.5px), radial-gradient(circle at 79% 70%, rgba(177,165,145,0.15) 0 1px, transparent 1.5px)",
           opacity: 0.75,
           filter: "url(#paper-grain)",
+          mixBlendMode: "multiply",
         }}
       />
       <div
@@ -1295,8 +1292,8 @@ function TreeCanvasInner({
           position: "absolute",
           inset: 0,
           pointerEvents: "none",
-          background: "radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(28,25,21,0.08) 100%)",
-          zIndex: 2,
+          background: "radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(28,25,21,0.22) 100%)",
+          zIndex: 0,
         }}
       />
       {/* Arrival blur overlay */}
@@ -1308,9 +1305,12 @@ function TreeCanvasInner({
             inset: 0,
             pointerEvents: "none",
             zIndex: 50,
-            backdropFilter: arrivalPhase === "entering" ? "blur(3px)" : "blur(0px)",
-            background: arrivalPhase === "entering" ? "rgba(246,241,231,0.3)" : "rgba(246,241,231,0)",
-            transition: "backdrop-filter 800ms var(--ease-tessera), background 800ms var(--ease-tessera)",
+            background: arrivalPhase === "entering"
+              ? "rgba(246,241,231,0.65)"
+              : "rgba(246,241,231,0)",
+            backdropFilter: arrivalPhase === "entering" ? "blur(4px)" : "blur(0px)",
+            WebkitBackdropFilter: arrivalPhase === "entering" ? "blur(4px)" : "blur(0px)",
+            transition: "background 800ms var(--ease-tessera), backdrop-filter 800ms var(--ease-tessera), -webkit-backdrop-filter 800ms var(--ease-tessera)",
           }}
         />
       )}
@@ -1889,6 +1889,7 @@ function TreeCanvasInner({
         edgeTypes={EDGE_TYPES}
         onWheel={momentumCamera.handleWheel as never}
         onMoveStart={momentumCamera.handleMoveStart as never}
+        onMove={momentumCamera.handleMove as never}
         onMoveEnd={momentumCamera.handleMoveEnd as never}
         panOnDrag={!editMode}
         panOnScroll={false}
@@ -1921,7 +1922,7 @@ function TreeCanvasInner({
                 width: cluster.halfW * 2,
                 height: cluster.halfH * 2,
                 borderRadius: "50%",
-                background: "radial-gradient(ellipse at center, rgba(212,190,159,0.07) 0%, transparent 70%)",
+                background: "radial-gradient(ellipse at center, rgba(212,190,159,0.15) 0%, transparent 70%)",
                 opacity: cluster.clusterDimmed ? 0.15 : 1,
                 transition: "opacity var(--duration-focus) var(--ease-tessera)",
               }}
@@ -1930,7 +1931,7 @@ function TreeCanvasInner({
         </div>
       )}
 
-      {!editMode && projectedFamilyClusters.length > 0 && viewport.zoom < 0.4 && !selectedPersonId && (
+      {!editMode && projectedFamilyClusters.length > 0 && viewport.zoom < 0.55 && !selectedPersonId && (
         <div
           style={{
             position: "absolute",
@@ -1953,7 +1954,7 @@ function TreeCanvasInner({
                   fontFamily: "var(--font-display)",
                   fontSize: Math.max(18, Math.min(32, 24 / viewport.zoom)),
                   color: "var(--ink-faded)",
-                  opacity: 0.14,
+                  opacity: 0.55,
                   letterSpacing: "0.08em",
                   whiteSpace: "nowrap",
                   textAlign: "center",

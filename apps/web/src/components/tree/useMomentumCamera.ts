@@ -12,6 +12,7 @@ export function useMomentumCamera(
 ) {
   const velocityRef = useRef({ x: 0, y: 0 });
   const momentumRafRef = useRef<number | null>(null);
+  const prevPosRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const PAN_MOMENTUM_DECAY = 0.92;
   const PAN_MOMENTUM_THRESHOLD = 0.15;
   const PAN_MOMENTUM_INTERVAL = 16;
@@ -57,6 +58,7 @@ export function useMomentumCamera(
 
   const handleMoveEnd = useCallback(
     (_event: MouseEvent | TouchEvent | null) => {
+      prevPosRef.current = null;
       if (Math.abs(velocityRef.current.x) > PAN_MOMENTUM_THRESHOLD || Math.abs(velocityRef.current.y) > PAN_MOMENTUM_THRESHOLD) {
         startMomentum();
       }
@@ -66,7 +68,29 @@ export function useMomentumCamera(
 
   const handleMoveStart = useCallback(() => {
     stopMomentum();
+    prevPosRef.current = null;
+    velocityRef.current = { x: 0, y: 0 };
   }, [stopMomentum]);
+
+  const handleMove = useCallback(
+    (_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
+      const now = performance.now();
+      if (prevPosRef.current) {
+        const dt = now - prevPosRef.current.t;
+        if (dt > 0 && dt < 200) {
+          const dx = viewport.x - prevPosRef.current.x;
+          const dy = viewport.y - prevPosRef.current.y;
+          const alpha = 0.4;
+          velocityRef.current = {
+            x: velocityRef.current.x * (1 - alpha) + dx * alpha,
+            y: velocityRef.current.y * (1 - alpha) + dy * alpha,
+          };
+        }
+      }
+      prevPosRef.current = { x: viewport.x, y: viewport.y, t: now };
+    },
+    [],
+  );
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -148,6 +172,7 @@ export function useMomentumCamera(
   return {
     handleWheel,
     handleMoveStart,
+    handleMove,
     handleMoveEnd,
     fitViewSmooth,
     fitBoundsSmooth,

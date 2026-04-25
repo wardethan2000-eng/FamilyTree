@@ -92,10 +92,10 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
             boxShadow: isDimmed
               ? "none"
               : isYou
-                ? "0 0 8px rgba(78,93,66,0.5)"
+                ? "0 0 8px rgba(78,93,66,0.6)"
                 : isFocused
-                  ? "0 0 10px rgba(28,25,21,0.35)"
-                  : "0 0 6px rgba(212,190,159,0.4)",
+                  ? "0 0 10px rgba(28,25,21,0.45)"
+                  : "0 0 8px rgba(212,190,159,0.6)",
             transition: "box-shadow var(--duration-micro) var(--ease-tessera), background var(--duration-focus) var(--ease-tessera)",
           }}
         />
@@ -153,10 +153,10 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
             boxShadow: isDimmed
               ? "none"
               : isYou
-                ? "0 0 10px rgba(78,93,66,0.5)"
+                ? "0 0 10px rgba(78,93,66,0.55)"
                 : isFocused
-                  ? "0 0 12px rgba(28,25,21,0.25)"
-                  : "0 0 8px rgba(212,190,159,0.35)",
+                  ? "0 0 12px rgba(28,25,21,0.4)"
+                  : "0 0 10px rgba(212,190,159,0.55)",
             transition: "box-shadow var(--duration-micro) var(--ease-tessera), border-color var(--duration-focus) var(--ease-tessera)",
           }}
         >
@@ -236,10 +236,10 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
           transition:
             "box-shadow var(--duration-micro) var(--ease-tessera), border-color var(--duration-focus) var(--ease-tessera)",
           boxShadow: isFocused
-            ? "0 0 0 4px rgba(212,190,159,0.28), 0 0 14px rgba(212,190,159,0.3)"
+            ? "0 0 0 4px rgba(212,190,159,0.35), 0 0 18px rgba(212,190,159,0.4)"
             : isYou
-              ? "0 0 10px rgba(78,93,66,0.45)"
-              : "0 0 8px rgba(212,190,159,0.25)",
+              ? "0 0 12px rgba(78,93,66,0.55)"
+              : "0 0 12px rgba(212,190,159,0.4)",
         }}
       >
         {resolvedPortraitUrl ? (
@@ -302,7 +302,6 @@ function PersonNodeComponent({ data }: NodeProps<PersonFlowNode>) {
           style={{
             fontFamily: "var(--font-body)",
             fontSize: 10,
-            fontStyle: "italic",
             color: "var(--ink-faded)",
             textAlign: "center",
             maxWidth: 88,
