@@ -945,6 +945,43 @@ export const invitations = pgTable(
   ],
 );
 
+export const branches = pgTable(
+  "branches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    sortWeight: integer("sort_weight").default(0).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    accent: varchar("accent", { length: 30 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("branches_tree_idx").on(table.treeId),
+    index("branches_is_default_idx").on(table.treeId, table.isDefault),
+  ],
+);
+
+export const memoryBranches = pgTable(
+  "memory_branches",
+  {
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.memoryId, table.branchId] }),
+    index("memory_branches_branch_idx").on(table.branchId),
+  ],
+);
+
 export const archiveExports = pgTable(
   "archive_exports",
   {
@@ -1020,6 +1057,7 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
   promptReplyLinks: many(promptReplyLinks),
   transcriptionJobs: many(transcriptionJobs),
   memoryPerspectives: many(memoryPerspectives),
+  branches: many(branches),
 }));
 
 export const treeMembershipsRelations = relations(treeMemberships, ({ one }) => ({
@@ -1162,6 +1200,7 @@ export const memoriesRelations = relations(memories, ({ one, many }) => ({
   personCuration: many(personMemoryCuration),
   treeVisibility: many(memoryTreeVisibility),
   personSuppressions: many(memoryPersonSuppressions),
+  branches: many(memoryBranches),
 }));
 
 export const promptsRelations = relations(prompts, ({ one, many }) => ({
@@ -1249,6 +1288,22 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
   linkedPerson: one(people, {
     fields: [invitations.linkedPersonId],
     references: [people.id],
+  }),
+}));
+
+export const branchesRelations = relations(branches, ({ one, many }) => ({
+  tree: one(trees, { fields: [branches.treeId], references: [trees.id] }),
+  memoryBranches: many(memoryBranches),
+}));
+
+export const memoryBranchesRelations = relations(memoryBranches, ({ one }) => ({
+  memory: one(memories, {
+    fields: [memoryBranches.memoryId],
+    references: [memories.id],
+  }),
+  branch: one(branches, {
+    fields: [memoryBranches.branchId],
+    references: [branches.id],
   }),
 }));
 

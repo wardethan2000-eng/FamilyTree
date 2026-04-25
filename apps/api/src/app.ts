@@ -18,6 +18,7 @@ import { importPlugin } from "./routes/import.js";
 import { curationPlugin } from "./routes/curation.js";
 import { mePlugin } from "./routes/me.js";
 import { driftPlugin } from "./routes/drift.js";
+import { branchesPlugin } from "./routes/branches.js";
 
 export function buildApp() {
   const trustedOriginsEnv = process.env.TRUSTED_ORIGINS;
@@ -126,6 +127,7 @@ export function buildApp() {
   app.register(curationPlugin);
   app.register(mePlugin);
   app.register(driftPlugin);
+  app.register(branchesPlugin);
 
   return app;
 }

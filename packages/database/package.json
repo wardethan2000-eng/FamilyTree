@@ -19,7 +19,8 @@
     "db:push": "drizzle-kit push --config ../../drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config ../../drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config ../../drizzle.config.ts",
-    "db:backfill:cross-tree": "pnpm build && node dist/scripts/cross-tree-backfill.js"
+    "db:backfill:cross-tree": "pnpm build && node dist/scripts/cross-tree-backfill.js",
+    "db:backfill:branches": "pnpm build && node dist/scripts/branch-backfill.js"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.7",
