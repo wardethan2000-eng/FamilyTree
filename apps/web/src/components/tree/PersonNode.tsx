@@ -251,10 +251,10 @@ function PersonNodeComponent({ data, id }: NodeProps<PersonFlowNode>) {
           transition:
             "box-shadow var(--duration-micro) var(--ease-tessera), border-color var(--duration-focus) var(--ease-tessera)",
           boxShadow: isFocused
-            ? "0 0 0 4px rgba(212,190,159,0.35), 0 0 18px rgba(212,190,159,0.4)"
+            ? "0 0 0 4px var(--star-glow), 0 0 18px var(--star-glow)"
             : isYou
               ? "0 0 12px rgba(78,93,66,0.55)"
-              : "0 0 12px rgba(212,190,159,0.4)",
+              : "0 0 12px var(--star-glow)",
         }}
       >
         {resolvedPortraitUrl ? (

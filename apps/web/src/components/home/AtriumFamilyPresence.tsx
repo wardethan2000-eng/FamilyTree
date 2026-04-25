@@ -77,10 +77,10 @@ export function AtriumFamilyPresence({
         <Link
           href={fullTreeHref}
           style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 13,
-            color: "var(--moss)",
-            textDecoration: "none",
+            ...presenceLinkStyle,
+            minHeight: 44,
+            display: "inline-flex",
+            alignItems: "center",
           }}
         >
           Open full tree →
@@ -100,6 +100,7 @@ export function AtriumFamilyPresence({
         }}
       >
         <div
+          className="tessera-family-grid"
           style={{
             display: "grid",
             gap: 24,
@@ -111,7 +112,7 @@ export function AtriumFamilyPresence({
             <div
               style={{
                 fontFamily: "var(--font-ui)",
-                fontSize: 11,
+                fontSize: 12,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
                 color: "var(--ink-faded)",
@@ -139,7 +140,7 @@ export function AtriumFamilyPresence({
                     style={{
                       marginTop: 8,
                       fontFamily: "var(--font-ui)",
-                      fontSize: 12,
+                      fontSize: 13,
                       color: "var(--ink-faded)",
                     }}
                   >
@@ -192,16 +193,17 @@ export function AtriumFamilyPresence({
                 flexWrap: "wrap",
               }}
             >
-              <Link href={fullTreeHref} style={presenceLinkStyle}>
+              <Link href={fullTreeHref} style={{ ...presenceLinkStyle, minHeight: 44, display: "inline-flex", alignItems: "center" }}>
                 Open full tree
               </Link>
-              <Link href={addPersonHref} style={presenceLinkStyle}>
+              <Link href={addPersonHref} style={{ ...presenceLinkStyle, minHeight: 44, display: "inline-flex", alignItems: "center" }}>
                 Add person
               </Link>
             </div>
           </div>
 
           <div
+            className="tessera-family-orbit"
             style={{
               minHeight: 320,
               border: "1px solid rgba(122,108,88,0.14)",
@@ -231,7 +233,7 @@ export function AtriumFamilyPresence({
                     transform: "translate(-50%, -50%)",
                     display: "grid",
                     justifyItems: "center",
-                    gap: 10,
+                    gap: "clamp(6px, 1.5vw, 10px)",
                     zIndex: 2,
                   }}
                 >
@@ -329,7 +331,7 @@ export function AtriumFamilyPresence({
                 <div
                   style={{
                     fontFamily: "var(--font-ui)",
-                    fontSize: 11,
+                    fontSize: 12,
                     textTransform: "uppercase",
                     letterSpacing: "0.08em",
                     color: "var(--ink-faded)",
@@ -361,6 +363,7 @@ export function AtriumFamilyPresence({
                         gap: 10,
                         textAlign: "left",
                         minWidth: "min(220px, 100%)",
+                        minHeight: 44,
                       }}
                     >
                       <Portrait person={person} size={52} />
@@ -380,7 +383,7 @@ export function AtriumFamilyPresence({
                             style={{
                               marginTop: 2,
                               fontFamily: "var(--font-ui)",
-                              fontSize: 11,
+                              fontSize: 12,
                               color: "var(--ink-faded)",
                             }}
                           >
@@ -419,7 +422,7 @@ function PresenceLine({ label, value }: { label: string; value: string }) {
       <div
         style={{
           fontFamily: "var(--font-ui)",
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: "var(--ink-faded)",
@@ -534,8 +537,9 @@ const orbitPositions = [
 ];
 
 const presenceLinkStyle = {
-  fontFamily: "var(--font-ui)",
-  fontSize: 13,
+  fontFamily: "var(--font-ui)" as const,
+  fontSize: 14,
   color: "var(--moss)",
   textDecoration: "none",
+  padding: "8px 4px",
 } as const;

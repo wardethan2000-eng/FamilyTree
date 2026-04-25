@@ -59,15 +59,20 @@ export function AtriumCoachmark({
           aria-label="Dismiss welcome"
           style={{
             position: "absolute",
-            top: 10,
-            right: 12,
+            top: 8,
+            right: 8,
             background: "transparent",
             border: "none",
             fontFamily: "var(--font-ui)",
-            fontSize: 16,
+            fontSize: 20,
             color: "var(--ink-faded)",
             cursor: "pointer",
             lineHeight: 1,
+            minHeight: 44,
+            minWidth: 44,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           ×
@@ -77,7 +82,7 @@ export function AtriumCoachmark({
           style={{
             margin: 0,
             fontFamily: "var(--font-ui)",
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: "var(--ink-faded)",
@@ -141,13 +146,14 @@ export function AtriumCoachmark({
             }}
             style={{
               fontFamily: "var(--font-ui)",
-              fontSize: 13,
+              fontSize: 14,
               background: "var(--ink)",
               color: "white",
               border: "none",
               borderRadius: 999,
-              padding: "8px 14px",
+              padding: "10px 18px",
               cursor: "pointer",
+              minHeight: 44,
             }}
           >
             Add a memory
@@ -156,9 +162,13 @@ export function AtriumCoachmark({
             href={familyTreeHref}
             style={{
               fontFamily: "var(--font-ui)",
-              fontSize: 13,
+              fontSize: 14,
               color: "var(--moss)",
               textDecoration: "none",
+              padding: "10px 4px",
+              minHeight: 44,
+              display: "inline-flex",
+              alignItems: "center",
             }}
           >
             Open the family tree →
@@ -169,11 +179,15 @@ export function AtriumCoachmark({
             style={{
               marginLeft: "auto",
               fontFamily: "var(--font-ui)",
-              fontSize: 12,
+              fontSize: 13,
               background: "transparent",
               border: "none",
               color: "var(--ink-faded)",
               cursor: "pointer",
+              padding: "10px 8px",
+              minHeight: 44,
+              display: "inline-flex",
+              alignItems: "center",
             }}
           >
             Got it
@@ -204,13 +218,13 @@ function Step({
       <span
         style={{
           flexShrink: 0,
-          width: 22,
-          height: 22,
+          width: 28,
+          height: 28,
           borderRadius: 999,
           background: "rgba(78,93,66,0.18)",
           color: "var(--moss)",
           fontFamily: "var(--font-ui)",
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 600,
           display: "inline-flex",
           alignItems: "center",

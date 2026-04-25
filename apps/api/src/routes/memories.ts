@@ -118,7 +118,6 @@ function serializePerspective(perspective: {
   contributor: {
     id: string;
     name: string;
-    email: string;
   } | null;
   contributorPerson?: {
     id: string;
@@ -143,7 +142,6 @@ function serializePerspective(perspective: {
       ? {
           id: perspective.contributor.id,
           name: perspective.contributor.name,
-          email: perspective.contributor.email,
         }
       : null,
     contributorPerson: perspective.contributorPerson
@@ -622,7 +620,6 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
           columns: {
             id: true,
             name: true,
-            email: true,
           },
         },
         prompt: {
@@ -631,7 +628,6 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
               columns: {
                 id: true,
                 name: true,
-                email: true,
               },
             },
             toPerson: {
@@ -648,7 +644,6 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
               columns: {
                 id: true,
                 name: true,
-                email: true,
               },
             },
             contributorPerson: {
@@ -781,11 +776,7 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
         scopeTreeId: rule.scopeTreeId,
       })),
       contributor: detailedMemory.contributor
-        ? {
-            id: detailedMemory.contributor.id,
-            name: detailedMemory.contributor.name,
-            email: detailedMemory.contributor.email,
-          }
+        ? { id: detailedMemory.contributor.id, name: detailedMemory.contributor.name }
         : null,
       prompt: detailedMemory.prompt
         ? {
@@ -794,7 +785,6 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
             status: detailedMemory.prompt.status,
             fromUserName:
               detailedMemory.prompt.fromUser?.name ??
-              detailedMemory.prompt.fromUser?.email ??
               null,
             toPerson: detailedMemory.prompt.toPerson
               ? {
@@ -904,7 +894,6 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
             columns: {
               id: true,
               name: true,
-              email: true,
             },
           },
           contributorPerson: {
@@ -1038,6 +1027,17 @@ export async function memoriesPlugin(app: FastifyInstance): Promise<void> {
       const inScope = await isMemoryInTreeScope(treeId, memoryId);
       if (!inScope) {
         return reply.status(404).send({ error: "Memory not found in this tree" });
+      }
+
+      const existingMemory = await db.query.memories.findFirst({
+        where: (m, { eq }) => eq(m.id, memoryId),
+        columns: { id: true, contributorUserId: true },
+      });
+      if (!existingMemory) {
+        return reply.status(404).send({ error: "Memory not found" });
+      }
+      if (existingMemory.contributorUserId !== session.user.id && !canManageTreeScope(membership.role)) {
+        return reply.status(403).send({ error: "Only the original contributor or a steward/founder can edit this memory" });
       }
 
       const updates: Record<string, unknown> = {

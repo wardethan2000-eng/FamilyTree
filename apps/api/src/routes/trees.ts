@@ -1128,7 +1128,9 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
         userId: m.userId,
         role: m.role,
         name: m.user?.name ?? null,
-        email: m.user?.email ?? "",
+        email: (userMembership.role === "founder" || userMembership.role === "steward")
+          ? (m.user?.email ?? "")
+          : null,
         joinedAt: m.joinedAt,
       }))
     );

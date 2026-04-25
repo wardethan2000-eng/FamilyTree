@@ -57,7 +57,6 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
                 columns: {
                   id: true,
                   name: true,
-                  email: true,
                 },
               },
               contributorPerson: {
@@ -114,7 +113,6 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
             contributorName:
               perspective.contributorPerson?.displayName ??
               perspective.contributor?.name ??
-              perspective.contributor?.email ??
               null,
           })) ?? [],
       })),

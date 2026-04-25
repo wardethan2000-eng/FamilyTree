@@ -100,9 +100,9 @@ function useDominantColors(src: string | null, isVideo: boolean): DominantColors
     img.src = src;
   }, [src, isVideo]);
 
-  if (typeof window !== "undefined" && src && !isVideo && extractedRef.current !== src) {
+  useEffect(() => {
     extract();
-  }
+  }, [extract]);
 
   return colors;
 }
@@ -125,13 +125,13 @@ export function ImmersivePhotoSection({
   const sectionRef = useRef<HTMLDivElement>(null);
   const contextRef = useRef<HTMLDivElement>(null);
   const [contextVisible, setContextVisible] = useState(false);
+  const [mediaShouldLoad, setMediaShouldLoad] = useState(false);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start end", "end start"],
   });
 
   const mediaScale = useTransform(scrollYProgress, [0.1, 0.35], [0.35, 1]);
-  const mediaRadius = useTransform(scrollYProgress, [0.1, 0.35], [16, 4]);
   const vignetteOpacity = useTransform(scrollYProgress, [0.15, 0.35], [0, 1]);
   const mediaOpacity = useTransform(scrollYProgress, [0, 0.1, 0.88, 1], [0, 1, 1, 0]);
 
@@ -139,7 +139,23 @@ export function ImmersivePhotoSection({
   const relatedPeople = getRelatedPeople(memory, people);
   const commentary = getMemoryCommentary(memory);
   const mediaCount = memory.mediaItems?.length ?? (memory.mediaUrl ? 1 : 0);
-  const colors = useDominantColors(isVideo ? null : mediaUrl, isVideo);
+  const colors = useDominantColors(mediaShouldLoad && !isVideo ? mediaUrl : null, isVideo);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setMediaShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "1400px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const el = contextRef.current;
@@ -218,12 +234,10 @@ export function ImmersivePhotoSection({
             className="immersive-media-card"
             style={{
               position: "relative",
-              width: hasContext ? "calc(100% - clamp(220px, 24vw, 340px))" : "100%",
+              width: "100%",
               height: "100%",
-              scale: mediaScale,
-              borderRadius: mediaRadius,
               opacity: mediaOpacity,
-              overflow: "hidden",
+              overflow: "visible",
             }}
           >
             <a
@@ -237,25 +251,29 @@ export function ImmersivePhotoSection({
               }}
             >
               {isVideo ? (
-                <video
-                  src={mediaUrl}
+                <motion.video
+                  src={mediaShouldLoad ? mediaUrl : undefined}
                   muted
                   playsInline
-                  autoPlay
+                  autoPlay={mediaShouldLoad}
                   loop
+                  preload="metadata"
                   style={{
                     position: "absolute",
                     inset: 0,
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
+                    scale: mediaScale,
                   }}
                 />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={mediaUrl}
+                <motion.img
+                  src={mediaShouldLoad ? mediaUrl : undefined}
                   alt={memory.title}
+                  loading="lazy"
+                  decoding="async"
                   onError={handleMediaError}
                   style={{
                     position: "absolute",
@@ -263,6 +281,7 @@ export function ImmersivePhotoSection({
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
+                    scale: mediaScale,
                   }}
                 />
               )}

@@ -145,7 +145,7 @@ export function AtriumStage({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
-                  padding: "5px 12px 5px 5px",
+                  padding: "8px 12px 8px 6px",
                   borderRadius: 999,
                   border: item.kind === "birthday"
                     ? "1px solid rgba(176,139,62,0.30)"
@@ -155,12 +155,13 @@ export function AtriumStage({
                     : "rgba(168,93,93,0.10)",
                   textDecoration: "none",
                   backdropFilter: "blur(6px)",
+                  minHeight: 44,
                 }}
               >
                 <div
                   style={{
-                    width: 22,
-                    height: 22,
+                    width: 28,
+                    height: 28,
                     borderRadius: "50%",
                     overflow: "hidden",
                     background: "rgba(246,241,231,0.12)",
@@ -182,7 +183,7 @@ export function AtriumStage({
                     <span
                       style={{
                         fontFamily: "var(--font-display)",
-                        fontSize: 10,
+                        fontSize: 12,
                         color: "rgba(246,241,231,0.7)",
                       }}
                     >
@@ -218,7 +219,7 @@ export function AtriumStage({
               background: "rgba(246,241,231,0.06)",
               backdropFilter: "blur(8px)",
               fontFamily: "var(--font-ui)",
-              fontSize: 11,
+              fontSize: 12,
               color: "rgba(246,241,231,0.56)",
               textTransform: "uppercase",
               letterSpacing: "0.12em",
@@ -325,12 +326,13 @@ export function AtriumStage({
               marginTop: 14,
               border: "none",
               background: "none",
-              padding: 0,
+              padding: "12px 4px",
               cursor: "pointer",
               fontFamily: "var(--font-display)",
               fontSize: 16,
               fontStyle: "italic",
               color: "rgba(246,241,231,0.72)",
+              minHeight: 44,
             }}
           >
             Drift through the archive
@@ -342,6 +344,7 @@ export function AtriumStage({
                 marginTop: 12,
                 fontFamily: "var(--font-ui)",
                 fontSize: 12,
+                lineHeight: 1.6,
                 color: "rgba(246,241,231,0.44)",
               }}
             >
@@ -374,7 +377,7 @@ function ContextMark({ label, value }: { label: string; value: string }) {
       <div
         style={{
           fontFamily: "var(--font-ui)",
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.10em",
           color: "rgba(246,241,231,0.40)",
@@ -407,4 +410,7 @@ const secondaryLinkStyle = {
   padding: "13px 20px",
   textDecoration: "none",
   transition: `background 200ms ${EASE}, border-color 200ms ${EASE}`,
+  minHeight: 44,
+  display: "inline-flex" as const,
+  alignItems: "center" as const,
 } as const;

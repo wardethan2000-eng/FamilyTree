@@ -9,6 +9,7 @@ import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import {
   contentDisposition,
+  extForMimeType,
   getPresignedUploadUrl,
   isAllowedMimeType,
   MEDIA_BUCKET,
@@ -156,7 +157,7 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(capacity.status).send({ error: capacity.reason });
     }
 
-    const ext = filename.includes(".") ? filename.split(".").pop()! : "bin";
+    const ext = extForMimeType(contentType);
     const objectKey = `trees/${treeId}/${randomUUID()}.${ext}`;
     const uploadUrl = await getPresignedUploadUrl(objectKey, contentType);
 

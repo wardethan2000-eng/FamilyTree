@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import { invitationsPlugin } from "./routes/invitations.js";
@@ -19,14 +20,36 @@ import { mePlugin } from "./routes/me.js";
 import { driftPlugin } from "./routes/drift.js";
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
-  const trustedOrigins = (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+  const trustedOriginsEnv = process.env.TRUSTED_ORIGINS;
+  if (!trustedOriginsEnv) {
+    throw new Error("TRUSTED_ORIGINS environment variable is required");
+  }
+  const trustedOrigins = trustedOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean);
 
-  // CORS for all non-auth routes. Runs at preHandler so it doesn't conflict
-  // with the onRequest hook that intercepts /api/auth/* before body parsing.
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? "info",
+      redact: ["req.headers.authorization", "req.headers.cookie", "req.headers['x-csrf-token']"],
+    },
+  });
+
+  app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "https:"],
+        fontSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+      },
+    },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  });
+
   app.register(cors, {
     hook: "preHandler",
     origin: trustedOrigins,
@@ -56,7 +79,7 @@ export function buildApp() {
         .header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
         .header(
           "Access-Control-Allow-Headers",
-          request.headers["access-control-request-headers"] ?? "Content-Type, Authorization",
+          "Content-Type, Authorization",
         )
         .status(204)
         .send();

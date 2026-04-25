@@ -4,7 +4,7 @@ import { magicLink } from "better-auth/plugins";
 import { db } from "./db.js";
 import * as schema from "@tessera/database";
 import { mailer, MAIL_FROM } from "./mailer.js";
-import { emailTemplates } from "./email-templates.js";
+import { emailTemplates, escapeHtml } from "./email-templates.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
@@ -82,7 +82,7 @@ export const auth = betterAuth({
         html: emailTemplates.shell(
           "Confirm your email",
           emailTemplates.paragraph(
-            `Welcome to Tessera${user.name ? `, ${user.name}` : ""}. Please confirm this email address so we can reach you about invitations and family memories.`,
+            `Welcome to Tessera${user.name ? `, ${escapeHtml(user.name)}` : ""}. Please confirm this email address so we can reach you about invitations and family memories.`,
           ) + emailTemplates.button(verifyUrl, "Confirm email"),
           "If you did not create a Tessera account, you can safely ignore this email.",
         ),
@@ -109,11 +109,9 @@ export const auth = betterAuth({
       },
     }),
   ],
-  trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000").split(
-    ",",
-  ),
-  secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-in-production",
-  baseURL: process.env.API_BASE_URL ?? "http://localhost:4000",
+  trustedOrigins: (() => { const v = process.env.TRUSTED_ORIGINS; if (!v) throw new Error("TRUSTED_ORIGINS environment variable is required"); return v.split(","); })(),
+  secret: (() => { const v = process.env.BETTER_AUTH_SECRET; if (!v) throw new Error("BETTER_AUTH_SECRET environment variable is required"); return v; })(),
+  baseURL: (() => { const v = process.env.API_BASE_URL; if (!v) throw new Error("API_BASE_URL environment variable is required"); return v; })(),
 });
 
 export type Auth = typeof auth;

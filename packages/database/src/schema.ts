@@ -148,6 +148,16 @@ export const users = pgTable(
   (table) => [uniqueIndex("users_email_unique_idx").on(table.email)],
 );
 
+export const deletedUsers = pgTable(
+  "deleted_users",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    email: text("email"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -205,7 +215,7 @@ export const userNotificationPreferences = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     invitationsEmail: boolean("invitations_email").default(true).notNull(),
     promptsEmail: boolean("prompts_email").default(true).notNull(),
-    systemEmail: boolean("system_email").default(true).notNull(),
+    systemEmail: boolean("system_email").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -223,8 +233,7 @@ export const trees = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     founderUserId: text("founder_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     tier: treeSubscriptionTierEnum("tier").default("seedling").notNull(),
     subscriptionStatus: treeSubscriptionStatusEnum("subscription_status")
       .default("active")
@@ -434,8 +443,7 @@ export const prompts = pgTable(
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
     fromUserId: text("from_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     toPersonId: uuid("to_person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
@@ -490,8 +498,7 @@ export const promptCampaigns = pgTable(
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
     fromUserId: text("from_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     toPersonId: uuid("to_person_id")
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
@@ -610,8 +617,7 @@ export const memories = pgTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     contributorUserId: text("contributor_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     mediaId: uuid("media_id").references(() => media.id, { onDelete: "set null" }),
     linkedMediaProvider: linkedMediaProviderEnum("linked_media_provider"),
     linkedMediaProviderItemId: varchar("linked_media_provider_item_id", {
@@ -777,8 +783,7 @@ export const memoryPerspectives = pgTable(
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
     contributorUserId: text("contributor_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     contributorPersonId: uuid("contributor_person_id").references(() => people.id, {
       onDelete: "set null",
     }),
@@ -857,8 +862,7 @@ export const memoryPersonSuppressions = pgTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     suppressedByUserId: text("suppressed_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -922,8 +926,7 @@ export const invitations = pgTable(
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
     invitedByUserId: text("invited_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     email: varchar("email", { length: 320 }).notNull(),
     proposedRole: membershipRoleEnum("proposed_role").notNull(),
     linkedPersonId: uuid("linked_person_id").references(() => people.id, {
@@ -950,8 +953,7 @@ export const archiveExports = pgTable(
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
     requestedByUserId: text("requested_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
+      .references(() => users.id, { onDelete: "set null" }),
     status: exportStatusEnum("status").default("queued").notNull(),
     storagePath: text("storage_path"),
     fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),

@@ -1,9 +1,10 @@
 "use client";
 import { getApiBase } from "@/lib/api-base";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   BaseEdge,
+  Background,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -61,12 +62,13 @@ const EDGE_TYPES = {
   constellationSpouse: SpouseEdge,
 };
 
-const CONTROL_SURFACE = "rgba(246,241,231,0.82)";
-const CONTROL_BORDER = "rgba(177,165,145,0.48)";
 const CANVAS_TOP_PADDING = 68;
 const PERSON_BANNER_WIDTH = 320;
-const CANVAS_BACKGROUND =
+
+const LIGHT_CANVAS_BACKGROUND =
   "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.72), transparent 32%), radial-gradient(circle at 82% 20%, rgba(226,214,194,0.38), transparent 28%), linear-gradient(180deg, #f7f2e9 0%, #f1eadf 100%)";
+const DARK_CANVAS_BACKGROUND =
+  "radial-gradient(circle at 20% 18%, rgba(30,40,70,0.85), transparent 35%), radial-gradient(circle at 82% 20%, rgba(50,60,100,0.5), transparent 30%), radial-gradient(circle at 50% 80%, rgba(20,30,60,0.6), transparent 40%), linear-gradient(180deg, #0a0e1a 0%, #0d1225 100%)";
 
 interface HoverState {
   personId: string;
@@ -129,6 +131,8 @@ function TreeCanvasInner({
   onConstellationChanged,
   onSelectedPersonChange,
 }: TreeCanvasProps) {
+  const { theme, toggleTheme } = useContext(ConstellationThemeContext);
+  const isDark = theme === "dark";
   const API = getApiBase();
   const reactFlow = useReactFlow();
   const viewport = useViewport();
@@ -1293,29 +1297,78 @@ function TreeCanvasInner({
     );
   }, [resetRelationshipEditorDrafts, selectedPersonId]);
 
+  const CANVAS_BACKGROUND = isDark ? DARK_CANVAS_BACKGROUND : LIGHT_CANVAS_BACKGROUND;
+
+  const starDustParticles = useMemo(() => {
+    if (!isDark) return null;
+    const particles: Array<{ x: number; y: number; size: number; opacity: number; duration: number; delay: number }> = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < 180; i++) {
+      const x = ((i * 7919 + 3571) % 10000) / 100;
+      const y = ((i * 6271 + 4237) % 10000) / 100;
+      const key = `${x.toFixed(1)},${y.toFixed(1)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const size = ((i * 3571) % 3) + 1;
+      const opacity = ((i * 4937) % 40 + 20) / 100;
+      const duration = ((i * 2741) % 8000 + 4000) / 1000;
+      const delay = ((i * 8293) % 12000) / 1000;
+      particles.push({ x, y, size, opacity, duration, delay });
+    }
+    return particles;
+  }, [isDark]);
+
   return (
     <div ref={rootRef} style={{ width: "100%", height: "100%", position: "relative", background: CANVAS_BACKGROUND }}>
+      {/* Grain overlay - only shown in light mode */}
+      {!isDark && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            backgroundImage: grainTileDataUrl ? `url(${grainTileDataUrl})` : undefined,
+            backgroundRepeat: "repeat",
+            backgroundSize: "256px 256px",
+            mixBlendMode: "multiply",
+            opacity: 0.35,
+            zIndex: 0,
+          }}
+        />
+      )}
+      
+      {/* Star dust particles - only shown in dark mode */}
+      {isDark && starDustParticles && (
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+          {starDustParticles.map((p, i) => (
+            <div
+              key={i}
+              className="star-dust"
+              style={{
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: p.size,
+                height: p.size,
+                background: p.size > 2 ? "rgba(160,190,255,0.9)" : "rgba(200,215,255,0.7)",
+                "--twinkle-duration": `${p.duration}s`,
+                "--twinkle-delay": `${p.delay}s`,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      )}
+      
+      {/* Vignette overlay - with theme-aware colors */}
       <div
         aria-hidden="true"
         style={{
           position: "absolute",
           inset: 0,
           pointerEvents: "none",
-          backgroundImage: grainTileDataUrl ? `url(${grainTileDataUrl})` : undefined,
-          backgroundRepeat: "repeat",
-          backgroundSize: "256px 256px",
-          mixBlendMode: "multiply",
-          opacity: 0.35,
-          zIndex: 0,
-        }}
-      />
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          background: "radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(28,25,21,0.22) 100%)",
+          background: isDark 
+            ? "radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(20,15,35,0.35) 100%)" 
+            : "radial-gradient(ellipse 70% 60% at 50% 45%, transparent 50%, rgba(28,25,21,0.22) 100%)",
           zIndex: 0,
         }}
       />
@@ -1361,9 +1414,9 @@ function TreeCanvasInner({
           right: 0,
           zIndex: 10,
           minHeight: 52,
-          background: CONTROL_SURFACE,
+          background: "var(--surface-bg)",
           backdropFilter: "blur(10px)",
-          borderBottom: `1px solid ${CONTROL_BORDER}`,
+          borderBottom: "1px solid var(--surface-border)",
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
           alignItems: "center",
@@ -1408,7 +1461,7 @@ function TreeCanvasInner({
             style={{
               ...(editMode ? toolbarPrimaryButtonStyle : toolbarButtonStyle),
               background: editMode ? "var(--ink)" : toolbarButtonStyle.background,
-              border: editMode ? "1px solid rgba(28,25,21,0.32)" : toolbarButtonStyle.border,
+              border: editMode ? "1px solid var(--ink)" : toolbarButtonStyle.border,
             }}
           >
             {editMode ? "Exit edit mode" : "Edit constellation"}
@@ -1540,10 +1593,12 @@ function TreeCanvasInner({
                         right: 0,
                         zIndex: 19,
                         minWidth: 160,
-                        background: "rgba(246,241,231,0.96)",
+                        background: isDark ? "rgba(20,25,40,0.96)" : "rgba(246,241,231,0.96)",
                         border: "1px solid var(--rule)",
                         borderRadius: 10,
-                        boxShadow: "0 12px 32px rgba(28,25,21,0.1)",
+                        boxShadow: isDark 
+                          ? "0 12px 32px rgba(5,8,15,0.4)" 
+                          : "0 12px 32px rgba(28,25,21,0.1)",
                         backdropFilter: "blur(12px)",
                         padding: "6px 4px",
                       }}
@@ -1626,6 +1681,42 @@ function TreeCanvasInner({
               </div>
             );
           })()}
+          
+          {onRequestMemoryClick && (
+            <button
+              onClick={onRequestMemoryClick}
+              style={toolbarButtonStyle}
+            >
+              Request a memory
+            </button>
+          )}
+          
+          <a
+            href={`/trees/${treeId}/inbox`}
+            style={toolbarIconButtonStyle}
+            title="Messages"
+            aria-label="Messages"
+          >
+            <InboxIcon />
+          </a>
+          
+          <button
+            onClick={toggleTheme}
+            style={toolbarIconButtonStyle}
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? "☀" : "☾"}
+          </button>
+          
+          <a
+            href={`/trees/${treeId}/settings`}
+            style={toolbarIconButtonStyle}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <GearIcon />
+          </a>
         </div>
       </div>
 
@@ -1658,7 +1749,7 @@ function TreeCanvasInner({
               border: "1px solid var(--rule)",
               borderRadius: 14,
               padding: "28px 32px",
-              boxShadow: "0 24px 48px rgba(28,25,21,0.12)",
+              boxShadow: "var(--card-shadow)",
               maxWidth: 420,
               textAlign: "center",
             }}
@@ -1695,7 +1786,7 @@ function TreeCanvasInner({
             position: "absolute",
             inset: 0,
             zIndex: 40,
-            background: "rgba(28,25,21,0.4)",
+            background: "var(--backdrop)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -1714,7 +1805,7 @@ function TreeCanvasInner({
               border: "1px solid var(--rule)",
               borderRadius: 12,
               padding: "20px 20px 16px",
-              boxShadow: "0 24px 48px rgba(28,25,21,0.2)",
+              boxShadow: "var(--card-shadow)",
             }}
           >
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "var(--ink)", marginBottom: 12 }}>
@@ -1801,10 +1892,10 @@ function TreeCanvasInner({
             maxWidth: 320,
             padding: "10px 12px",
             borderRadius: 12,
-            background: CONTROL_SURFACE,
+            background: "var(--surface-bg)",
             backdropFilter: "blur(10px)",
-            border: `1px solid ${CONTROL_BORDER}`,
-            boxShadow: "0 10px 24px rgba(40,30,18,0.08)",
+            border: "1px solid var(--surface-border)",
+            boxShadow: "0 10px 24px var(--shadow)",
             display: "flex",
             flexDirection: "column",
             gap: 6,
@@ -1830,8 +1921,8 @@ function TreeCanvasInner({
                   fontFamily: "var(--font-ui)",
                   fontSize: 12,
                   color: "var(--moss)",
-                  background: "rgba(255,250,244,0.84)",
-                  border: `1px solid ${CONTROL_BORDER}`,
+                  background: "var(--card-bg)",
+                  border: "1px solid var(--surface-border)",
                   borderRadius: 999,
                   padding: "4px 10px",
                   textDecoration: "none",
@@ -1921,8 +2012,18 @@ function TreeCanvasInner({
         maxZoom={2.5}
         style={{ background: "transparent", paddingTop: CANVAS_TOP_PADDING }}
         proOptions={{ hideAttribution: true }}
-      />
-
+      >
+        {/* Only show background dots in dark mode */}
+        {isDark && (
+          <Background
+            style={{ background: "transparent" }}
+            gap={44}
+            size={1}
+            color="rgba(100,130,180,0.18)"
+          />
+        )}
+      </ReactFlow>
+      
       {projectedFamilyClusters.length > 0 && (
         <div
           style={{
@@ -1943,7 +2044,9 @@ function TreeCanvasInner({
                 width: cluster.halfW * 2,
                 height: cluster.halfH * 2,
                 borderRadius: "50%",
-                background: "radial-gradient(ellipse at center, rgba(212,190,159,0.15) 0%, transparent 70%)",
+                background: isDark 
+                  ? "radial-gradient(ellipse at center, rgba(120,160,220,0.15) 0%, transparent 70%)" 
+                  : "radial-gradient(ellipse at center, rgba(212,190,159,0.15) 0%, transparent 70%)",
                 opacity: cluster.clusterDimmed ? 0.15 : 1,
                 transition: "opacity var(--duration-focus) var(--ease-tessera)",
               }}
@@ -1951,7 +2054,7 @@ function TreeCanvasInner({
           ))}
         </div>
       )}
-
+      
       {!editMode && projectedFamilyClusters.length > 0 && viewport.zoom < 0.55 && !selectedPersonId && (
         <div
           style={{
@@ -1974,8 +2077,8 @@ function TreeCanvasInner({
                   transform: "translate(-50%, -50%)",
                   fontFamily: "var(--font-display)",
                   fontSize: Math.max(18, Math.min(32, 24 / viewport.zoom)),
-                  color: "var(--ink-faded)",
-                  opacity: 0.55,
+                  color: isDark ? "rgba(200,215,255,0.7)" : "var(--ink-faded)",
+                  opacity: isDark ? 0.7 : 0.55,
                   letterSpacing: "0.08em",
                   whiteSpace: "nowrap",
                   textAlign: "center",
@@ -2046,7 +2149,7 @@ function TreeCanvasInner({
             position: "absolute",
             inset: 0,
             zIndex: 30,
-            background: "rgba(28,25,21,0.4)",
+            background: "var(--backdrop)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -2063,7 +2166,7 @@ function TreeCanvasInner({
               border: "1px solid var(--rule)",
               borderRadius: 12,
               padding: "20px 20px 16px",
-              boxShadow: "0 24px 48px rgba(28,25,21,0.2)",
+              boxShadow: "var(--card-shadow)",
             }}
           >
             <div
@@ -2316,7 +2419,7 @@ function TreeCanvasInner({
             position: "absolute",
             inset: 0,
             zIndex: 31,
-            background: "rgba(28,25,21,0.35)",
+            background: "var(--backdrop)",
             backdropFilter: "blur(3px)",
             display: "flex",
             alignItems: "center",
@@ -2333,7 +2436,7 @@ function TreeCanvasInner({
               border: "1px solid var(--rule)",
               background: "var(--paper)",
               padding: "16px 16px 14px",
-              boxShadow: "0 18px 40px rgba(28,25,21,0.18)",
+              boxShadow: "var(--card-shadow)",
             }}
           >
             <div
@@ -2531,7 +2634,9 @@ function ParentChildEdge({
   }
 
   const edgeClass = isDimmed ? "edge-dimmed" : "edge-pulse";
-  const stroke = isDimmed ? "rgba(177, 165, 145, 0.45)" : undefined;
+  const stroke = isDimmed 
+    ? "rgba(177, 165, 145, 0.45)" 
+    : "var(--rule)";
   const edgeStyle: React.CSSProperties = isDimmed
     ? { stroke, strokeWidth, cursor: "pointer" }
     : { strokeWidth, cursor: "pointer" };
@@ -2602,7 +2707,9 @@ function SpouseEdge({
   }
 
   const edgeClass = isDimmed ? "edge-dimmed" : "edge-shimmer";
-  const stroke = isDimmed ? "rgba(177, 165, 145, 0.45)" : undefined;
+  const stroke = isDimmed 
+    ? "rgba(177, 165, 145, 0.45)" 
+    : "var(--rule)";
   const edgeStyle: React.CSSProperties = isDimmed
     ? { stroke, strokeWidth, cursor: "pointer" }
     : { strokeWidth, cursor: "pointer" };
@@ -2676,7 +2783,7 @@ function ParentPlaceholderOverlay({
               y1={placeholderCenters[0]!.y}
               x2={placeholderCenters[1]!.x}
               y2={placeholderCenters[1]!.y}
-              stroke="rgba(177,165,145,0.78)"
+              style={{ stroke: "var(--rule)" }}
               strokeWidth="1.5"
               strokeDasharray="4 4"
               opacity={opacity}
@@ -2686,7 +2793,7 @@ function ParentPlaceholderOverlay({
               y1={placeholderCenters[0]!.y + bubbleSize / 2 - 4}
               x2={(placeholderCenters[0]!.x + placeholderCenters[1]!.x) / 2}
               y2={computedBranchY}
-              stroke="rgba(177,165,145,0.78)"
+              style={{ stroke: "var(--rule)" }}
               strokeWidth="1.5"
               opacity={opacity}
             />
@@ -2695,7 +2802,7 @@ function ParentPlaceholderOverlay({
               y1={computedBranchY}
               x2={Math.max(...childXs)}
               y2={computedBranchY}
-              stroke="rgba(177,165,145,0.78)"
+              style={{ stroke: "var(--rule)" }}
               strokeWidth="1.5"
               opacity={opacity}
             />
@@ -2706,7 +2813,7 @@ function ParentPlaceholderOverlay({
                 y1={computedBranchY}
                 x2={anchor.x}
                 y2={anchor.y}
-                stroke="rgba(177,165,145,0.78)"
+                style={{ stroke: "var(--rule)" }}
                 strokeWidth="1.5"
                 opacity={opacity}
               />
@@ -2720,7 +2827,7 @@ function ParentPlaceholderOverlay({
               y1={actualParentAnchors[0]!.y}
               x2={placeholderCenters[0]!.x}
               y2={placeholderCenters[0]!.y}
-              stroke="rgba(177,165,145,0.78)"
+              style={{ stroke: "var(--rule)" }}
               strokeWidth="1.5"
               strokeDasharray="4 4"
               opacity={opacity}
@@ -2750,14 +2857,14 @@ function ParentPlaceholderOverlay({
               width: bubbleSize,
               height: bubbleSize,
               borderRadius: "50%",
+              background: "var(--card-bg)",
               border: "1px dashed rgba(78,93,66,0.45)",
-              background: "rgba(246,241,231,0.74)",
               color: "var(--moss)",
               fontFamily: "var(--font-ui)",
               fontSize: 24,
               lineHeight: 1,
               cursor: "pointer",
-              boxShadow: "0 8px 20px rgba(28,25,21,0.08)",
+              boxShadow: "var(--btn-shadow)",
               backdropFilter: "blur(6px)",
             }}
           >
@@ -2769,12 +2876,12 @@ function ParentPlaceholderOverlay({
                 fontFamily: "var(--font-ui)",
                 fontSize: 11,
                 color: "var(--ink-faded)",
-                background: "rgba(246,241,231,0.88)",
-                border: "1px solid rgba(177,165,145,0.5)",
+                background: "var(--card-bg)",
+                border: "1px solid var(--surface-border)",
                 borderRadius: 999,
                 padding: "3px 8px",
                 whiteSpace: "nowrap",
-                boxShadow: "0 6px 16px rgba(28,25,21,0.06)",
+                boxShadow: "var(--btn-shadow)",
               }}
             >
               Add parent
@@ -2820,13 +2927,13 @@ function RelationGhost({
           height: size,
           borderRadius: "50%",
           border: "1px dashed rgba(78,93,66,0.45)",
-          background: "rgba(246,241,231,0.6)",
+          background: "var(--btn-bg)",
           color: "var(--moss)",
           fontFamily: "var(--font-ui)",
           fontSize: 24,
           lineHeight: 1,
           cursor: "pointer",
-          boxShadow: "0 10px 20px rgba(28,25,21,0.08)",
+          boxShadow: "var(--btn-shadow)",
           backdropFilter: "blur(6px)",
         }}
       >
@@ -2837,12 +2944,12 @@ function RelationGhost({
           fontFamily: "var(--font-ui)",
           fontSize: 11,
           color: "var(--ink-faded)",
-          background: "rgba(246,241,231,0.88)",
-          border: "1px solid rgba(177,165,145,0.5)",
+          background: "var(--card-bg)",
+          border: "1px solid var(--surface-border)",
           borderRadius: 999,
           padding: "3px 8px",
           whiteSpace: "nowrap",
-          boxShadow: "0 6px 16px rgba(28,25,21,0.06)",
+          boxShadow: "var(--btn-shadow)",
         }}
       >
         {label}
@@ -2918,7 +3025,7 @@ const toolbarButtonStyle: React.CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: 13,
   color: "var(--ink-faded)",
-  background: "rgba(246,241,231,0.76)",
+  background: "var(--btn-bg)",
   border: "1px solid var(--rule)",
   borderRadius: 999,
   cursor: "pointer",
@@ -2927,7 +3034,7 @@ const toolbarButtonStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 6,
   textDecoration: "none",
-  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+  boxShadow: "var(--btn-shadow)",
 };
 
 const toolbarPrimaryButtonStyle: React.CSSProperties = {
@@ -2949,11 +3056,11 @@ const toolbarHintStyle: React.CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: 11,
   color: "var(--ink-faded)",
-  background: "rgba(246,241,231,0.76)",
+  background: "var(--btn-bg)",
   border: "1px solid var(--rule)",
   borderRadius: 999,
   padding: "8px 12px",
-  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+  boxShadow: "var(--btn-shadow)",
 };
 
 const toolbarSegmentedStyle: React.CSSProperties = {
@@ -2963,8 +3070,8 @@ const toolbarSegmentedStyle: React.CSSProperties = {
   padding: 4,
   borderRadius: 999,
   border: "1px solid var(--rule)",
-  background: "rgba(246,241,231,0.76)",
-  boxShadow: "0 12px 26px rgba(28,25,21,0.06)",
+  background: "var(--btn-bg)",
+  boxShadow: "var(--btn-shadow)",
 };
 
 function toolbarNavItemStyle(active: boolean): React.CSSProperties {
@@ -2991,17 +3098,51 @@ function toolbarNavButtonStyle(active: boolean): React.CSSProperties {
 }
 
 const floatingPanelStyle: React.CSSProperties = {
-  background: "rgba(246,241,231,0.94)",
+  background: "var(--card-bg)",
   border: "1px solid var(--rule)",
   borderRadius: 14,
-  boxShadow: "0 18px 34px rgba(28,25,21,0.1)",
+  boxShadow: "var(--card-shadow)",
   backdropFilter: "blur(12px)",
 };
 
+function ConstellationThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    return (localStorage.getItem("tessera-theme") as "light" | "dark") || "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("tessera-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }, []);
+
+  return (
+    <ConstellationThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ConstellationThemeContext.Provider>
+  );
+}
+
+interface ConstellationTheme {
+  theme: "light" | "dark";
+  toggleTheme: () => void;
+}
+
+const ConstellationThemeContext = React.createContext<ConstellationTheme>({
+  theme: "light",
+  toggleTheme: () => {},
+});
+
 export function TreeCanvas(props: TreeCanvasProps) {
   return (
-    <ReactFlowProvider>
-      <TreeCanvasInner {...props} />
-    </ReactFlowProvider>
+    <ConstellationThemeProvider>
+      <ReactFlowProvider>
+        <TreeCanvasInner {...props} />
+      </ReactFlowProvider>
+    </ConstellationThemeProvider>
   );
 }

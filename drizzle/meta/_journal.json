@@ -148,6 +148,20 @@
       "when": 1777343849000,
       "tag": "0020_elder_last_standalone",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1777059433547,
+      "tag": "0021_quick_calypso",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1777059535388,
+      "tag": "0022_wild_donald_blake",
+      "breakpoints": true
     }
   ]
 }

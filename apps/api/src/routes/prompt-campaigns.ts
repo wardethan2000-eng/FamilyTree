@@ -6,6 +6,7 @@ import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
+import { escapeHtml } from "../lib/email-templates.js";
 import { mayEmailUser } from "./me.js";
 import { sendInstallEmail as sendElderInstallEmail } from "./elder-capture.js";
 
@@ -88,8 +89,8 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
           ? { id: c.toPerson.id, name: c.toPerson.displayName }
           : null,
         fromUser: c.fromUser
-          ? { id: c.fromUser.id, name: c.fromUser.name ?? c.fromUser.email }
-          : null,
+           ? { id: c.fromUser.id, name: c.fromUser.name ?? "A tree member" }
+           : null,
         recipients: c.recipients.map((r) => ({ id: r.id, email: r.email })),
         questions: c.questions
           .sort((a, b) => a.position - b.position)
@@ -379,9 +380,11 @@ async function processCampaignOnce(
   const tree = await db.query.trees.findFirst({
     where: (t, { eq }) => eq(t.id, campaign.treeId),
   });
-  const fromUser = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, campaign.fromUserId),
-  });
+  const fromUser = campaign.fromUserId
+    ? await db.query.users.findFirst({
+        where: (u, { eq }) => eq(u.id, campaign.fromUserId!),
+      })
+    : null;
   const person = await db.query.people.findFirst({
     where: (p, { eq }) => eq(p.id, campaign.toPersonId),
   });
@@ -458,15 +461,15 @@ async function processCampaignOnce(
         from: MAIL_FROM,
         to: email,
         subject: `${campaign.name} — a question for ${personName}`,
-        html: `
-          <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px 20px; color: #1C1915; background: #F6F1E7;">
-            <h1 style="font-size: 24px; font-weight: 400; margin: 0 0 14px;">A weekly question</h1>
-            <p style="font-size: 15px; line-height: 1.7; color: #403A2E; margin: 0 0 12px;">
-              This is part of <strong>${campaign.name}</strong>, a series ${fromName} is gathering for the family archive about <strong>${personName}</strong>.
-            </p>
-            <blockquote style="margin: 0 0 20px; padding: 14px 16px; border-left: 3px solid #B08B3E; background: #EDE6D6; color: #1C1915;">
-              ${nextQuestion.questionText}
-            </blockquote>
+          html: `
+            <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px 20px; color: #1C1915; background: #F6F1E7;">
+              <h1 style="font-size: 24px; font-weight: 400; margin: 0 0 14px;">A weekly question</h1>
+              <p style="font-size: 15px; line-height: 1.7; color: #403A2E; margin: 0 0 12px;">
+                This is part of <strong>${escapeHtml(campaign.name)}</strong>, a series ${escapeHtml(fromName)} is gathering for the family archive about <strong>${escapeHtml(personName)}</strong>.
+              </p>
+              <blockquote style="margin: 0 0 20px; padding: 14px 16px; border-left: 3px solid #B08B3E; background: #EDE6D6; color: #1C1915;">
+                ${escapeHtml(nextQuestion.questionText)}
+              </blockquote>
             <p style="margin: 0 0 24px;">
               <a href="${replyUrl}"
                  style="background: #4E5D42; color: #F6F1E7; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 15px; display: inline-block;">

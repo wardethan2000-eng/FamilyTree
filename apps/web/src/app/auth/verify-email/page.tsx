@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { authApi } from "@/lib/auth-api";
+import { getApiBase } from "@/lib/api-base";
 
 type Status = "pending" | "success" | "error";
 
@@ -32,7 +33,7 @@ function VerifyEmailContent() {
     async function verify() {
       try {
         const res = await fetch(
-          `${""}/api/auth/verify-email?token=${encodeURIComponent(token as string)}`,
+          `${getApiBase()}/api/auth/verify-email?token=${encodeURIComponent(token as string)}`,
           { credentials: "include" }
         );
         if (!res.ok) {

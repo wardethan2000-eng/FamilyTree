@@ -9,11 +9,13 @@ import { getSession } from "../lib/session.js";
 import {
   getPresignedUploadUrl,
   isAllowedMimeType,
+  extForMimeType,
   mediaUrl,
 } from "../lib/storage.js";
 import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
+import { escapeHtml } from "../lib/email-templates.js";
 import { mayEmailUser } from "./me.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
@@ -126,11 +128,11 @@ export async function sendInstallEmail(opts: {
       from: MAIL_FROM,
       to: opts.email,
       subject: `${label} — your private memory link`,
-      html: `
+          html: `
         <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px 20px; color: #1C1915; background: #F6F1E7;">
           <h1 style="font-size: 26px; font-weight: 400; margin: 0 0 14px;">A place for your memories</h1>
           <p style="font-size: 17px; line-height: 1.7; color: #403A2E;">
-            ${opts.inviterName} set up a private space where you can share photos, voice notes, and stories for the family archive of <strong>${label}</strong>.
+            ${escapeHtml(opts.inviterName)} set up a private space where you can share photos, voice notes, and stories for the family archive of <strong>${escapeHtml(label)}</strong>.
           </p>
           <p style="font-size: 17px; line-height: 1.7; color: #403A2E; margin: 0 0 24px;">
             Tap the button below to open it. On your phone, tap <strong>Share</strong> → <strong>Add to Home Screen</strong> so it stays one tap away.
@@ -144,7 +146,7 @@ export async function sendInstallEmail(opts: {
             This link is private to you. Don't share it with others.
           </p>
         </div>`,
-      text: `${opts.inviterName} set up a private memory page for ${label}.\n\nOpen it: ${url}\n\nOn your phone, choose Share → Add to Home Screen so it stays one tap away.`,
+        text: `${opts.inviterName} set up a private memory page for ${label}.\n\nOpen it: ${url}\n\nOn your phone, choose Share → Add to Home Screen so it stays one tap away.`,
     });
     return true;
   } catch {
@@ -254,7 +256,6 @@ export async function elderCapturePlugin(app: FastifyInstance): Promise<void> {
           : null,
         createdAt: r.createdAt,
         lastUsedAt: r.lastUsedAt,
-        lastUsedUserAgent: r.lastUsedUserAgent,
         lastStandaloneAt: r.lastStandaloneAt,
         revokedAt: r.revokedAt,
       })),
@@ -420,7 +421,7 @@ export async function elderCapturePlugin(app: FastifyInstance): Promise<void> {
     if (!capacity.allowed) {
       return reply.status(capacity.status).send({ error: capacity.reason });
     }
-    const ext = filename.includes(".") ? filename.split(".").pop()! : "bin";
+    const ext = extForMimeType(contentType);
     const objectKey = `trees/${t.treeId}/elder-capture/${t.id}/${randomUUID()}.${ext}`;
     const uploadUrl = await getPresignedUploadUrl(objectKey, contentType);
     const [mediaRecord] = await db
@@ -572,8 +573,8 @@ async function submitMemory(
       await enqueueMemoryTranscription(result.id, t.treeId);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Submission failed";
-    return reply.status(400).send({ error: message });
+    request.log.error({ err }, "Elder capture submission failed");
+    return reply.status(400).send({ error: "Submission failed" });
   }
 
   await touchToken(t.id, request);

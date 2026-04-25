@@ -6,6 +6,9 @@ coverage/
 .env
 .env.local
 .env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 .turbo/
 
 apps/*/node_modules/

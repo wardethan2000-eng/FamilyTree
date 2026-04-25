@@ -34,11 +34,11 @@ export function AtriumContextStrip({
 
 function ContextRun({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ minWidth: "min(220px, 100%)", flex: "1 1 220px" }}>
+    <div style={{ minWidth: "min(160px, 100%)", flex: "1 1 160px" }}>
       <div
         style={{
           fontFamily: "var(--font-ui)",
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: "var(--ink-faded)",

@@ -56,8 +56,9 @@ export function EraRibbon({
           <span
             style={{
               fontFamily: "var(--font-ui)",
-              fontSize: 12,
+              fontSize: 13,
               color: "var(--ink-faded)",
+              lineHeight: 1.4,
             }}
           >
             Filter Home through the decades already present in the archive.
@@ -65,6 +66,7 @@ export function EraRibbon({
         </div>
 
         <div
+          className="tessera-era-ribbon-scroll"
           style={{
             display: "flex",
             gap: 10,
@@ -72,6 +74,8 @@ export function EraRibbon({
             paddingBottom: 4,
             scrollbarWidth: "none",
             scrollSnapType: "x proximity",
+            position: "relative",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <EraChip
@@ -123,7 +127,7 @@ function EraChip({
         background: highlighted ? "rgba(78,93,66,0.08)" : "var(--paper-deep)",
         color: highlighted ? "var(--ink)" : "var(--ink-faded)",
         borderRadius: 999,
-        padding: "10px 14px",
+        padding: "12px 16px",
         minWidth: "fit-content",
         cursor: "pointer",
         textAlign: "left",
@@ -133,6 +137,7 @@ function EraChip({
         transition:
           `background 220ms ${EASE}, border-color 220ms ${EASE}, box-shadow 220ms ${EASE}, color 220ms ${EASE}, transform 220ms ${EASE}`,
         transform: hovered ? "translateY(-1px)" : "none",
+        minHeight: 44,
       }}
     >
       <div
@@ -148,7 +153,7 @@ function EraChip({
         style={{
           marginTop: 2,
           fontFamily: "var(--font-ui)",
-          fontSize: 11,
+          fontSize: 12,
           opacity: 0.85,
         }}
       >

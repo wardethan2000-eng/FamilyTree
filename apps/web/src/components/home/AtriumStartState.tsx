@@ -40,7 +40,7 @@ export function AtriumStartState({
               background: "rgba(246,241,231,0.08)",
               backdropFilter: "blur(10px)",
               fontFamily: "var(--font-ui)",
-              fontSize: 11,
+              fontSize: 12,
               color: "rgba(246,241,231,0.62)",
               textTransform: "uppercase",
               letterSpacing: "0.12em",
@@ -98,8 +98,9 @@ export function AtriumStartState({
                 background: "rgba(246,241,231,0.95)",
                 border: "none",
                 borderRadius: 999,
-                padding: "12px 18px",
+                padding: "14px 22px",
                 cursor: "pointer",
+                minHeight: 44,
               }}
             >
               Add first memory
@@ -114,8 +115,11 @@ export function AtriumStartState({
                 background: "rgba(246,241,231,0.08)",
                 border: "1px solid rgba(246,241,231,0.18)",
                 borderRadius: 999,
-                padding: "12px 18px",
+                padding: "14px 22px",
                 textDecoration: "none",
+                minHeight: 44,
+                display: "inline-flex",
+                alignItems: "center",
               }}
             >
               Add first person

@@ -12,8 +12,8 @@ export const s3 = new S3Client({
   endpoint: `http://${process.env.MINIO_ENDPOINT ?? "localhost"}:${process.env.MINIO_PORT ?? "9000"}`,
   region: "us-east-1",
   credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY ?? "tessera",
-    secretAccessKey: process.env.MINIO_SECRET_KEY ?? "tessera-dev-secret",
+    accessKeyId: (() => { const v = process.env.MINIO_ACCESS_KEY; if (!v) throw new Error("MINIO_ACCESS_KEY is required"); return v; })(),
+    secretAccessKey: (() => { const v = process.env.MINIO_SECRET_KEY; if (!v) throw new Error("MINIO_SECRET_KEY is required"); return v; })(),
   },
   forcePathStyle: true, // required for MinIO
 });
@@ -56,6 +56,37 @@ export const ALLOWED_MIME_TYPES = new Set([
 
 export function isAllowedMimeType(mime: string): boolean {
   return ALLOWED_MIME_TYPES.has((mime.toLowerCase().split(";")[0] ?? "").trim());
+}
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/tiff": "tiff",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "video/mpeg": "mpeg",
+  "video/3gpp": "3gp",
+  "video/x-msvideo": "avi",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
+  "audio/webm": "webm",
+  "audio/flac": "flac",
+  "audio/x-m4a": "m4a",
+  "audio/opus": "opus",
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+};
+
+export function extForMimeType(mime: string): string {
+  return MIME_TO_EXT[(mime.toLowerCase().split(";")[0] ?? "").trim()] ?? "bin";
 }
 
 /**

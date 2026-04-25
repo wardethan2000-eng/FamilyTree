@@ -132,6 +132,10 @@ export default function AtriumPage() {
 
   const [mode, setMode] = useState<AtriumMode>("scroll");
   const [headerVisible, setHeaderVisible] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const openMobileMenu = useCallback(() => setMobileMenuOpen(true), []);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -508,6 +512,7 @@ export default function AtriumPage() {
 
   return (
     <main
+      className="tessera-main-with-bottom-bar"
       style={{
         minHeight: "100vh",
         background: "var(--paper)",
@@ -548,10 +553,13 @@ export default function AtriumPage() {
             href="/dashboard"
             style={{
               fontFamily: "var(--font-ui)",
-              fontSize: 11,
+              fontSize: 12,
               color: "var(--ink-faded)",
               textDecoration: "none",
-              padding: "4px 0",
+              padding: "8px 4px",
+              minHeight: 44,
+              display: "inline-flex",
+              alignItems: "center",
             }}
           >
             ← Archives
@@ -608,6 +616,7 @@ export default function AtriumPage() {
           <button
             type="button"
             onClick={() => setMode("scroll")}
+            className="tessera-mobile-hide"
             style={{
               ...headerButtonStyle,
               fontSize: 11,
@@ -622,6 +631,7 @@ export default function AtriumPage() {
           <button
             type="button"
             onClick={() => setMode("gallery")}
+            className="tessera-mobile-hide"
             style={{
               ...headerButtonStyle,
               fontSize: 11,
@@ -636,6 +646,7 @@ export default function AtriumPage() {
           <button
             type="button"
             onClick={() => setMode("filmstrip")}
+            className="tessera-mobile-hide"
             style={{
               ...headerButtonStyle,
               fontSize: 11,
@@ -667,12 +678,13 @@ export default function AtriumPage() {
           <button
             type="button"
             onClick={() => setWizardOpen(true)}
+            className="tessera-mobile-hide"
             style={headerPrimaryButtonStyle}
           >
             + Add memory
           </button>
 
-          <button type="button" onClick={() => setSearchOpen(true)} style={headerButtonStyle}>
+          <button type="button" onClick={() => setSearchOpen(true)} style={{ ...headerButtonStyle, minHeight: 44, minWidth: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
             <span>⌕</span>
             <span className="tessera-header-search-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
               Search
@@ -697,6 +709,11 @@ export default function AtriumPage() {
             style={{
               ...headerIconButtonStyle,
               position: "relative",
+              minHeight: 44,
+              minWidth: 44,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
             title="Messages"
             aria-label="Messages"
@@ -729,14 +746,254 @@ export default function AtriumPage() {
 
           <Link
             href={`/trees/${treeId}/settings`}
-            style={headerIconButtonStyle}
+            style={{ ...headerIconButtonStyle, minHeight: 44, minWidth: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
             title="Settings"
             aria-label="Settings"
           >
             <GearIcon />
           </Link>
+
+          <button
+            type="button"
+            className="tessera-mobile-menu-button"
+            onClick={openMobileMenu}
+            aria-label="Menu"
+            style={{
+              ...headerIconButtonStyle,
+              minHeight: 44,
+              minWidth: 44,
+              display: "none",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 20,
+              lineHeight: 1,
+            }}
+          >
+            ☰
+          </button>
         </div>
       </header>
+
+      {/* Mobile slide-out menu */}
+      <div
+        className="tessera-mobile-menu-overlay"
+        data-open={mobileMenuOpen ? "true" : "false"}
+        onClick={closeMobileMenu}
+      />
+      <div className="tessera-mobile-menu" data-open={mobileMenuOpen ? "true" : "false"}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: 17, color: "var(--ink)" }}>
+            {tree?.name ?? "Tessera"}
+          </span>
+          <button
+            type="button"
+            onClick={closeMobileMenu}
+            aria-label="Close menu"
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 22,
+              color: "var(--ink-faded)",
+              cursor: "pointer",
+              minHeight: 44,
+              minWidth: 44,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ×
+          </button>
+        </div>
+        <nav>
+          <Link href={`/trees/${treeId}/home`} onClick={closeMobileMenu} aria-current="page">
+            Home
+          </Link>
+          <Link href={`/trees/${treeId}/tree`} onClick={closeMobileMenu}>
+            Family tree
+          </Link>
+          <button type="button" onClick={() => { closeMobileMenu(); openDriftChooser(); }}>
+            Drift through the archive
+          </button>
+          <Link href={`/trees/${treeId}/prompts/campaigns`} onClick={closeMobileMenu}>
+            Campaigns
+          </Link>
+        </nav>
+        <div className="tessera-menu-section">
+          <div style={{ display: "grid", gap: 8 }}>
+            {(["scroll", "gallery", "filmstrip"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setMode(m); closeMobileMenu(); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  minHeight: 44,
+                  padding: "10px 16px",
+                  borderRadius: 10,
+                  border: mode === m ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
+                  background: mode === m ? "var(--moss)" : "var(--paper-deep)",
+                  color: mode === m ? "#fff" : "var(--ink-faded)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                {m === "scroll" ? "↕" : m === "gallery" ? "▦" : "≡"}{" "}
+                {m.charAt(0).toUpperCase() + m.slice(1)} view
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="tessera-menu-section">
+          <button
+            type="button"
+            className="tessera-menu-primary"
+            onClick={() => { closeMobileMenu(); setWizardOpen(true); }}
+          >
+            + Add memory
+          </button>
+        </div>
+        <div className="tessera-menu-section" style={{ display: "grid", gap: 4 }}>
+          <Link
+            href={`/trees/${treeId}/inbox`}
+            onClick={closeMobileMenu}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              minHeight: 44,
+              padding: "10px 16px",
+              borderRadius: 10,
+              textDecoration: "none",
+              color: "var(--ink)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+            }}
+          >
+            <InboxIcon /> Messages
+            {inboxCount > 0 && (
+              <span style={{
+                marginLeft: "auto",
+                minWidth: 20,
+                height: 20,
+                borderRadius: 999,
+                background: "var(--rose)",
+                color: "#fff",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 6px",
+              }}>
+                {inboxCount > 9 ? "9+" : inboxCount}
+              </span>
+            )}
+          </Link>
+          <Link
+            href={`/trees/${treeId}/curation`}
+            onClick={closeMobileMenu}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              minHeight: 44,
+              padding: "10px 16px",
+              borderRadius: 10,
+              textDecoration: "none",
+              color: curationCount > 0 ? "var(--amber, #c97d1a)" : "var(--ink-faded)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+            }}
+          >
+            ✎ Curation
+            {curationCount > 0 && (
+              <span style={{
+                marginLeft: "auto",
+                minWidth: 20,
+                height: 20,
+                borderRadius: 999,
+                background: "var(--amber, #c97d1a)",
+                color: "#fff",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 6px",
+              }}>
+                {curationCount}
+              </span>
+            )}
+          </Link>
+          <Link
+            href={`/trees/${treeId}/settings`}
+            onClick={closeMobileMenu}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              minHeight: 44,
+              padding: "10px 16px",
+              borderRadius: 10,
+              textDecoration: "none",
+              color: "var(--ink-faded)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+            }}
+          >
+            <GearIcon /> Settings
+          </Link>
+        </div>
+      </div>
+
+      {/* Mobile bottom action bar */}
+      <div className="tessera-mobile-bottom-bar">
+        <button
+          type="button"
+          data-active={mode === "scroll" ? "true" : "false"}
+          onClick={() => setMode("scroll")}
+        >
+          <span className="tessera-bottom-bar-icon">↕</span>
+          Scroll
+        </button>
+        <button
+          type="button"
+          data-active={mode === "gallery" ? "true" : "false"}
+          onClick={() => setMode("gallery")}
+        >
+          <span className="tessera-bottom-bar-icon">▦</span>
+          Gallery
+        </button>
+        <button
+          type="button"
+          data-active={mode === "filmstrip" ? "true" : "false"}
+          onClick={() => setMode("filmstrip")}
+        >
+          <span className="tessera-bottom-bar-icon">≡</span>
+          Filmstrip
+        </button>
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          style={{ color: "var(--moss)" }}
+        >
+          <span className="tessera-bottom-bar-icon" style={{ fontSize: 24, lineHeight: 1 }}>+</span>
+          Add
+        </button>
+        <button
+          type="button"
+          onClick={openMobileMenu}
+        >
+          <span className="tessera-bottom-bar-icon">☰</span>
+          More
+        </button>
+      </div>
 
       <AtriumCoachmark
         treeId={treeId}
@@ -866,10 +1123,8 @@ export default function AtriumPage() {
           }
         }
         @media (max-width: 640px) {
-          .tessera-header {
-            grid-template-columns: 1fr auto !important;
-            gap: 6px !important;
-            padding: 6px 10px !important;
+          .tessera-mobile-menu-button {
+            display: inline-flex !important;
           }
         }
       `}</style>

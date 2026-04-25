@@ -13,6 +13,7 @@ import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { addPersonToTreeScope } from "../lib/cross-tree-write-service.js";
 import { isPersonInTreeScope } from "../lib/cross-tree-read-service.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
+import { escapeHtml } from "../lib/email-templates.js";
 import { mayEmailUser } from "./me.js";
 
 function hashToken(raw: string): string {
@@ -118,8 +119,8 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
         <div style="font-family: Georgia, serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; color: #1C1915; background: #F6F1E7;">
           <h1 style="font-size: 28px; font-weight: 400; margin: 0 0 16px;">You're invited</h1>
           <p style="font-size: 16px; line-height: 1.7; color: #403A2E;">
-            <strong>${inviterName}</strong> has invited you to contribute to
-            <strong>${tree.name}</strong> — a private family archive.
+            <strong>${escapeHtml(inviterName)}</strong> has invited you to contribute to
+            <strong>${escapeHtml(tree.name)}</strong> — a private family archive.
           </p>
           <p style="margin: 32px 0;">
             <a href="${acceptUrl}"
@@ -140,7 +141,7 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
         emailDelivered = false;
         emailError = err instanceof Error ? err.message : String(err);
         request.log.error(
-          { err, email, treeId },
+          { err, treeId },
           "Failed to deliver invitation email; invitation record still created",
         );
       }
@@ -186,7 +187,7 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
         proposedRole: inv.proposedRole,
         linkedPersonId: inv.linkedPersonId,
         linkedPersonName: inv.linkedPerson?.displayName ?? null,
-        invitedByName: inv.invitedBy?.name ?? inv.invitedBy?.email ?? "Unknown",
+        invitedByName: inv.invitedBy?.name ?? "A tree member",
         expiresAt: inv.expiresAt,
         createdAt: inv.createdAt,
       }))
@@ -219,8 +220,7 @@ export async function invitationsPlugin(app: FastifyInstance): Promise<void> {
       id: invitation.id,
       treeName: invitation.tree?.name ?? "Unknown",
       treeId: invitation.treeId,
-      invitedByName: invitation.invitedBy?.name ?? invitation.invitedBy?.email ?? "Unknown",
-      email: invitation.email,
+      invitedByName: invitation.invitedBy?.name ?? "A tree member",
       proposedRole: invitation.proposedRole,
       linkedPersonName: invitation.linkedPerson?.displayName ?? null,
       expiresAt: invitation.expiresAt,

@@ -28,6 +28,47 @@
   --duration-focus:    500ms;
   --duration-camera:   600ms;
   --duration-arrival:  800ms;
+
+  /* Component surfaces (light defaults) */
+  --surface-bg:  rgba(246, 241, 231, 0.82);
+  --surface-border: rgba(177, 165, 145, 0.48);
+  --backdrop:    rgba(28, 25, 21, 0.4);
+  --card-bg:     rgba(246, 241, 231, 0.94);
+  --card-shadow: 0 18px 40px rgba(28, 25, 21, 0.2);
+  --btn-bg:      rgba(246, 241, 231, 0.76);
+  --btn-border:  rgba(177, 165, 145, 0.48);
+  --btn-shadow:  0 12px 26px rgba(28, 25, 21, 0.06);
+  --node-bg:     var(--paper-deep);
+  --node-border: var(--rule);
+
+  /* Dark mode ambient */
+  --star-glow:   rgba(180, 200, 255, 0.12);
+}
+
+/* ─── Dark Constellation ────────────────────────────────────────────────── */
+
+[data-theme="dark"] {
+  --paper:       #0a0e1a;
+  --paper-deep:  #111527;
+  --ink:         #e8e4dc;
+  --ink-soft:    #b8b3a8;
+  --ink-faded:   #7a7670;
+  --rule:        #2a3040;
+  --moss:        #7ea06a;
+  --rose:        #c87a7a;
+  --gilt:        #d4a84e;
+  --shadow:      rgba(0, 0, 0, 0.32);
+  --star-glow:   rgba(140, 170, 255, 0.18);
+  --surface-bg:  rgba(10, 14, 26, 0.88);
+  --surface-border: rgba(60, 75, 100, 0.5);
+  --backdrop:    rgba(0, 0, 10, 0.55);
+  --card-bg:     rgba(16, 20, 36, 0.94);
+  --card-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  --btn-bg:      rgba(20, 26, 44, 0.76);
+  --btn-border:  rgba(60, 75, 100, 0.4);
+  --btn-shadow:  0 12px 26px rgba(0, 0, 0, 0.25);
+  --node-bg:     #111527;
+  --node-border: #2a3040;
 }
 
 @theme inline {
@@ -159,6 +200,270 @@ body {
   font-family: var(--font-ui), 'Inter', sans-serif;
 }
 
+/* ─── Mobile baseline ──────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+/* ─── Mobile header: hamburger menu ─────────────────────────────────────── */
+
+.tessera-mobile-menu-overlay {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .tessera-header {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    height: 52px;
+    min-height: 52px !important;
+    align-items: stretch !important;
+  }
+
+  .tessera-header > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding-left: 12px !important;
+    min-width: 0 !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .tessera-header > div:last-child {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0 !important;
+    padding-right: 8px !important;
+    flex-wrap: nowrap !important;
+    min-width: 0 !important;
+  }
+
+  .tessera-header-curation {
+    display: none !important;
+  }
+
+  .tessera-header-search-text {
+    display: none !important;
+  }
+
+  .tessera-mobile-hide {
+    display: none !important;
+  }
+
+  .tessera-mobile-menu-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(28, 25, 21, 0.5);
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 250ms var(--ease-tessera, cubic-bezier(0.22, 0.61, 0.36, 1)),
+                visibility 250ms;
+  }
+
+  .tessera-mobile-menu-overlay[data-open="true"] {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .tessera-mobile-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(300px, 85vw);
+    z-index: 41;
+    background: var(--paper);
+    border-left: 1px solid var(--rule);
+    padding: 20px 16px 24px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 300ms var(--ease-tessera, cubic-bezier(0.22, 0.61, 0.36, 1));
+  }
+
+  .tessera-mobile-menu[data-open="true"] {
+    transform: translateX(0);
+  }
+
+  .tessera-mobile-menu nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+
+  .tessera-mobile-menu nav a,
+  .tessera-mobile-menu nav button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: left;
+    width: 100%;
+  }
+
+  .tessera-mobile-menu nav a:hover,
+  .tessera-mobile-menu nav button:hover {
+    background: var(--paper-deep);
+  }
+
+  .tessera-mobile-menu nav a[aria-current="page"] {
+    background: var(--moss);
+    color: #fff;
+  }
+
+  .tessera-mobile-menu .tessera-menu-section {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .tessera-mobile-menu .tessera-menu-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 48px;
+    padding: 14px 20px;
+    border-radius: 999px;
+    border: 1px solid rgba(78, 93, 66, 0.28);
+    background: var(--moss);
+    color: #fff;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    width: 100%;
+  }
+}
+
+@media (min-width: 641px) {
+  .tessera-mobile-menu-button {
+    display: none !important;
+  }
+
+  .tessera-mobile-menu-overlay {
+    display: none !important;
+  }
+
+  .tessera-mobile-menu {
+    display: none !important;
+  }
+}
+
+/* ─── EraRibbon scrollbar fade ─────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .tessera-era-ribbon-scroll {
+    position: relative;
+  }
+
+  .tessera-era-ribbon-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 32px;
+    background: linear-gradient(to right, transparent, rgba(242, 235, 224, 0.95));
+    pointer-events: none;
+  }
+}
+
+/* ─── Family Presence: stack on mobile ───────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .tessera-family-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .tessera-family-orbit {
+    min-height: 280px !important;
+  }
+
+  .tessera-main-with-bottom-bar {
+    padding-bottom: 72px;
+  }
+}
+
+/* ─── Mobile bottom action bar ──────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .tessera-mobile-bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    background: rgba(246, 241, 231, 0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 8px 12px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
+    min-height: 56px;
+  }
+
+  .tessera-mobile-bottom-bar button,
+  .tessera-mobile-bottom-bar a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 44px;
+    min-width: 56px;
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    color: var(--ink-faded);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    border-radius: 8px;
+    position: relative;
+  }
+
+  .tessera-mobile-bottom-bar button[data-active="true"],
+  .tessera-mobile-bottom-bar a[data-active="true"] {
+    color: var(--moss);
+  }
+
+  .tessera-mobile-bottom-bar .tessera-bottom-bar-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+}
+
+@media (min-width: 641px) {
+  .tessera-mobile-bottom-bar {
+    display: none !important;
+  }
+}
+
 /* ─── ReactFlow overrides ────────────────────────────────────────────────── */
 
 .react-flow__node {
@@ -204,4 +509,73 @@ body {
 /* Remove ReactFlow attribution */
 .react-flow__attribution {
   display: none;
+}
+
+/* ─── Dark Constellation: ReactFlow overrides ────────────────────────────── */
+
+[data-theme="dark"] .react-flow__edge path {
+  stroke: #3a4a5e;
+}
+
+[data-theme="dark"] .react-flow__background {
+  background: var(--paper);
+}
+
+/* ─── Dark Constellation: animated edges ──────────────────────────────────── */
+
+[data-theme="dark"] .edge-pulse {
+  animation: edgePulseDark 10s ease-in-out infinite;
+}
+
+[data-theme="dark"] .edge-shimmer {
+  animation: edgeShimmerDark 8s ease-in-out infinite;
+}
+
+[data-theme="dark"] .edge-dimmed path {
+  stroke: #1e2838;
+  stroke-opacity: 0.5;
+}
+
+@keyframes edgePulseDark {
+  0%, 100% { stroke: #4a6080; stroke-width: 1.2; }
+  50%      { stroke: #8ab4ff; stroke-width: 1.6; }
+}
+
+@keyframes edgeShimmerDark {
+  0%, 100% { stroke: #3e5470; stroke-width: 1.0; }
+  50%      { stroke: #a0c4ff; stroke-width: 1.4; }
+}
+
+/* ─── Dark Constellation: essence line ─────────────────────────────────────── */
+
+[data-theme="dark"] .essence-line {
+  color: var(--ink-faded);
+}
+
+/* ─── Dark Constellation: star-dust particles ─────────────────────────────── */
+
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 0.75; }
+}
+
+.star-dust {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: starTwinkle var(--twinkle-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--twinkle-delay, 0s);
+}
+
+/* ─── Dark Constellation: node halos ──────────────────────────────────────── */
+
+[data-theme="dark"] .person-node-halo {
+  filter: blur(8px);
+}
+
+/* ─── Dark Constellation: mobile bottom bar ───────────────────────────────── */
+
+[data-theme="dark"] .tessera-mobile-bottom-bar {
+  background: rgba(10, 14, 26, 0.95);
+  border-top-color: var(--rule);
 }

@@ -15,11 +15,13 @@ import { getSession } from "../lib/session.js";
 import {
   getPresignedUploadUrl,
   isAllowedMimeType,
+  extForMimeType,
   mediaUrl,
 } from "../lib/storage.js";
 import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
+import { escapeHtml } from "../lib/email-templates.js";
 import { mayEmailUser } from "./me.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
@@ -92,7 +94,7 @@ function canManagePrompt(
 
 function canSendEmailReplyLink(
   role: string,
-  promptSenderUserId: string,
+  promptSenderUserId: string | null,
   promptLinkedUserId: string | null | undefined,
   currentUserId: string,
 ): boolean {
@@ -534,10 +536,10 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
           <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px 20px; color: #1C1915; background: #F6F1E7;">
             <h1 style="font-size: 26px; font-weight: 400; margin: 0 0 14px;">Share a memory</h1>
             <p style="font-size: 16px; line-height: 1.7; color: #403A2E; margin: 0 0 12px;">
-              <strong>${fromName}</strong> asked a question for <strong>${personName}</strong> in the family archive.
+              <strong>${escapeHtml(fromName)}</strong> asked a question for <strong>${escapeHtml(personName)}</strong> in the family archive.
             </p>
             <blockquote style="margin: 0 0 20px; padding: 14px 16px; border-left: 3px solid #B08B3E; background: #EDE6D6; color: #1C1915;">
-              ${prompt.questionText}
+              ${escapeHtml(prompt.questionText)}
             </blockquote>
             <p style="margin: 0 0 24px;">
               <a href="${replyUrl}"
@@ -578,7 +580,6 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       toPersonName: resolved.link.prompt.toPerson?.displayName ?? null,
       fromUserName:
         resolved.link.prompt.fromUser?.name ??
-        resolved.link.prompt.fromUser?.email ??
         "A family member",
       email: resolved.link.email,
       expiresAt: resolved.link.expiresAt,
@@ -609,7 +610,7 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       return reply.status(capacity.status).send({ error: capacity.reason });
     }
 
-    const ext = filename.includes(".") ? filename.split(".").pop()! : "bin";
+    const ext = extForMimeType(contentType);
     const objectKey = `trees/${resolved.link.treeId}/reply-links/${resolved.link.id}/${randomUUID()}.${ext}`;
     const uploadUrl = await getPresignedUploadUrl(objectKey, contentType);
 

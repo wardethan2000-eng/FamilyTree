@@ -414,7 +414,7 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
     const people = await getTreeScopedPeople(treeId);
 
     return reply.send(
-      people.map((p) => ({
+      people.map(({ linkedUserId, ...p }) => ({
         ...p,
         portraitUrl: p.portraitMedia ? mediaUrl(p.portraitMedia.objectKey) : null,
         birthPlaceResolved: serializePlace(p.birthPlaceRef),
@@ -464,8 +464,6 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
             essenceLine: candidate.essenceLine,
             birthDateText: candidate.birthDateText,
             deathDateText: candidate.deathDateText,
-            linkedUserId: candidate.linkedUserId,
-            homeTreeId: candidate.homeTreeId,
             portraitUrl: candidate.portraitMedia
               ? mediaUrl(candidate.portraitMedia.objectKey)
               : null,

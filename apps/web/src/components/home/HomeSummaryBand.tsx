@@ -18,7 +18,7 @@ export function HomeSummaryBand({
         padding: "24px max(20px, 5vw) 0",
         display: "grid",
         gap: 16,
-        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
       }}
     >
       <article
@@ -31,17 +31,17 @@ export function HomeSummaryBand({
           boxShadow: "0 10px 28px rgba(40,30,18,0.04)",
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            color: "var(--ink-faded)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 8,
-          }}
-        >
-          Archive scale
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--ink-faded)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginBottom: 8,
+            }}
+          >
+            Archive scale
         </div>
         <div
           style={{
@@ -65,17 +65,17 @@ export function HomeSummaryBand({
           boxShadow: "0 10px 28px rgba(40,30,18,0.04)",
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            color: "var(--ink-faded)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 8,
-          }}
-        >
-          Historical span
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--ink-faded)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginBottom: 8,
+            }}
+          >
+            Historical span
         </div>
         <div
           style={{
@@ -110,17 +110,17 @@ export function HomeSummaryBand({
           boxShadow: "0 10px 28px rgba(40,30,18,0.04)",
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 11,
-            color: "var(--ink-faded)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 8,
-          }}
-        >
-          Still unfolding
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 12,
+              color: "var(--ink-faded)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginBottom: 8,
+            }}
+          >
+            Still unfolding
         </div>
         <div
           style={{

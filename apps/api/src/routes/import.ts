@@ -8,7 +8,7 @@ import { canManageTreeScope } from "../lib/cross-tree-permission-service.js";
 import { parseGedcom } from "../lib/gedcom-parser.js";
 
 const GedcomImportBody = z.object({
-  gedcom: z.string().min(1).max(20 * 1024 * 1024), // 20 MB cap
+  gedcom: z.string().min(1).max(5 * 1024 * 1024), // 5 MB cap
 });
 
 function normalizePair(aId: string, bId: string) {
