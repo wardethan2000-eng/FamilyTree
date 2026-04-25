@@ -59,7 +59,7 @@
   --gilt:        #d4a84e;
   --shadow:      rgba(0, 0, 0, 0.32);
   --star-glow:   rgba(140, 170, 255, 0.18);
-  --surface-bg:  rgba(10, 14, 26, 0.88);
+  --surface-bg:  rgba(10, 14, 26, 0.94);
   --surface-border: rgba(60, 75, 100, 0.5);
   --backdrop:    rgba(0, 0, 10, 0.55);
   --card-bg:     rgba(16, 20, 36, 0.94);
@@ -555,8 +555,8 @@ body {
 /* ─── Dark Constellation: star-dust particles ─────────────────────────────── */
 
 @keyframes starTwinkle {
-  0%, 100% { opacity: 0.15; }
-  50%      { opacity: 0.75; }
+  0%, 100% { opacity: 0.08; }
+  50%      { opacity: 0.45; }
 }
 
 .star-dust {

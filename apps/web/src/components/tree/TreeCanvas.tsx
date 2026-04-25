@@ -68,7 +68,7 @@ const PERSON_BANNER_WIDTH = 320;
 const LIGHT_CANVAS_BACKGROUND =
   "radial-gradient(circle at 20% 18%, rgba(255,255,255,0.72), transparent 32%), radial-gradient(circle at 82% 20%, rgba(226,214,194,0.38), transparent 28%), linear-gradient(180deg, #f7f2e9 0%, #f1eadf 100%)";
 const DARK_CANVAS_BACKGROUND =
-  "radial-gradient(circle at 20% 18%, rgba(30,40,70,0.85), transparent 35%), radial-gradient(circle at 82% 20%, rgba(50,60,100,0.5), transparent 30%), radial-gradient(circle at 50% 80%, rgba(20,30,60,0.6), transparent 40%), linear-gradient(180deg, #0a0e1a 0%, #0d1225 100%)";
+  "radial-gradient(circle at 25% 20%, rgba(18,24,52,0.7), transparent 35%), radial-gradient(circle at 80% 25%, rgba(30,40,75,0.4), transparent 30%), linear-gradient(180deg, #080c18 0%, #0a0f20 100%)";
 
 interface HoverState {
   personId: string;
@@ -1303,17 +1303,16 @@ function TreeCanvasInner({
     if (!isDark) return null;
     const particles: Array<{ x: number; y: number; size: number; opacity: number; duration: number; delay: number }> = [];
     const seen = new Set<string>();
-    for (let i = 0; i < 180; i++) {
+    for (let i = 0; i < 55; i++) {
       const x = ((i * 7919 + 3571) % 10000) / 100;
       const y = ((i * 6271 + 4237) % 10000) / 100;
       const key = `${x.toFixed(1)},${y.toFixed(1)}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const size = ((i * 3571) % 3) + 1;
-      const opacity = ((i * 4937) % 40 + 20) / 100;
-      const duration = ((i * 2741) % 8000 + 4000) / 1000;
-      const delay = ((i * 8293) % 12000) / 1000;
-      particles.push({ x, y, size, opacity, duration, delay });
+      const size = ((i * 3571) % 2) + 1;
+      const duration = ((i * 2741) % 8000 + 5000) / 1000;
+      const delay = ((i * 8293) % 15000) / 1000;
+      particles.push({ x, y, size, opacity: 0.4, duration, delay });
     }
     return particles;
   }, [isDark]);
@@ -1340,7 +1339,7 @@ function TreeCanvasInner({
       
       {/* Star dust particles - only shown in dark mode */}
       {isDark && starDustParticles && (
-        <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 1 }}>
           {starDustParticles.map((p, i) => (
             <div
               key={i}
@@ -1350,7 +1349,7 @@ function TreeCanvasInner({
                 top: `${p.y}%`,
                 width: p.size,
                 height: p.size,
-                background: p.size > 2 ? "rgba(160,190,255,0.9)" : "rgba(200,215,255,0.7)",
+                background: p.size > 1.5 ? "rgba(160,190,255,0.7)" : "rgba(200,215,255,0.45)",
                 "--twinkle-duration": `${p.duration}s`,
                 "--twinkle-delay": `${p.delay}s`,
               } as React.CSSProperties}
@@ -1382,8 +1381,8 @@ function TreeCanvasInner({
             pointerEvents: "none",
             zIndex: 50,
             background: arrivalPhase === "entering"
-              ? "rgba(246,241,231,0.92)"
-              : "rgba(246,241,231,0)",
+              ? "var(--paper)"
+              : "transparent",
             transition: "background 800ms var(--ease-tessera)",
           }}
         />
