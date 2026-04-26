@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { ApiPerson } from "./treeTypes";
 import type { DriftFilter } from "./DriftMode";
 
-type ChooserMode = "menu" | "person" | "branch" | "era" | "remembrance";
+type ChooserMode = "menu" | "person" | "era" | "remembrance";
 
 interface DriftChooserSheetProps {
   open: boolean;
@@ -74,16 +74,7 @@ export function DriftChooserSheet({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           onClick={handleClose}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 70,
-            background: "rgba(10, 8, 6, 0.55)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-          }}
+          className="drift-chooser-overlay"
         >
           <motion.div
             initial={{ y: 40, opacity: 0 }}
@@ -91,53 +82,19 @@ export function DriftChooserSheet({
             exit={{ y: 40, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.22, 0.61, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "min(560px, 100%)",
-              maxHeight: "80vh",
-              background: "var(--paper)",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              padding: "20px 22px 28px",
-              boxShadow: "0 -12px 40px rgba(0,0,0,0.25)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              overflow: "hidden",
-            }}
+            className="drift-chooser-sheet"
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
+            <div className="drift-chooser-header">
               <div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 20,
-                    color: "var(--ink)",
-                    lineHeight: 1.2,
-                  }}
-                >
+                <div className="drift-chooser-title">
                   {mode === "menu" && "Drift through…"}
                   {mode === "person" && "About one person"}
-                  {mode === "branch" && "Through a branch"}
                   {mode === "era" && "From an era"}
                   {mode === "remembrance" && "In remembrance"}
                 </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 12,
-                    color: "var(--ink-faded)",
-                    marginTop: 2,
-                  }}
-                >
+                <div className="drift-chooser-subtitle">
                   {mode === "menu" && "Pick a way to wander."}
                   {mode === "person" && "We'll show every memory tied to them."}
-                  {mode === "branch" && "Start with someone, then drift into their closest family."}
                   {mode === "era" && "Memories whose date falls in that window."}
                   {mode === "remembrance" &&
                     "A quieter pace, in chronological order, in their memory."}
@@ -150,19 +107,19 @@ export function DriftChooserSheet({
                     setMode("menu");
                     setSearch("");
                   }}
-                  style={navBtnStyle}
+                  className="drift-chooser-nav-btn"
                 >
                   ← Back
                 </button>
               ) : (
-                <button type="button" onClick={handleClose} style={navBtnStyle}>
+                <button type="button" onClick={handleClose} className="drift-chooser-nav-btn">
                   Close
                 </button>
               )}
             </div>
 
             {mode === "menu" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div className="drift-chooser-menu">
                 <ChoiceRow
                   title="All memories"
                   subtitle="A free-roaming drift across the whole archive."
@@ -172,13 +129,6 @@ export function DriftChooserSheet({
                   title="About one person"
                   subtitle="Center the drift on a single relative."
                   onClick={() => setMode("person")}
-                />
-                <ChoiceRow
-                  title="Through a branch"
-                  subtitle="Start with someone, then widen into their closest family."
-                  onClick={() => setMode("branch")}
-                  disabled={livingPeople.length < 2}
-                  disabledHint="Add more people to unlock branch drift."
                 />
                 <ChoiceRow
                   title="From an era"
@@ -195,43 +145,18 @@ export function DriftChooserSheet({
               </div>
             )}
 
-            {(mode === "person" || mode === "remembrance" || mode === "branch") && (
+            {(mode === "person" || mode === "remembrance") && (
               <>
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search names…"
-                  style={{
-                    fontFamily: "var(--font-ui)",
-                    fontSize: 13,
-                    padding: "8px 12px",
-                    border: "1px solid var(--rule)",
-                    borderRadius: 6,
-                    background: "var(--paper-deep)",
-                    color: "var(--ink)",
-                    outline: "none",
-                  }}
+                  className="drift-chooser-search"
                 />
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 4,
-                    overflowY: "auto",
-                    maxHeight: 360,
-                    paddingRight: 4,
-                  }}
-                >
+                <div className="drift-chooser-people-list">
                   {filteredPeople.length === 0 ? (
-                    <div
-                      style={{
-                        fontFamily: "var(--font-ui)",
-                        fontSize: 12,
-                        color: "var(--ink-faded)",
-                        padding: "16px 6px",
-                      }}
-                    >
+                    <div className="drift-chooser-empty">
                       {mode === "remembrance"
                         ? "No relatives have a death date yet."
                         : "No matches."}
@@ -245,22 +170,14 @@ export function DriftChooserSheet({
                           pick(
                             mode === "remembrance"
                               ? { mode: "remembrance", personId: person.id }
-                              : mode === "branch"
-                                ? { mode: "branch", personId: person.id }
-                                : { personId: person.id },
+                              : { personId: person.id },
                           )
                         }
-                        style={personRowStyle}
+                        className="drift-chooser-person-row"
                       >
                         <span>{person.name}</span>
                         {person.birthYear || person.deathYear ? (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "var(--ink-faded)",
-                              fontFamily: "var(--font-ui)",
-                            }}
-                          >
+                          <span className="drift-chooser-person-years">
                             {person.birthYear ?? "?"} –{" "}
                             {person.deathYear ?? (person.deathDateText ? "?" : "")}
                           </span>
@@ -273,13 +190,7 @@ export function DriftChooserSheet({
             )}
 
             {mode === "era" && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-                  gap: 8,
-                }}
-              >
+              <div className="drift-chooser-eras">
                 {ERAS.map((era) => (
                   <button
                     key={era.id}
@@ -287,7 +198,7 @@ export function DriftChooserSheet({
                     onClick={() =>
                       pick({ yearStart: era.yearStart, yearEnd: era.yearEnd })
                     }
-                    style={eraBtnStyle}
+                    className="drift-chooser-era-btn"
                   >
                     {era.label}
                   </button>
@@ -319,76 +230,12 @@ function ChoiceRow({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      style={{
-        textAlign: "left",
-        padding: "12px 14px",
-        border: "1px solid var(--rule)",
-        borderRadius: 8,
-        background: disabled ? "var(--paper-deep)" : "var(--paper)",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.55 : 1,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        transition: "border-color var(--duration-micro), background var(--duration-micro)",
-      }}
+      className={`drift-chooser-choice ${disabled ? "drift-chooser-choice--disabled" : ""}`}
     >
-      <span
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: 15,
-          color: "var(--ink)",
-        }}
-      >
-        {title}
-      </span>
-      <span
-        style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: 12,
-          color: "var(--ink-faded)",
-          lineHeight: 1.4,
-        }}
-      >
+      <span className="drift-chooser-choice-title">{title}</span>
+      <span className="drift-chooser-choice-subtitle">
         {disabled && disabledHint ? disabledHint : subtitle}
       </span>
     </button>
   );
 }
-
-const navBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "1px solid var(--rule)",
-  borderRadius: 6,
-  padding: "5px 12px",
-  fontFamily: "var(--font-ui)",
-  fontSize: 12,
-  color: "var(--ink-soft)",
-  cursor: "pointer",
-};
-
-const personRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "10px 12px",
-  border: "1px solid var(--rule)",
-  borderRadius: 6,
-  background: "var(--paper)",
-  cursor: "pointer",
-  fontFamily: "var(--font-ui)",
-  fontSize: 13,
-  color: "var(--ink)",
-  textAlign: "left",
-};
-
-const eraBtnStyle: React.CSSProperties = {
-  padding: "12px 10px",
-  border: "1px solid var(--rule)",
-  borderRadius: 8,
-  background: "var(--paper)",
-  cursor: "pointer",
-  fontFamily: "var(--font-ui)",
-  fontSize: 13,
-  color: "var(--ink)",
-};

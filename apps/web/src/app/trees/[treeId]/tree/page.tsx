@@ -6,7 +6,8 @@ import { useSession } from "@/lib/auth-client";
 import { getApiBase } from "@/lib/api-base";
 import { AnimatePresence } from "framer-motion";
 import { TreeCanvas } from "@/components/tree/TreeCanvas";
-import { DriftMode } from "@/components/tree/DriftMode";
+import { DriftMode, type DriftFilter } from "@/components/tree/DriftMode";
+import { DriftChooserSheet } from "@/components/tree/DriftChooserSheet";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { PromptComposer } from "@/components/tree/PromptComposer";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
@@ -59,10 +60,31 @@ export default function TreePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [driftOpen, setDriftOpen] = useState(false);
+  const [driftChooserOpen, setDriftChooserOpen] = useState(false);
+  const [driftFilter, setDriftFilter] = useState<DriftFilter | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedPromptPersonId, setSelectedPromptPersonId] = useState<string | null>(null);
+
+  const openDrift = useCallback(
+    (filter?: DriftFilter | null) => {
+      setDriftFilter(filter ?? null);
+      setDriftChooserOpen(false);
+      setDriftOpen(true);
+    },
+    [],
+  );
+  const closeDrift = useCallback(() => {
+    setDriftOpen(false);
+    setDriftFilter(null);
+  }, []);
+  const openDriftChooser = useCallback(() => {
+    setDriftChooserOpen(true);
+  }, []);
+  const closeDriftChooser = useCallback(() => {
+    setDriftChooserOpen(false);
+  }, []);
 
   const mapPeoplePayload = useCallback((data: Array<Record<string, unknown>>) => {
     return data.map((p) => ({
@@ -319,7 +341,7 @@ export default function TreePage() {
         relationships={relationships}
         currentUserPersonId={currentUserPersonId}
         initialSelectedPersonId={focusPersonId}
-        onDriftClick={() => setDriftOpen(true)}
+        onDriftClick={() => openDriftChooser()}
         onPersonDetailClick={handlePersonDetail}
         onAddMemoryClick={() => setWizardOpen(true)}
         onRequestMemoryClick={() => setRequestOpen(true)}
@@ -328,14 +350,22 @@ export default function TreePage() {
         onSelectedPersonChange={setSelectedPromptPersonId}
       />
 
+      <DriftChooserSheet
+        open={driftChooserOpen}
+        people={people}
+        onClose={closeDriftChooser}
+        onChoose={(filter) => openDrift(filter)}
+      />
+
       <AnimatePresence>
         {driftOpen && (
           <DriftMode
             treeId={treeId}
             people={people}
-            onClose={() => setDriftOpen(false)}
+            onClose={closeDrift}
             onPersonDetail={handlePersonDetail}
             apiBase={API}
+            initialFilter={driftFilter}
           />
         )}
       </AnimatePresence>
