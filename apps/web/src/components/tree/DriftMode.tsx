@@ -53,14 +53,13 @@ interface DriftFeedMemory {
   mediaItems?: ApiMemoryMediaItem[];
 }
 
-const PHOTO_DURATION_MS = 6000;
+const PHOTO_DURATION_MS = 16000;
 const REMEMBRANCE_PACING_MULTIPLIER = 1.6;
-const STORY_MIN_MS = 8000;
+const STORY_MIN_MS = 12000;
 const STORY_MAX_MS = 45000;
 const WORDS_PER_MINUTE = 200;
 const MEDIA_MAX_MS = 60000;
-const DEFAULT_MEDIA_FALLBACK_MS = 15000;
-const DOCUMENT_CARD_MS = 8000;
+const DOCUMENT_CARD_MS = 14000;
 const SEEN_STORAGE_KEY_PREFIX = "tessera:drift:seen:";
 const MAX_SEEN_ENTRIES = 500;
 
@@ -187,12 +186,41 @@ type DetectedKind = "image" | "video" | "audio" | "link" | "text";
 
 function detectItemKind(item: DriftItem): DetectedKind {
   const mime = item.media?.mimeType ?? "";
+  const mediaUrl = item.media?.mediaUrl ?? "";
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
-  if (mime.startsWith("image/") || (item.media?.mediaUrl && !mime)) return "image";
+  if (mime.startsWith("image/")) return "image";
   if (item.media?.linkedMediaPreviewUrl || item.media?.linkedMediaOpenUrl) return "link";
-  if (item.memory.kind === "voice") return "audio";
+  if (mediaUrl) {
+    const lower = mediaUrl.toLowerCase().split("?")[0] ?? "";
+    if (/\.(mp4|mov|webm|m4v)$/.test(lower)) return "video";
+    if (/\.(mp3|m4a|wav|aac|ogg|oga)$/.test(lower)) return "audio";
+    if (/\.(jpg|jpeg|png|gif|webp|avif|heic|heif)$/.test(lower)) return "image";
+  }
+  if (item.memory.kind === "photo" && mediaUrl) return "image";
+  if (item.memory.kind === "voice" && mediaUrl) return "audio";
   return "text";
+}
+
+function legacyMediaItem(memory: DriftFeedMemory): ApiMemoryMediaItem | null {
+  if (!memory.mediaUrl) return null;
+  return {
+    id: `${memory.id}:primary-media`,
+    mediaId: null,
+    mediaUrl: memory.mediaUrl,
+    mimeType: memory.mimeType ?? null,
+    linkedMediaProvider: null,
+    linkedMediaPreviewUrl: null,
+    linkedMediaOpenUrl: null,
+    linkedMediaLabel: null,
+    sortOrder: -1,
+  };
+}
+
+function itemSummary(item: DriftItem | null): string {
+  if (!item) return "";
+  const parts = [item.person.name, item.memory.dateOfEventText].filter(Boolean);
+  return parts.join(" · ");
 }
 
 function readingTimeMs(text: string | null | undefined): number {
@@ -234,9 +262,11 @@ export function DriftMode({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [failedMediaKeys, setFailedMediaKeys] = useState<Record<string, true>>({});
   const [backdropStyle] = useState<BackdropStyle>("blur-soft");
   const [videoMuted, setVideoMuted] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -297,16 +327,29 @@ export function DriftMode({
                 portraitUrl: memory.primaryPerson.portraitUrl,
               } as ApiPerson)
             : null) ??
-          people[0]!;
+          people[0] ??
+          ({
+            id: memory.primaryPersonId,
+            name: "Unknown relative",
+            portraitUrl: null,
+          } as ApiPerson);
         const memoryWithPerson: ApiMemory = {
           ...memory,
           personId: subject.id,
         } as ApiMemory;
 
-        const mediaItems = (memory.mediaItems ?? []).filter(
+        const childMediaItems = (memory.mediaItems ?? []).filter(
           (item) =>
             item.mediaUrl || item.linkedMediaPreviewUrl || item.linkedMediaOpenUrl,
         );
+        const primaryMedia = legacyMediaItem(memory);
+        const hasPrimaryInChildren =
+          primaryMedia?.mediaUrl &&
+          childMediaItems.some((item) => item.mediaUrl === primaryMedia.mediaUrl);
+        const mediaItems =
+          primaryMedia && !hasPrimaryInChildren
+            ? [primaryMedia, ...childMediaItems]
+            : childMediaItems;
         if (mediaItems.length === 0) {
           flat.push({
             key: `${memory.id}:solo`,
@@ -332,15 +375,30 @@ export function DriftMode({
 
       setItems(flat);
       setCurrentIndex(0);
+      setFailedMediaKeys({});
       setIsLoading(false);
     };
     fetchAll();
   }, [treeId, people, apiBase, initialFilter]);
 
   const current = items[currentIndex] ?? null;
-  const currentKind: DetectedKind | null = current ? detectItemKind(current) : null;
+  const detectedKind: DetectedKind | null = current ? detectItemKind(current) : null;
+  const currentKind: DetectedKind | null =
+    current && detectedKind && failedMediaKeys[current.key] ? "text" : detectedKind;
+  const previousItem =
+    items.length > 1
+      ? items[(currentIndex - 1 + items.length) % items.length] ?? null
+      : null;
+  const nextItem =
+    items.length > 1 ? items[(currentIndex + 1) % items.length] ?? null : null;
   const isRemembrance = initialFilter?.mode === "remembrance";
   const filterPersonId = initialFilter?.personId ?? null;
+
+  const handleMediaError = useCallback(() => {
+    if (!current) return;
+    setFailedMediaKeys((failed) => ({ ...failed, [current.key]: true }));
+    setProgress(0);
+  }, [current]);
 
   const remembranceSubject = useMemo(() => {
     if (!isRemembrance || !filterPersonId) return null;
@@ -434,6 +492,26 @@ export function DriftMode({
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (progressRef.current) clearInterval(progressRef.current);
+    };
+  }, [isPlaying, currentIndex, currentKind, computedDurationMs, advance, items.length]);
+
+  useEffect(() => {
+    if (!isPlaying || items.length === 0 || !currentKind) return;
+    if (currentKind !== "video" && currentKind !== "audio") return;
+
+    const startedAt = Date.now();
+    startedAtRef.current = startedAt;
+
+    progressRef.current = setInterval(() => {
+      const elapsed = Date.now() - startedAtRef.current;
+      setProgress(Math.min(100, (elapsed / computedDurationMs) * 100));
+    }, 100);
+
+    mediaFallbackRef.current = setTimeout(advance, computedDurationMs);
+
+    return () => {
+      if (mediaFallbackRef.current) clearTimeout(mediaFallbackRef.current);
       if (progressRef.current) clearInterval(progressRef.current);
     };
   }, [isPlaying, currentIndex, currentKind, computedDurationMs, advance, items.length]);
@@ -607,6 +685,32 @@ export function DriftMode({
         aria-label="Next"
       />
 
+      {previousItem && (
+        <button
+          type="button"
+          onClick={stepBack}
+          className="drift-side-context drift-side-context--left"
+          aria-label={`Previous: ${previousItem.memory.title}`}
+        >
+          <span className="drift-side-context__eyebrow">Previous</span>
+          <span className="drift-side-context__title">{previousItem.memory.title}</span>
+          <span className="drift-side-context__meta">{itemSummary(previousItem)}</span>
+        </button>
+      )}
+
+      {nextItem && (
+        <button
+          type="button"
+          onClick={advance}
+          className="drift-side-context drift-side-context--right"
+          aria-label={`Next: ${nextItem.memory.title}`}
+        >
+          <span className="drift-side-context__eyebrow">Next</span>
+          <span className="drift-side-context__title">{nextItem.memory.title}</span>
+          <span className="drift-side-context__meta">{itemSummary(nextItem)}</span>
+        </button>
+      )}
+
       {isLoading && (
         <div className="drift-loader" />
       )}
@@ -653,6 +757,7 @@ export function DriftMode({
                     duration: reduceMotion ? 0 : computedDurationMs / 1000,
                     ease: "linear",
                   }}
+                  onError={handleMediaError}
                   className="drift-image"
                 />
               </div>
@@ -669,6 +774,7 @@ export function DriftMode({
                 onLoadedMetadata={() => {
                   startedAtRef.current = Date.now();
                 }}
+                onError={handleMediaError}
                 onTimeUpdate={(e) => {
                   const el = e.currentTarget;
                   if (el.duration && Number.isFinite(el.duration)) {
@@ -705,9 +811,7 @@ export function DriftMode({
                     }
                   }}
                   onEnded={advance}
-                  onError={() => {
-                    setTimeout(advance, DEFAULT_MEDIA_FALLBACK_MS);
-                  }}
+                  onError={handleMediaError}
                 />
                 {transcriptCaption && (
                   <p className="drift-transcript">{transcriptCaption}</p>
