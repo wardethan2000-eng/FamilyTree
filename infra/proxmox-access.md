@@ -152,10 +152,10 @@ To confirm the working directories:
 ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 ```
 
-Current verified live pids after corkboard drift deployment on 2026-04-26:
+Current verified live pids after corkboard drift camera-glide refactor on 2026-04-26:
 
-- API listener pid: `159132`
-- Web listener pid: `159133`
+- API listener pid: `163412`
+- Web listener pid: `163413`
 
 ## Historical Startup Shape On The App VM
 
