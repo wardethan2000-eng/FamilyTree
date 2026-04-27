@@ -112,8 +112,7 @@ export function addMessageListener(
 ): () => void {
   const session = getSession();
   if (!session) return () => {};
-  const handler = (namespace: string, message: string) => {
-    if (namespace !== CAST_NAMESPACE) return;
+  const handler = (_namespace: string, message: string) => {
     try {
       const parsed = JSON.parse(message);
       if (parsed.type === "DRIFT_STATE") {
@@ -123,9 +122,13 @@ export function addMessageListener(
       // ignore malformed messages
     }
   };
-  session.addListener("message", handler as (event: unknown) => void);
+  session.addMessageListener(CAST_NAMESPACE, handler);
   return () => {
-    // Note: no removeListener in Cast SDK; best-effort cleanup
+    try {
+      session.removeMessageListener(CAST_NAMESPACE, handler);
+    } catch {
+      // session may already be torn down
+    }
   };
 }
 

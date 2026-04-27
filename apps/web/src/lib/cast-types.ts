@@ -64,7 +64,14 @@ export interface CastSessionInstance {
   loadMedia(request: unknown): Promise<void>;
   sendMessage(namespace: string, message: string): Promise<void>;
   endSession(stopCasting: boolean): Promise<void>;
-  addListener(eventType: string, callback: (event: unknown) => void): void;
+  addMessageListener(
+    namespace: string,
+    listener: (namespace: string, message: string) => void,
+  ): void;
+  removeMessageListener(
+    namespace: string,
+    listener: (namespace: string, message: string) => void,
+  ): void;
 }
 
 export interface RemotePlayerInstance {

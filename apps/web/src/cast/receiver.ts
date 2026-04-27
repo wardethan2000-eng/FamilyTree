@@ -143,6 +143,24 @@ function play() {
   sendState();
 }
 
+function scheduleAutoAdvance() {
+  clearAutoAdvance();
+  const item = items[currentIndex];
+  if (!item) return;
+  const kind = detectKind(item);
+  if (kind === "video" || kind === "audio") {
+    if (videoEl) { void videoEl.play().catch(() => {}); }
+    if (audioEl) { void audioEl.play().catch(() => {}); }
+    return;
+  }
+  progressStart = Date.now();
+  progressInterval = setInterval(() => {
+    const elapsed = Date.now() - progressStart;
+    updateProgress(Math.min(100, (elapsed / currentDuration) * 100));
+  }, 50);
+  autoAdvanceTimer = setTimeout(() => advance(), currentDuration);
+}
+
 function pause() {
   isPlaying = false;
   clearAutoAdvance();
@@ -258,6 +276,8 @@ function renderCurrent() {
     </div>
   `;
 
+  videoEl = null;
+  audioEl = null;
   if (kind === "video" || kind === "audio") {
     const mediaEl = root.querySelector(kind === "video" ? "video" : "audio") as HTMLMediaElement | null;
     if (mediaEl) {
@@ -274,16 +294,7 @@ function renderCurrent() {
     }
   }
 
-  progressStart = Date.now();
-
-  if (isPlaying && kind !== "video" && kind !== "audio") {
-    progressInterval = setInterval(() => {
-      const elapsed = Date.now() - progressStart;
-      updateProgress(Math.min(100, (elapsed / currentDuration) * 100));
-    }, 50);
-
-    autoAdvanceTimer = setTimeout(() => advance(), currentDuration);
-  }
+  if (isPlaying) scheduleAutoAdvance();
 
   sendState();
 }
@@ -356,7 +367,7 @@ async function fetchDrift(filter: Record<string, string | number | null | undefi
     items = [];
     for (const memory of data.memories) {
       const personName = memory.primaryPerson?.name ?? "Unknown";
-      const personPortraitUrl = resolveMediaUrl(memory.primaryPerson?.portraitUrl ?? null);
+      const personPortraitUrl = memory.primaryPerson?.portraitUrl ?? null;
       const mediaItems = (memory.mediaItems ?? []).filter(
         (i) => i.mediaUrl || i.linkedMediaPreviewUrl || i.linkedMediaOpenUrl,
       );
@@ -372,7 +383,7 @@ async function fetchDrift(filter: Record<string, string | number | null | undefi
           dateOfEventText: memory.dateOfEventText,
           personName,
           personPortraitUrl,
-          mediaUrl: resolveMediaUrl(memory.mediaUrl),
+          mediaUrl: memory.mediaUrl,
           mimeType: memory.mimeType,
           linkedMediaPreviewUrl: null,
           linkedMediaOpenUrl: null,
@@ -392,7 +403,7 @@ async function fetchDrift(filter: Record<string, string | number | null | undefi
             dateOfEventText: memory.dateOfEventText,
             personName,
             personPortraitUrl,
-            mediaUrl: resolveMediaUrl(mi.mediaUrl),
+            mediaUrl: mi.mediaUrl,
             mimeType: mi.mimeType ?? null,
             linkedMediaPreviewUrl: mi.linkedMediaPreviewUrl ?? null,
             linkedMediaOpenUrl: mi.linkedMediaOpenUrl ?? null,
