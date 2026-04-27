@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { PinPosition, ThreadConnection, CameraState } from "./corkboardTypes";
 import {
   CAMERA_GLIDE_DURATION,
@@ -249,17 +249,24 @@ export function useCorkboardCamera(
     lastInteraction.current = Date.now();
   }, []);
 
-  return {
-    cameraRef,
-    setCamera,
-    setSetCamera,
-    glideToPin,
-    jumpToPin,
-    initCamera,
-    panBy,
-    zoomBy,
-    cancelGlide,
-    isGliding: isGlidingRef,
-    touchInteraction,
-  };
+  // Memoize the return object so consumers can safely list `cameraControls`
+  // in useEffect deps without triggering re-runs every render. Each
+  // individual function is already useCallback-stabilized; this wraps them
+  // into a stable object identity.
+  return useMemo(
+    () => ({
+      cameraRef,
+      setCamera,
+      setSetCamera,
+      glideToPin,
+      jumpToPin,
+      initCamera,
+      panBy,
+      zoomBy,
+      cancelGlide,
+      isGliding: isGlidingRef,
+      touchInteraction,
+    }),
+    [setCamera, setSetCamera, glideToPin, jumpToPin, initCamera, panBy, zoomBy, cancelGlide, touchInteraction],
+  );
 }

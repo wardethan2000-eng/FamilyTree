@@ -12,6 +12,7 @@ interface CorkboardThreadProps {
   visible: boolean;
   onThreadClick?: (thread: ThreadConnection) => void;
   thread: ThreadConnection;
+  currentMemId?: string | null;
 }
 
 const THREAD_COLORS: Record<ThreadType, string> = {
@@ -41,12 +42,18 @@ export function CorkboardThread({
   visible,
   onThreadClick,
   thread,
+  currentMemId,
 }: CorkboardThreadProps) {
   if (!visible) return null;
 
   const pathD = getThreadPath(from, to, type);
   const color = THREAD_COLORS[type];
-  const baseOpacity = THREAD_OPACITY[type] * strength;
+  // Threads connected to the current memory are emphasized; the rest are
+  // present but quieter so the board still reads as a network.
+  const isConnectedToCurrent =
+    currentMemId != null && (thread.from === currentMemId || thread.to === currentMemId);
+  const ambientFade = isConnectedToCurrent || isActive ? 1 : 0.45;
+  const baseOpacity = THREAD_OPACITY[type] * strength * ambientFade;
   const baseWidth = THREAD_WIDTH[type];
   const width = isActive ? baseWidth + 1 : baseWidth;
   const opacity = isActive ? Math.min(1, baseOpacity + 0.4) : baseOpacity;
@@ -120,10 +127,6 @@ export function CorkboardThreadLayer({
         if (!fromPin || !toPin) return null;
         if (!visibility[thread.type]) return null;
 
-        const isConnectedToCurrent =
-          currentMemId !== null &&
-          (thread.from === currentMemId || thread.to === currentMemId);
-
         return (
           <CorkboardThread
             key={thread.id}
@@ -132,9 +135,10 @@ export function CorkboardThreadLayer({
             type={thread.type}
             strength={thread.strength}
             isActive={thread.id === activeThreadId}
-            visible={isConnectedToCurrent || thread.id === activeThreadId}
+            visible
             onThreadClick={onThreadClick}
             thread={thread}
+            currentMemId={currentMemId}
           />
         );
       })}

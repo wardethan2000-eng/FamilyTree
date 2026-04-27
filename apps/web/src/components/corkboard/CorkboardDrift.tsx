@@ -160,7 +160,14 @@ export function CorkboardDrift({
   const [currentMemId, setCurrentMemId] = useState<string | null>(null);
   const [nextMemId, setNextMemId] = useState<string | null>(null);
   const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set());
-  const [camera, setCameraState] = useState<CameraState>({ x: 0, y: 0, zoom: CAMERA_FOCUSED_ZOOM });
+  // Start at board center at the focused zoom level. The init effect below
+  // re-centers on the first pin once layout is ready; staying at the same
+  // zoom avoids a jarring zoom-jump as the loader fades.
+  const [camera, setCameraState] = useState<CameraState>({
+    x: 2000,
+    y: 1500,
+    zoom: CAMERA_FOCUSED_ZOOM,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [threadVisibility, setThreadVisibility] = useState<ThreadVisibility>({
     temporal: true,
@@ -169,6 +176,7 @@ export function CorkboardDrift({
   });
   const [pinsVisible, setPinsVisible] = useState(false);
   const [containerSize, setContainerSize] = useState({ w: 1200, h: 800 });
+  const [cameraInitialized, setCameraInitialized] = useState(false);
 
   const traverseOrder = useRef<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -377,7 +385,6 @@ export function CorkboardDrift({
 
       if (smartWeave.length > 0) {
         const firstMemId = smartWeave[0]!;
-        cameraControls.initCamera(firstMemId);
         prevMemIdRef.current = firstMemId;
         markVisited(firstMemId);
       }
@@ -385,7 +392,23 @@ export function CorkboardDrift({
       setIsLoading(false);
     };
     fetchAll();
-  }, [treeId, people, apiBase, initialFilter, cameraControls, updateIndex, markVisited]);
+    // We deliberately exclude `cameraControls`: it's a fresh object each
+    // render, and listing it would re-fire fetch on every state change.
+    // Camera centering is handled by a dedicated effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treeId, people, apiBase, initialFilter, updateIndex, markVisited]);
+
+  // Center the camera on the start pin once pins are computed and ready.
+  // Runs after the items → pins useMemo has settled, so the cameraControls
+  // closure sees the populated pin array.
+  useEffect(() => {
+    if (cameraInitialized) return;
+    if (pins.length === 0 || traverseOrder.current.length === 0) return;
+    const firstMemId = traverseOrder.current[0];
+    if (!firstMemId) return;
+    cameraControls.initCamera(firstMemId);
+    setCameraInitialized(true);
+  }, [pins, cameraInitialized, cameraControls]);
 
   useEffect(() => {
     if (!isLoading && pins.length > 0) {
@@ -510,12 +533,21 @@ export function CorkboardDrift({
     });
   }, []);
 
+  const handlePinSelect = useCallback((memId: string) => {
+    if (isGlideTransitionRef.current) return;
+    const idx = traverseOrder.current.indexOf(memId);
+    if (idx >= 0) updateIndex(idx);
+  }, [updateIndex]);
+
   const handleMediaEnded = useCallback(() => {
     advance();
   }, [advance]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (expandedPinId) return;
+    // Don't start a board-pan when the user is pressing on a pin or its
+    // contents — that lets the pin's own click handler win.
+    if ((e.target as HTMLElement).closest(".corkboard-pin")) return;
     cameraControls.cancelGlide();
     cameraControls.touchInteraction();
     setIsDragging(true);
@@ -525,7 +557,9 @@ export function CorkboardDrift({
       cx: cameraControls.cameraRef.current.x,
       cy: cameraControls.cameraRef.current.y,
     };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    // Capture on the viewport (currentTarget) so subsequent pointermove
+    // events route here regardless of what's under the cursor.
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }, [expandedPinId, cameraControls]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -732,6 +766,11 @@ export function CorkboardDrift({
             const isVisited = visitedIds.has(mem.id);
             const isUnfocused = !isCurrentPin && !isExpanded;
             const isAdjacent = isUnfocused && adjacentMemoryIds.has(mem.id);
+            // Stagger delay caps at 800ms regardless of pin count: with 200
+            // memories at 60ms each the last pin would otherwise wait 12s.
+            const staggerDelay = pinsVisible
+              ? Math.min(800, (i / Math.max(1, pins.length - 1)) * 800)
+              : 0;
 
             return (
               <CorkboardPin
@@ -746,8 +785,9 @@ export function CorkboardDrift({
                 isPlaying={isPlaying}
                 onExpand={handleExpand}
                 onContract={handleContract}
+                onSelect={handlePinSelect}
                 reduceMotion={reduceMotion}
-                delay={pinsVisible ? i * 60 : 0}
+                delay={staggerDelay}
                 visible={pinsVisible}
                 onMediaEnded={isExpanded ? handleMediaEnded : undefined}
               />

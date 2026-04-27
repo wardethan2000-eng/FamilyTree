@@ -16,6 +16,7 @@ interface CorkboardPinProps {
   isPlaying: boolean;
   onExpand: (id: string) => void;
   onContract: () => void;
+  onSelect: (memoryId: string) => void;
   reduceMotion: boolean;
   delay: number;
   visible: boolean;
@@ -44,6 +45,7 @@ export const CorkboardPin = memo(function CorkboardPin({
   isPlaying,
   onExpand,
   onContract,
+  onSelect,
   reduceMotion,
   delay,
   visible,
@@ -69,6 +71,10 @@ export const CorkboardPin = memo(function CorkboardPin({
       onContract();
     } else if (isCurrent) {
       onExpand(pin.id);
+    } else {
+      // Clicking a non-current pin focuses it: camera glides over and the
+      // pin becomes current. A second click then expands it.
+      onSelect(memory.id);
     }
   };
 
@@ -113,19 +119,20 @@ export const CorkboardPin = memo(function CorkboardPin({
         width: isExpanded ? 480 : pin.width,
         minHeight: isExpanded ? 320 : pin.height,
         height: isExpanded ? "auto" : pin.height,
-        transform: isExpanded ? "none" : `rotate(${pin.rotation}deg)`,
         zIndex: isExpanded ? 50 : isCurrent ? 10 : undefined,
         transformOrigin: "center center",
       }}
-      initial={reduceMotion ? false : { opacity: 0, scale: 0.5, y: 20 }}
+      initial={reduceMotion ? false : { opacity: 0, scale: 0.5, y: 20, rotate: pin.rotation }}
       animate={{
         opacity: visible ? targetOpacity : 0,
         scale: visible ? targetScale : 0.5,
         y: visible ? 0 : 20,
+        rotate: isExpanded ? 0 : pin.rotation,
       }}
       transition={{
         opacity: { duration: isExpanded ? 0.6 : 0.4, ease: [0.22, 0.61, 0.36, 1] },
         scale: { duration: isExpanded ? 0.6 : 0.4, ease: [0.22, 0.61, 0.36, 1] },
+        rotate: { duration: isExpanded ? 0.6 : 0.4, ease: [0.22, 0.61, 0.36, 1] },
         y: { duration: 0.6, ease: [0.22, 0.61, 0.36, 1], delay: reduceMotion ? 0 : delay / 1000 },
       }}
       onClick={handleClick}
