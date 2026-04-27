@@ -35,6 +35,7 @@ import { isCanonicalTreeId, resolveCanonicalTreeId } from "@/lib/tree-route";
 import { usePendingVoiceTranscriptionRefresh } from "@/lib/usePendingVoiceTranscriptionRefresh";
 import { AddMemoryWizard } from "@/components/tree/AddMemoryWizard";
 import { DriftMode, type DriftFilter } from "@/components/tree/DriftMode";
+import { CorkboardDrift } from "@/components/corkboard/CorkboardDrift";
 import { DriftChooserSheet } from "@/components/tree/DriftChooserSheet";
 import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { GearIcon, InboxIcon } from "@/components/tree/SurfaceToolbarIcons";
@@ -1077,7 +1078,25 @@ export default function AtriumPage() {
       />
 
       <AnimatePresence>
-        {driftOpen && (
+        {driftOpen && driftFilter?.mode === "corkboard" ? (
+          <CorkboardDrift
+            key="corkboard"
+            treeId={treeId}
+            people={people.map((person) => ({
+              id: person.id,
+              name: person.name,
+              birthYear: person.birthYear,
+              deathYear: person.deathYear,
+              essenceLine: person.essenceLine,
+              portraitUrl: person.portraitUrl,
+              linkedUserId: person.linkedUserId,
+            }))}
+            onClose={closeDrift}
+            onPersonDetail={handlePersonClick}
+            apiBase={API}
+            initialFilter={driftFilter}
+          />
+        ) : driftOpen ? (
           <DriftMode
             treeId={treeId}
             people={people.map((person) => ({
@@ -1096,7 +1115,7 @@ export default function AtriumPage() {
             casting={chromecast.state.isConnected}
             castDeviceName={chromecast.state.deviceName}
           />
-        )}
+        ) : null}
       </AnimatePresence>
 
       <DriftCastControls />
