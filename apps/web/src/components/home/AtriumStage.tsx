@@ -18,6 +18,7 @@ export function AtriumStage({
   historicalLabel,
   today,
   treeId,
+  onScrollToMemories,
 }: {
   treeName: string;
   featuredMemory: TreeHomeMemory | null;
@@ -36,6 +37,7 @@ export function AtriumStage({
     monthDayLabel: string;
   } | null | undefined;
   treeId: string;
+  onScrollToMemories?: () => void;
 }) {
   const mediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
   const excerpt = getHeroExcerpt(featuredMemory);
@@ -406,6 +408,35 @@ export function AtriumStage({
           <ContextMark label="Historical span" value={historicalLabel} />
           <ContextMark label="Branch focus" value={branchCue} />
         </div>
+
+        {onScrollToMemories && (
+          <button
+            type="button"
+            onClick={onScrollToMemories}
+            style={{
+              marginTop: "clamp(28px, 4vw, 48px)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "10px 20px",
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "rgba(246,241,231,0.88)",
+              background: "rgba(246,241,231,0.08)",
+              border: "1px solid rgba(246,241,231,0.18)",
+              borderRadius: 999,
+              cursor: "pointer",
+              backdropFilter: "blur(4px)",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            Explore memories
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M6 2v8M2 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
       </div>
     </section>
   );

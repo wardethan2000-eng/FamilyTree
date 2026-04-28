@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AtriumCoachmark } from "@/components/home/AtriumCoachmark";
 import { AtriumSkeleton } from "@/components/home/HomeSurfaceSkeletons";
@@ -42,6 +42,7 @@ import { GearIcon, InboxIcon } from "@/components/tree/SurfaceToolbarIcons";
 import { DriftCastControls } from "@/components/cast/DriftCastControls";
 import { CastButton } from "@/components/cast/CastButton";
 import { ViewModeDropdown } from "@/components/home/ViewModeDropdown";
+import { ArchiveSwitcher } from "@/components/home/ArchiveSwitcher";
 import { useChromecast } from "@/hooks/useChromecast";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { usePendingTimeout } from "@/lib/usePendingTimeout";
@@ -137,6 +138,7 @@ export default function AtriumPage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
+  const memoriesRef = useRef<HTMLDivElement>(null);
   const [selectedEra, setSelectedEra] = useState<EraValue>("all");
 
   const [mode, setMode] = useState<AtriumMode>("scroll");
@@ -145,6 +147,10 @@ export default function AtriumPage() {
 
   const openMobileMenu = useCallback(() => setMobileMenuOpen(true), []);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+
+  const scrollToMemories = useCallback(() => {
+    memoriesRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [memoriesRef]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -572,17 +578,7 @@ export default function AtriumPage() {
           >
             ← Archives
           </Link>
-          <span
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 17,
-              color: "var(--ink)",
-              lineHeight: 1,
-              flexShrink: 0,
-            }}
-          >
-            {tree?.name ?? "Tessera"}
-          </span>
+          <ArchiveSwitcher currentTreeId={treeId} currentTreeName={tree?.name ?? "Tessera"} />
         </div>
 
         <div
@@ -917,7 +913,49 @@ export default function AtriumPage() {
           onAddMemory={() => setWizardOpen(true)}
         />
       ) : (
-        <AtriumModeRouter
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "clamp(16px, 3vw, 32px) 0 clamp(8px, 2vw, 16px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={scrollToMemories}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "10px 20px",
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--ink-faded)",
+                background: "var(--paper-deep)",
+                border: "1px solid var(--rule)",
+                borderRadius: 999,
+                cursor: "pointer",
+                transition: "background 0.15s, border-color 0.15s",
+              }}
+            >
+              Explore memories
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M6 2v8M2 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+          <div
+            style={{
+              margin: "0 auto",
+              maxWidth: 400,
+              height: 1,
+              background: "var(--rule)",
+            }}
+          />
+          <div ref={memoriesRef} style={{ scrollMarginTop: 56 }} />
+          <AtriumModeRouter
           mode={mode}
           treeId={treeId}
           treeName={tree?.name ?? "Family Archive"}
@@ -958,6 +996,7 @@ export default function AtriumPage() {
             openDrift({ mode: "remembrance", personId })
           }
         />
+        </>
       )}
 
       <DriftChooserSheet

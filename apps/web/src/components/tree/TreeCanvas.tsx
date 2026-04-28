@@ -1467,7 +1467,7 @@ function TreeCanvasInner({
               border: editMode ? "1px solid var(--ink)" : toolbarButtonStyle.border,
             }}
           >
-            {editMode ? "Exit edit mode" : "Edit constellation"}
+            {editMode ? "Exit edit mode" : "Edit tree"}
           </button>
 
           {editMode ? (
