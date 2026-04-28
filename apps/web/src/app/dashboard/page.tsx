@@ -16,5 +16,25 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  return null;
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "var(--paper)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <p
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 13,
+          color: "var(--ink-faded)",
+        }}
+      >
+        Opening your archives…
+      </p>
+    </main>
+  );
 }
