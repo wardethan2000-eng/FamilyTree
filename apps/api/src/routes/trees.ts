@@ -929,10 +929,14 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
       // Per-tree data: people, memories, relationships, hero candidates, today highlights
       ...memberships.map(async (m) => {
         const tree = m.tree;
-        const [people, memories, relationships] = await Promise.all([
+        const [people, memories, relationships, totalMemoryCount] = await Promise.all([
           getTreeScopedPeople(tree.id),
-          getTreeMemories(tree.id, { limit: 50, viewerUserId: session.user.id }),
+          getTreeMemories(tree.id, { limit: 20, viewerUserId: session.user.id }),
           getTreeRelationships(tree.id),
+          db.select({ id: schema.memories.id })
+            .from(schema.memories)
+            .where(eq(schema.memories.treeId, tree.id))
+            .then((rows) => rows.length),
         ]);
 
         const directMemoryPersonIds = new Set<string>();
@@ -952,7 +956,7 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
         const earliestYear = years.length > 0 ? Math.min(...years) : null;
         const latestYear = years.length > 0 ? Math.max(...years) : null;
 
-        const heroCandidates = selectHeroCandidates(memories, 1);
+        const heroCandidates = selectHeroCandidates(memories, 3);
 
         const todayHighlights = buildTodayHighlights({ people, memories });
         const hasTodayHighlights =
@@ -970,7 +974,7 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
           },
           stats: {
             peopleCount: people.length,
-            memoryCount: memories.length,
+            memoryCount: totalMemoryCount,
             generationCount: computeGenerationCount(people, relationships),
             peopleWithoutPortraitCount: people.filter((p) => !p.portraitMedia).length,
             peopleWithoutDirectMemoriesCount: people.filter(
@@ -983,6 +987,10 @@ export async function treesPlugin(app: FastifyInstance): Promise<void> {
             decadeBuckets: buildDecadeBuckets(memories),
           },
           heroCandidates: heroCandidates.map(serializeHomeMemory),
+          memories: memories
+            .filter((m) => !heroCandidates.includes(m))
+            .slice(0, 8)
+            .map(serializeHomeMemory),
           isFoundedByYou: !!tree.founderUserId && tree.founderUserId === session.user.id,
           today: hasTodayHighlights ? todayHighlights : null,
         };
