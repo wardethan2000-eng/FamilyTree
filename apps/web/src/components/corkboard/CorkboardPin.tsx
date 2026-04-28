@@ -157,7 +157,15 @@ export const CorkboardPin = memo(function CorkboardPin({
             {memory.kind === "video" && (resolvedMediaUrl || resolvedPreviewUrl) && (
               <div className="corkboard-pin-video-preview" aria-hidden="true">
                 {resolvedMediaUrl ? (
-                  <video src={resolvedMediaUrl} muted playsInline preload="metadata" />
+                  <video
+                    src={resolvedMediaUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onCanPlay={(e) => e.currentTarget.play().catch(() => {})}
+                  />
                 ) : (
                   resolvedPreviewUrl && <img src={resolvedPreviewUrl} alt="" loading="lazy" decoding="async" />
                 )}
