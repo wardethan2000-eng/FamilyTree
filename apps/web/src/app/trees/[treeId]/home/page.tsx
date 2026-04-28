@@ -41,6 +41,7 @@ import { SearchOverlay } from "@/components/tree/SearchOverlay";
 import { GearIcon, InboxIcon } from "@/components/tree/SurfaceToolbarIcons";
 import { DriftCastControls } from "@/components/cast/DriftCastControls";
 import { CastButton } from "@/components/cast/CastButton";
+import { ViewModeDropdown } from "@/components/home/ViewModeDropdown";
 import { useChromecast } from "@/hooks/useChromecast";
 import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import { usePendingTimeout } from "@/lib/usePendingTimeout";
@@ -136,7 +137,6 @@ export default function AtriumPage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
-  const [curationCount, setCurationCount] = useState(0);
   const [selectedEra, setSelectedEra] = useState<EraValue>("all");
 
   const [mode, setMode] = useState<AtriumMode>("scroll");
@@ -205,7 +205,6 @@ export default function AtriumPage() {
         : "all",
     );
     setInboxCount(data.inboxCount);
-    setCurationCount(data.curationCount);
   }, []);
 
   useEffect(() => {
@@ -605,10 +604,6 @@ export default function AtriumPage() {
             <button type="button" onClick={openDriftChooser} style={getHeaderNavButtonStyle(false)} title="Choose how to drift">
               Drift
             </button>
-            <CastButton />
-            <Link href={`/trees/${treeId}/prompts/campaigns`} style={getHeaderNavItemStyle(false)} title="Recurring questions you're sending">
-              Campaigns
-            </Link>
           </div>
         </div>
 
@@ -623,67 +618,7 @@ export default function AtriumPage() {
             minWidth: 0,
           }}
         >
-          <button
-            type="button"
-            onClick={() => setMode("scroll")}
-            className="tessera-mobile-hide"
-            style={{
-              ...headerButtonStyle,
-              fontSize: 11,
-              padding: "6px 10px",
-              background: mode === "scroll" ? "var(--moss)" : "var(--paper-deep)",
-              color: mode === "scroll" ? "#fff" : "var(--ink-faded)",
-              border: mode === "scroll" ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
-            }}
-          >
-            Scroll
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("gallery")}
-            className="tessera-mobile-hide"
-            style={{
-              ...headerButtonStyle,
-              fontSize: 11,
-              padding: "6px 10px",
-              background: mode === "gallery" ? "var(--moss)" : "var(--paper-deep)",
-              color: mode === "gallery" ? "#fff" : "var(--ink-faded)",
-              border: mode === "gallery" ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
-            }}
-          >
-            Gallery
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("filmstrip")}
-            className="tessera-mobile-hide"
-            style={{
-              ...headerButtonStyle,
-              fontSize: 11,
-              padding: "6px 10px",
-              background: mode === "filmstrip" ? "var(--moss)" : "var(--paper-deep)",
-              color: mode === "filmstrip" ? "#fff" : "var(--ink-faded)",
-              border: mode === "filmstrip" ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
-            }}
-          >
-            Filmstrip
-          </button>
-
-          {curationCount > 0 && (
-            <Link
-              href={`/trees/${treeId}/curation`}
-              className="tessera-header-curation"
-              style={{
-                ...headerButtonStyle,
-                color: "var(--amber, #c97d1a)",
-                border: "1px solid var(--amber, #c97d1a)",
-                gap: 4,
-              }}
-              title="Review queue"
-            >
-              ✎ {curationCount} need{curationCount === 1 ? "s" : ""} attention
-            </Link>
-          )}
+          <ViewModeDropdown mode={mode} onChange={setMode} />
 
           <button
             type="button"
@@ -693,6 +628,19 @@ export default function AtriumPage() {
           >
             + Add memory
           </button>
+
+          <Link
+            href={`/trees/${treeId}/prompts/campaigns`}
+            className="tessera-mobile-hide"
+            style={headerButtonStyle}
+            title="Recurring questions you're sending"
+          >
+            Campaigns
+          </Link>
+
+          <span className="tessera-mobile-hide">
+            <CastButton variant="icon" />
+          </span>
 
           <button type="button" onClick={() => setSearchOpen(true)} style={{ ...headerButtonStyle, minHeight: 44, minWidth: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
             <span>⌕</span>
@@ -825,38 +773,7 @@ export default function AtriumPage() {
           <button type="button" onClick={() => { closeMobileMenu(); openDriftChooser(); }}>
             Drift through the archive
           </button>
-          <Link href={`/trees/${treeId}/prompts/campaigns`} onClick={closeMobileMenu}>
-            Campaigns
-          </Link>
         </nav>
-        <div className="tessera-menu-section">
-          <div style={{ display: "grid", gap: 8 }}>
-            {(["scroll", "gallery", "filmstrip"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { setMode(m); closeMobileMenu(); }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  minHeight: 44,
-                  padding: "10px 16px",
-                  borderRadius: 10,
-                  border: mode === m ? "1px solid rgba(78,93,66,0.28)" : "1px solid var(--rule)",
-                  background: mode === m ? "var(--moss)" : "var(--paper-deep)",
-                  color: mode === m ? "#fff" : "var(--ink-faded)",
-                  fontFamily: "var(--font-ui)",
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
-                {m === "scroll" ? "↕" : m === "gallery" ? "▦" : "≡"}{" "}
-                {m.charAt(0).toUpperCase() + m.slice(1)} view
-              </button>
-            ))}
-          </div>
-        </div>
         <div className="tessera-menu-section">
           <button
             type="button"
@@ -867,6 +784,24 @@ export default function AtriumPage() {
           </button>
         </div>
         <div className="tessera-menu-section" style={{ display: "grid", gap: 4 }}>
+          <Link
+            href={`/trees/${treeId}/prompts/campaigns`}
+            onClick={closeMobileMenu}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              minHeight: 44,
+              padding: "10px 16px",
+              borderRadius: 10,
+              textDecoration: "none",
+              color: "var(--ink)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+            }}
+          >
+            Campaigns
+          </Link>
           <Link
             href={`/trees/${treeId}/inbox`}
             onClick={closeMobileMenu}
@@ -901,43 +836,6 @@ export default function AtriumPage() {
                 padding: "0 6px",
               }}>
                 {inboxCount > 9 ? "9+" : inboxCount}
-              </span>
-            )}
-          </Link>
-          <Link
-            href={`/trees/${treeId}/curation`}
-            onClick={closeMobileMenu}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              minHeight: 44,
-              padding: "10px 16px",
-              borderRadius: 10,
-              textDecoration: "none",
-              color: curationCount > 0 ? "var(--amber, #c97d1a)" : "var(--ink-faded)",
-              fontFamily: "var(--font-ui)",
-              fontSize: 14,
-            }}
-          >
-            ✎ Curation
-            {curationCount > 0 && (
-              <span style={{
-                marginLeft: "auto",
-                minWidth: 20,
-                height: 20,
-                borderRadius: 999,
-                background: "var(--amber, #c97d1a)",
-                color: "#fff",
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 6px",
-              }}>
-                {curationCount}
               </span>
             )}
           </Link>
@@ -1156,9 +1054,6 @@ export default function AtriumPage() {
             display: none !important;
           }
           .tessera-header-search-text {
-            display: none !important;
-          }
-          .tessera-header-curation {
             display: none !important;
           }
         }

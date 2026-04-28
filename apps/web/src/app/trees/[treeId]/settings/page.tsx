@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { getApiBase } from "@/lib/api-base";
@@ -62,6 +63,7 @@ export default function TreeSettingsPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [curationCount, setCurationCount] = useState(0);
 
   // Invite form
   const [inviteEmail, setInviteEmail] = useState("");
@@ -169,16 +171,21 @@ export default function TreeSettingsPage() {
 
   const fetchData = useCallback(async () => {
     if (!treeId) return;
-    const [treeRes, invitesRes, membersRes, peopleRes] = await Promise.all([
+    const [treeRes, invitesRes, membersRes, peopleRes, homeRes] = await Promise.all([
       fetch(`${API}/api/trees/${treeId}`, { credentials: "include" }),
       fetch(`${API}/api/trees/${treeId}/invitations`, { credentials: "include" }),
       fetch(`${API}/api/trees/${treeId}/members`, { credentials: "include" }),
       fetch(`${API}/api/trees/${treeId}/people`, { credentials: "include" }),
+      fetch(`${API}/api/trees/${treeId}/home`, { credentials: "include" }),
     ]);
 
     if (treeRes.ok) setTree(await treeRes.json());
     if (invitesRes.ok) setInvitations(await invitesRes.json());
     if (peopleRes.ok) setPeople(await peopleRes.json());
+    if (homeRes.ok) {
+      const homeData = await homeRes.json();
+      setCurationCount(homeData.curationCount ?? 0);
+    }
     if (membersRes.ok) {
       const membersData: Member[] = await membersRes.json();
       setMembers(membersData);
@@ -282,6 +289,32 @@ export default function TreeSettingsPage() {
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", margin: "0 0 48px" }}>
           Archive settings
         </p>
+
+        {curationCount > 0 && (
+          <Link
+            href={`/trees/${treeId}/curation`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 20px",
+              marginBottom: 32,
+              borderRadius: 12,
+              border: "1px solid var(--amber, #c97d1a)",
+              background: "rgba(201,125,26,0.06)",
+              textDecoration: "none",
+              color: "var(--amber, #c97d1a)",
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+              fontWeight: 500,
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              ✎ {curationCount} need{curationCount === 1 ? "s" : ""} attention
+            </span>
+            <span style={{ fontSize: 16 }}>→</span>
+          </Link>
+        )}
 
         {/* Invite section */}
         <section id="invite" ref={inviteSectionRef} style={sectionStyle}>
