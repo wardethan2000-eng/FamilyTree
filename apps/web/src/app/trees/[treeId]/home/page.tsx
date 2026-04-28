@@ -155,7 +155,6 @@ export default function AtriumPage() {
   const [selectedEra, setSelectedEra] = useState<EraValue>("all");
 
   const [mode, setMode] = useState<AtriumMode>("scroll");
-  const [headerVisible, setHeaderVisible] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const openMobileMenu = useCallback(() => setMobileMenuOpen(true), []);
@@ -178,32 +177,7 @@ export default function AtriumPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  useEffect(() => {
-    if (memories.length === 0 || loading) return;
 
-    let hideTimer: ReturnType<typeof setTimeout>;
-
-    const scheduleHide = () => {
-      clearTimeout(hideTimer);
-      setHeaderVisible(true);
-      hideTimer = setTimeout(() => setHeaderVisible(false), 2500);
-    };
-
-    const onTopHover = (e: MouseEvent) => {
-      if (e.clientY < 24) {
-        clearTimeout(hideTimer);
-        setHeaderVisible(true);
-      }
-    };
-
-    scheduleHide();
-    window.addEventListener("mousemove", onTopHover);
-
-    return () => {
-      clearTimeout(hideTimer);
-      window.removeEventListener("mousemove", onTopHover);
-    };
-  }, [memories.length, loading]);
 
   const applyHomePayload = useCallback((data: TreeHomePayload) => {
     setTree(data.tree);
@@ -565,8 +539,7 @@ export default function AtriumPage() {
           alignItems: "center",
           padding: "8px 16px",
           gap: 16,
-          transform: headerVisible ? "translateY(0)" : "translateY(-100%)",
-          transition: "transform 400ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+          transform: "translateY(0)",
         }}
       >
          <div
