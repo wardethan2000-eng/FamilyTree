@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory, TreeHomeTodayBirthday, TreeHomeTodayDeathiversary, TreeHomeTodayMemoryAnniversary } from "./homeTypes";
-import { EASE, getHeroExcerpt } from "./homeUtils";
+import { EASE, getHeroExcerpt, isVideoMemory } from "./homeUtils";
 
 export function AtriumStage({
   treeName,
@@ -39,6 +39,7 @@ export function AtriumStage({
 }) {
   const mediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
   const excerpt = getHeroExcerpt(featuredMemory);
+  const isVideo = featuredMemory ? isVideoMemory(featuredMemory) : false;
   const usesMedia = Boolean(mediaUrl && featuredMemory?.kind === "photo");
 
   const todayBirthdayItems = (today?.birthdays.filter((p) => p.daysUntil === 0) ?? []).slice(0, 2).map((p) => ({
@@ -69,34 +70,73 @@ export function AtriumStage({
     >
       {usesMedia ? (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl ?? ""}
-            alt={featuredMemory?.title ?? ""}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: "blur(24px) sepia(18%) brightness(0.38) saturate(0.9)",
-              transform: "scale(1.08)",
-            }}
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl ?? ""}
-            alt=""
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              filter: "sepia(12%) brightness(0.72)",
-            }}
-          />
+          {isVideo ? (
+            <video
+              src={mediaUrl ?? ""}
+              aria-hidden="true"
+              muted
+              playsInline
+              autoPlay
+              loop
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "blur(24px) sepia(18%) brightness(0.38) saturate(0.9)",
+                transform: "scale(1.08)",
+              }}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={mediaUrl ?? ""}
+              alt={featuredMemory?.title ?? ""}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "blur(24px) sepia(18%) brightness(0.38) saturate(0.9)",
+                transform: "scale(1.08)",
+              }}
+            />
+          )}
+          {isVideo ? (
+            <video
+              src={mediaUrl ?? ""}
+              muted
+              playsInline
+              autoPlay
+              loop
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                filter: "sepia(12%) brightness(0.72)",
+              }}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={mediaUrl ?? ""}
+              alt=""
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                filter: "sepia(12%) brightness(0.72)",
+              }}
+            />
+          )}
           <div
             style={{
               position: "absolute",

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getProxiedMediaUrl } from "@/lib/media-url";
 import type { TreeHomeMemory } from "../homeTypes";
-import { EASE, getHeroExcerpt } from "../homeUtils";
+import { EASE, getHeroExcerpt, isVideoMemory } from "../homeUtils";
 
 interface FoyerRoomProps {
   treeName: string;
@@ -33,6 +33,7 @@ export function FoyerRoom({
 }: FoyerRoomProps) {
   const mediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
   const excerpt = getHeroExcerpt(featuredMemory);
+  const isVideo = featuredMemory ? isVideoMemory(featuredMemory) : false;
   const usesMedia = Boolean(
     mediaUrl && featuredMemory?.kind === "photo",
   );
@@ -79,22 +80,40 @@ export function FoyerRoom({
     >
       {usesMedia && mediaUrl ? (
         <>
-          {/* Photo: the experience */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl}
-            alt={featuredMemory?.title ?? treeName}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: "sepia(12%) brightness(0.55)",
-              animation: "kenBurns 80s ease-in-out infinite",
-              willChange: "transform",
-            }}
-          />
+          {isVideo ? (
+            <video
+              src={mediaUrl}
+              muted
+              playsInline
+              autoPlay
+              loop
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "sepia(12%) brightness(0.55)",
+              }}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={mediaUrl}
+              alt={featuredMemory?.title ?? treeName}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "sepia(12%) brightness(0.55)",
+                animation: "kenBurns 80s ease-in-out infinite",
+                willChange: "transform",
+              }}
+            />
+          )}
           {/* Cinematic vignette */}
           <div
             style={{

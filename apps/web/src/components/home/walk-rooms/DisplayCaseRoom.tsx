@@ -2,7 +2,7 @@
 
 import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory } from "../homeTypes";
-import { EASE } from "../homeUtils";
+import { EASE, isVideoMemory } from "../homeUtils";
 
 interface TrailPerson {
   id: string;
@@ -133,6 +133,7 @@ function DisplayCaseCard({
   const mediaUrl = visualItems[0]?.mediaUrl ?? null;
   const excerpt = getMemoryExcerpt(memory);
   const isPhoto = memory.kind === "photo" && mediaUrl;
+  const isVideo = isPhoto && isVideoMemory(memory);
 
   return (
     <button
@@ -161,18 +162,34 @@ function DisplayCaseCard({
             overflow: "hidden",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl!}
-            alt={memory.title}
-            onError={handleMediaError}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: "grayscale(16%) sepia(8%)",
-            }}
-          />
+          {isVideo ? (
+            <video
+              src={mediaUrl!}
+              muted
+              playsInline
+              autoPlay
+              loop
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "grayscale(16%) sepia(8%)",
+              }}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={mediaUrl!}
+              alt={memory.title}
+              onError={handleMediaError}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "grayscale(16%) sepia(8%)",
+              }}
+            />
+          )}
           <div
             style={{
               position: "absolute",

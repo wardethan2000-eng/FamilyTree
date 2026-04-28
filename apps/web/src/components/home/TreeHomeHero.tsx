@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { getProxiedMediaUrl } from "@/lib/media-url";
 import type { TreeHomeMemory } from "./homeTypes";
-import { getHeroExcerpt } from "./homeUtils";
+import { getHeroExcerpt, isVideoMemory } from "./homeUtils";
 
 const HERO_EASE = [0.22, 0.61, 0.36, 1] as const;
 
@@ -26,6 +26,7 @@ export function TreeHomeHero({
 }) {
   const featuredMemoryMediaUrl = getProxiedMediaUrl(featuredMemory?.mediaUrl);
   const heroExcerpt = getHeroExcerpt(featuredMemory);
+  const isVideo = featuredMemory ? isVideoMemory(featuredMemory) : false;
 
   return (
     <section
@@ -50,19 +51,37 @@ export function TreeHomeHero({
         >
           {featuredMemory?.kind === "photo" && featuredMemoryMediaUrl ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={featuredMemoryMediaUrl}
-                alt={featuredMemory.title}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  filter: "sepia(20%) brightness(0.68)",
-                }}
-              />
+              {isVideo ? (
+                <video
+                  src={featuredMemoryMediaUrl}
+                  muted
+                  playsInline
+                  autoPlay
+                  loop
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "sepia(20%) brightness(0.68)",
+                  }}
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={featuredMemoryMediaUrl}
+                  alt={featuredMemory.title}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "sepia(20%) brightness(0.68)",
+                  }}
+                />
+              )}
               <div
                 style={{
                   position: "absolute",

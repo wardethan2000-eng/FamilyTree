@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { getProxiedMediaUrl, handleMediaError } from "@/lib/media-url";
 import type { TreeHomeMemory } from "../homeTypes";
-import { EASE, getHeroExcerpt, getVoiceTranscriptLabel } from "../homeUtils";
+import { EASE, getHeroExcerpt, getVoiceTranscriptLabel, isVideoMemory } from "../homeUtils";
 
 interface TrailPerson {
   id: string;
@@ -225,23 +225,40 @@ function PhotoMemoryRoom({
         overflow: "hidden",
       }}
     >
-      {/* Photo: hero, the experience */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={mediaUrl}
-        alt={memory.title}
-        onError={handleMediaError}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          filter: "sepia(10%) brightness(0.55)",
-          animation: "kenBurnsSlow 80s ease-in-out infinite",
-          willChange: "transform",
-        }}
-      />
+      {isVideoMemory(memory) ? (
+        <video
+          src={mediaUrl}
+          muted
+          playsInline
+          autoPlay
+          loop
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            filter: "sepia(10%) brightness(0.55)",
+          }}
+        />
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={mediaUrl}
+          alt={memory.title}
+          onError={handleMediaError}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            filter: "sepia(10%) brightness(0.55)",
+            animation: "kenBurnsSlow 80s ease-in-out infinite",
+            willChange: "transform",
+          }}
+        />
+      )}
 
       {/* Cinematic vignette: dark edges, soft center */}
       <div
@@ -649,18 +666,34 @@ function DocumentMemoryRoom({
           border: "1px solid var(--rule)",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={mediaUrl}
-          alt={memory.title}
-          onError={handleMediaError}
-          style={{
-            width: "100%",
-            maxHeight: "60vh",
-            objectFit: "contain",
-            background: "var(--paper-deep)",
-          }}
-        />
+        {isVideoMemory(memory) ? (
+          <video
+            src={mediaUrl}
+            muted
+            playsInline
+            autoPlay
+            loop
+            style={{
+              width: "100%",
+              maxHeight: "60vh",
+              objectFit: "contain",
+              background: "var(--paper-deep)",
+            }}
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={mediaUrl}
+            alt={memory.title}
+            onError={handleMediaError}
+            style={{
+              width: "100%",
+              maxHeight: "60vh",
+              objectFit: "contain",
+              background: "var(--paper-deep)",
+            }}
+          />
+        )}
 
         <div style={{ padding: "20px 24px 24px" }}>
           <div
