@@ -462,19 +462,6 @@ export function CorkboardDrift({
     });
   }, []);
 
-  const stepBack = useCallback(() => {
-    if (isGlideTransitionRef.current) return;
-    const len = traverseOrder.current.length;
-    setCurrentIndex((i) => {
-      const prev = i - 1;
-      const result = prev < 0 ? len - 1 : prev;
-      const memId = traverseOrder.current[result];
-      if (memId) setCurrentMemId(memId);
-      setNextMemId(traverseOrder.current[result + 1] ?? null);
-      return result;
-    });
-  }, []);
-
   /* ─── Spatial keyboard navigation helpers ────────────────────────────────── */
 
   const findNearestInDirection = useCallback(
@@ -488,7 +475,7 @@ export function CorkboardDrift({
       const dirX = Math.cos(angleRad);
       const dirY = Math.sin(angleRad);
 
-      let best: { id: string; dist: number; dot: number } | null = null;
+      let best: { id: string; score: number } | null = null;
 
       for (const pin of pins) {
         if (pin.memoryId === fromMemId) continue;
@@ -504,8 +491,8 @@ export function CorkboardDrift({
         if (dot < 0.15) continue;
 
         const score = dist * (2.5 - dot); // closer + more aligned = better
-        if (!best || score < dist * (2.5 - dot)) {
-          best = { id: pin.memoryId, dist, dot };
+        if (!best || score < best.score) {
+          best = { id: pin.memoryId, score };
         }
       }
 
@@ -543,32 +530,6 @@ export function CorkboardDrift({
     },
     [currentMemId, updateIndex, findNearestInDirection]
   );
-
-  const jumpNext = useCallback(() => {
-    if (isGlideTransitionRef.current) return;
-    const len = traverseOrder.current.length;
-    setCurrentIndex((i) => {
-      const next = i + 2;
-      const result = next >= len ? 0 : next;
-      const memId = traverseOrder.current[result];
-      if (memId) setCurrentMemId(memId);
-      setNextMemId(traverseOrder.current[result + 1] ?? null);
-      return result;
-    });
-  }, []);
-
-  const jumpPrev = useCallback(() => {
-    if (isGlideTransitionRef.current) return;
-    const len = traverseOrder.current.length;
-    setCurrentIndex((i) => {
-      const prev = i - 2;
-      const result = prev < 0 ? len - 1 : prev;
-      const memId = traverseOrder.current[result];
-      if (memId) setCurrentMemId(memId);
-      setNextMemId(traverseOrder.current[result + 1] ?? null);
-      return result;
-    });
-  }, []);
 
   useEffect(() => {
     const order = traverseOrder.current;
