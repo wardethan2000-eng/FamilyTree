@@ -2,6 +2,7 @@
 
 export default function Error({
   error,
+  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -26,7 +27,7 @@ export default function Error({
           {"\n"}
           {error.stack}
         </pre>
-        <button onClick={reset} style={{ marginTop: 16, padding: "8px 16px", cursor: "pointer" }}>
+        <button type="button" onClick={() => reset()} style={{ marginTop: 16, padding: "8px 16px", cursor: "pointer" }}>
           Try again
         </button>
       </div>
