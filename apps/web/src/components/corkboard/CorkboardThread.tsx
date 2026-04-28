@@ -13,12 +13,21 @@ interface CorkboardThreadProps {
   currentMemId?: string | null;
 }
 
-const THREAD_COLOR = "rgba(232, 224, 208, 0.35)";
-const THREAD_WIDTH = 0.6;
-const THREAD_OPACITY = 0.14;
-const THREAD_ACTIVE_OPACITY = 0.28;
-const THREAD_ACTIVE_WIDTH = 1.0;
-const THREAD_CONNECTED_OPACITY = 0.2;
+const THREAD_STYLE: Record<ThreadType, { color: string; width: number; opacity: number; connectedOpacity: number }> = {
+  temporal: { color: "rgba(232, 224, 208, 0.34)", width: 0.65, opacity: 0.14, connectedOpacity: 0.24 },
+  person: { color: "rgba(202, 214, 178, 0.32)", width: 0.75, opacity: 0.12, connectedOpacity: 0.22 },
+  branch: { color: "rgba(210, 164, 150, 0.3)", width: 0.7, opacity: 0.1, connectedOpacity: 0.2 },
+  era: { color: "rgba(194, 184, 165, 0.26)", width: 0.55, opacity: 0.08, connectedOpacity: 0.16 },
+  "co-subject": { color: "rgba(202, 214, 178, 0.28)", width: 0.6, opacity: 0.1, connectedOpacity: 0.18 },
+  place: { color: "rgba(210, 164, 150, 0.28)", width: 0.6, opacity: 0.09, connectedOpacity: 0.18 },
+};
+
+const THREAD_ACTIVE_WIDTH = 1.35;
+const THREAD_ACTIVE_OPACITY = 0.78;
+
+function gradientIdForThread(thread: ThreadConnection) {
+  return `corkboard-active-thread-${thread.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
 
 export function CorkboardThread({
   from,
@@ -31,11 +40,13 @@ export function CorkboardThread({
 }: CorkboardThreadProps) {
   if (!visible) return null;
 
-  const pathD = getThreadPath(from, to, "temporal");
+  const threadStyle = THREAD_STYLE[thread.type] ?? THREAD_STYLE.temporal;
+  const pathD = getThreadPath(from, to, thread.type);
   const isConnectedToCurrent =
     currentMemId != null && (thread.from === currentMemId || thread.to === currentMemId);
-  const opacity = isActive ? THREAD_ACTIVE_OPACITY : isConnectedToCurrent ? THREAD_CONNECTED_OPACITY : THREAD_OPACITY;
-  const width = isActive ? THREAD_ACTIVE_WIDTH : THREAD_WIDTH;
+  const opacity = isActive ? THREAD_ACTIVE_OPACITY : isConnectedToCurrent ? threadStyle.connectedOpacity : threadStyle.opacity;
+  const width = isActive ? THREAD_ACTIVE_WIDTH : threadStyle.width;
+  const gradientId = gradientIdForThread(thread);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -43,7 +54,24 @@ export function CorkboardThread({
   };
 
   return (
-    <g>
+    <g className={`corkboard-thread corkboard-thread--${thread.type}${isActive ? " corkboard-thread--active" : ""}`}>
+      {isActive && (
+        <defs>
+          <linearGradient
+            id={gradientId}
+            gradientUnits="userSpaceOnUse"
+            x1={from.x}
+            y1={from.y}
+            x2={to.x}
+            y2={to.y}
+          >
+            <stop offset="0%" stopColor="rgba(232, 224, 208, 0)" />
+            <stop offset="24%" stopColor="rgba(232, 224, 208, 0.26)" />
+            <stop offset="58%" stopColor="rgba(255, 246, 222, 0.9)" />
+            <stop offset="100%" stopColor="rgba(232, 224, 208, 0.12)" />
+          </linearGradient>
+        </defs>
+      )}
       <path
         d={pathD}
         fill="none"
@@ -53,10 +81,22 @@ export function CorkboardThread({
         style={{ cursor: "pointer", pointerEvents: "stroke" }}
         onClick={handleClick}
       />
+      {isActive && (
+        <path
+          d={pathD}
+          fill="none"
+          stroke="rgba(255, 238, 196, 0.18)"
+          strokeWidth={7}
+          strokeLinecap="round"
+          opacity={0.55}
+          className="corkboard-thread-glow"
+          style={{ pointerEvents: "none" }}
+        />
+      )}
       <path
         d={pathD}
         fill="none"
-        stroke={THREAD_COLOR}
+        stroke={isActive ? `url(#${gradientId})` : threadStyle.color}
         strokeWidth={width}
         strokeLinecap="round"
         opacity={opacity}

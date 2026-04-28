@@ -2060,10 +2060,27 @@ body {
 }
 
 .corkboard-thread-path {
-  transition: opacity 1.8s cubic-bezier(0.22, 0.61, 0.36, 1), stroke-width 0.3s ease-out;
+  mix-blend-mode: screen;
+  transition: opacity 1.8s cubic-bezier(0.22, 0.61, 0.36, 1), stroke-width 0.3s ease-out, filter 0.3s ease-out;
 }
 .corkboard-thread-path--active {
-  opacity: 0.3;
+  filter: drop-shadow(0 0 5px rgba(255, 238, 196, 0.22));
+  animation: corkboard-active-route-breathe 1.8s ease-in-out infinite;
+}
+.corkboard-thread-glow {
+  filter: blur(1.2px);
+}
+.corkboard-thread--era .corkboard-thread-path,
+.corkboard-thread--place .corkboard-thread-path {
+  stroke-dasharray: 7 12;
+}
+.corkboard-thread--person .corkboard-thread-path {
+  filter: drop-shadow(0 0 3px rgba(202, 214, 178, 0.08));
+}
+
+@keyframes corkboard-active-route-breathe {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
 }
 
 .corkboard-pin {
@@ -2115,6 +2132,9 @@ body {
 }
 .corkboard-pin--unfocused {
   opacity: 0.28;
+}
+.corkboard-pin--context {
+  box-shadow: 0 0 0 1px rgba(232, 224, 208, 0.14), 0 0 26px rgba(232, 224, 208, 0.08), 0 4px 20px rgba(0, 0, 0, 0.34) !important;
 }
 .corkboard-pin--expanded {
   z-index: 50;
@@ -2295,15 +2315,6 @@ body {
   height: auto;
   max-height: 58vh;
   object-fit: contain;
-}
-
-.corkboard-ken-burns-photo img {
-  animation: corkboard-kenburns 16s ease-in-out forwards;
-}
-
-@keyframes corkboard-kenburns {
-  0% { transform: scale(1); }
-  100% { transform: scale(1.06); }
 }
 
 .corkboard-pin-expanded-video {
@@ -2640,7 +2651,6 @@ body {
   .drift-loader,
   .corkboard-audio-orb,
   .corkboard-thread-path--active,
-  .corkboard-ken-burns-photo img,
   a[href],
   button {
     animation: none !important;

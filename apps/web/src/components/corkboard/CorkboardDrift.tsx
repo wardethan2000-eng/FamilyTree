@@ -266,6 +266,23 @@ export function CorkboardDrift({
     return itemsById.get(currentMemId) ?? items[0] ?? null;
   }, [currentMemId, items, itemsById]);
 
+  const expandedMemId = useMemo(
+    () => pins.find((p) => p.id === expandedPinId)?.memoryId ?? null,
+    [expandedPinId, pins],
+  );
+
+  const contextMemoryIds = useMemo(() => {
+    if (!expandedMemId) return new Set<string>();
+    const related = new Set<string>([expandedMemId]);
+    for (const thread of threads) {
+      if (thread.from === expandedMemId) related.add(thread.to);
+      if (thread.to === expandedMemId) related.add(thread.from);
+    }
+    if (activeRoute?.from) related.add(activeRoute.from);
+    if (activeRoute?.to) related.add(activeRoute.to);
+    return related;
+  }, [activeRoute, expandedMemId, threads]);
+
   const activeThreadId = useMemo(() => {
     const routeFrom = activeRoute?.from ?? currentMemId;
     const routeTo = activeRoute?.to ?? nextMemId;
@@ -526,10 +543,12 @@ export function CorkboardDrift({
       ? CAMERA_GLIDE_DURATION * 1000 * 0.5
       : CAMERA_GLIDE_DURATION * 1000;
     const targetZoom = expandedPinId ? expandedLayout.zoom : CAMERA_FOCUSED_ZOOM;
+    const routeThread = findThreadBetween(threads, prevMemId, curMemId);
+    const routeType = routeThread?.type ?? "temporal";
 
     isGlideTransitionRef.current = true;
     setActiveRoute({ from: prevMemId, to: curMemId });
-    cameraControls.glideToPin(prevMemId, curMemId, glideDuration, targetZoom);
+    cameraControls.glideToPin(prevMemId, curMemId, glideDuration, targetZoom, routeType);
 
     const glideTimeout = setTimeout(() => {
       isGlideTransitionRef.current = false;
@@ -540,7 +559,7 @@ export function CorkboardDrift({
     markVisited(curMemId);
 
     return () => clearTimeout(glideTimeout);
-  }, [currentIndex, expandedPinId, expandedLayout.zoom, cameraControls, markVisited]);
+  }, [currentIndex, expandedPinId, expandedLayout.zoom, threads, cameraControls, markVisited]);
 
   useEffect(() => {
     if (!isPlaying || items.length === 0 || !currentMemory) return;
@@ -835,6 +854,7 @@ export function CorkboardDrift({
             const isExpanded = expandedPinId === pin.id;
             const isVisited = visitedIds.has(mem.id);
             const isUnfocused = !isCurrentPin && !isExpanded;
+            const isContextual = !isExpanded && contextMemoryIds.has(mem.id);
             // Stagger delay caps at 800ms regardless of pin count: with 200
             // memories at 60ms each the last pin would otherwise wait 12s.
             const staggerDelay = pinsVisible
@@ -850,6 +870,7 @@ export function CorkboardDrift({
                 isCurrent={isCurrentPin}
                 isVisited={isVisited}
                 isUnfocused={isUnfocused}
+                isContextual={isContextual}
                 isPlaying={isPlaying}
                 onExpand={handleExpand}
                 onContract={handleContract}

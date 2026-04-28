@@ -12,6 +12,7 @@ interface CorkboardPinProps {
   isCurrent: boolean;
   isVisited: boolean;
   isUnfocused: boolean;
+  isContextual: boolean;
   isPlaying: boolean;
   onExpand: (id: string) => void;
   onContract: () => void;
@@ -42,6 +43,7 @@ export const CorkboardPin = memo(function CorkboardPin({
   isCurrent,
   isVisited,
   isUnfocused,
+  isContextual,
   isPlaying,
   onExpand,
   onContract,
@@ -68,6 +70,7 @@ export const CorkboardPin = memo(function CorkboardPin({
   const expandedClass = isExpanded ? " corkboard-pin--expanded" : "";
   const startClass = pin.isStartPin ? " corkboard-pin--start" : "";
   const currentClass = isCurrent ? " corkboard-pin--current" : "";
+  const contextClass = isContextual ? " corkboard-pin--context" : "";
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -80,8 +83,8 @@ export const CorkboardPin = memo(function CorkboardPin({
     }
   };
 
-  const targetOpacity = isExpanded ? 1 : isUnfocused ? 0.35 : 1;
-  const targetScale = isExpanded ? 1 : isCurrent ? 1.25 : pin.scale;
+  const targetOpacity = isExpanded ? 1 : isContextual ? 0.58 : isUnfocused ? 0.22 : 1;
+  const targetScale = isExpanded ? 1 : isCurrent ? 1.25 : isContextual ? pin.scale * 1.06 : pin.scale;
 
   const expandedRef = useRef<HTMLDivElement>(null);
 
@@ -114,7 +117,7 @@ export const CorkboardPin = memo(function CorkboardPin({
 
   return (
     <motion.div
-      className={`corkboard-pin ${kindClass}${visitedClass}${unfocusedClass}${expandedClass}${startClass}${currentClass}`}
+      className={`corkboard-pin ${kindClass}${visitedClass}${unfocusedClass}${expandedClass}${startClass}${currentClass}${contextClass}`}
       style={{
         left: pin.x - (isExpanded ? expandedWidth : pin.width) / 2,
         top: pin.y - (isExpanded ? expandedMinHeight : pin.height) / 2,
@@ -208,7 +211,7 @@ export const CorkboardPin = memo(function CorkboardPin({
             </div>
 
             {memory.kind === "image" && resolvedPreviewUrl && (
-              <div className="corkboard-pin-expanded-photo corkboard-ken-burns-photo">
+              <div className="corkboard-pin-expanded-photo">
                 <img src={resolvedPreviewUrl} alt={title} />
               </div>
             )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { PinPosition, CameraState } from "./corkboardTypes";
+import type { PinPosition, CameraState, ThreadType } from "./corkboardTypes";
 import { sampleCameraPath } from "./CorkboardLayout";
 import {
   CAMERA_GLIDE_DURATION,
@@ -59,7 +59,13 @@ export function useCorkboardCamera(
   }, []);
 
   const glideToPin = useCallback(
-    (fromMemId: string, toMemId: string, durationMs?: number, targetZoom = CAMERA_FOCUSED_ZOOM) => {
+    (
+      fromMemId: string,
+      toMemId: string,
+      durationMs?: number,
+      targetZoom = CAMERA_FOCUSED_ZOOM,
+      threadType: ThreadType = "temporal",
+    ) => {
       cancelGlide();
       isGlidingRef.current = true;
       lastInteraction.current = Date.now();
@@ -95,7 +101,7 @@ export function useCorkboardCamera(
         const elapsed = now - startTime;
         const rawT = Math.min(1, elapsed / duration);
         const t = easeBezier(rawT, EASE_P1, EASE_P2);
-        const pathPoint = sampleCameraPath(pathFromPin, pathToPin, "temporal", t);
+        const pathPoint = sampleCameraPath(pathFromPin, pathToPin, threadType, t);
 
         const next: CameraState = {
           x: pathPoint.x,
