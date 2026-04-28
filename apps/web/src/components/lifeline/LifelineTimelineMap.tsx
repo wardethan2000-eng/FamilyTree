@@ -52,8 +52,8 @@ export function LifelineTimelineMap({
     const firstYear = hasBirthYear ? birthYear! : Math.min(...yearGroups.map((g) => g.year));
     const endYear = deathYear ?? (isLiving ? new Date().getFullYear() : null);
     const lastYear = endYear ?? Math.max(...yearGroups.map((g) => g.year));
-    const totalYears = lastYear - firstYear;
-    if (totalYears <= 0) return null;
+    let totalYears = lastYear - firstYear;
+    if (totalYears < 0) totalYears = 0;
 
     const safeTotal = totalYears > 0 ? totalYears : 1;
 
@@ -69,10 +69,11 @@ export function LifelineTimelineMap({
         (sum, g) => sum + g.memories.length,
         0
       );
+      const rawPct = ((y - firstYear) / safeTotal) * 100;
       decades.push({
         year: y,
         age: age ?? 0,
-        pct: ((y - firstYear) / safeTotal) * 100,
+        pct: Math.max(0, Math.min(100, rawPct)),
         hue: era?.hue ?? "var(--rule)",
         eraLabel: era?.label ?? "",
         hasMemories: memoryCount > 0,
@@ -84,7 +85,7 @@ export function LifelineTimelineMap({
       .filter((g) => g.memories.length > 0)
       .map((g) => ({
         year: g.year,
-        pct: ((g.year - firstYear) / safeTotal) * 100,
+        pct: Math.max(0, Math.min(100, ((g.year - firstYear) / safeTotal) * 100)),
         hue: g.era?.hue ?? "var(--rule)",
       }));
 
@@ -194,11 +195,12 @@ export function LifelineTimelineMap({
             <div
               key={`yr-${m.year}`}
               className={styles.timelineMapYearDot}
+              role="img"
+              aria-label={`Year ${m.year}`}
               style={{
                 top: `${m.pct}%`,
                 background: m.hue,
               }}
-              title={String(m.year)}
             />
           ))}
 

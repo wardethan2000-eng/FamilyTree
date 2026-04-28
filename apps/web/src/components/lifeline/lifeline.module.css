@@ -886,14 +886,19 @@
   border-top: 1px solid var(--rule);
 }
 
-.undatedAfterTimeline {
-  max-width: 720px;
-  margin: 10px 0 0 184px;
+.undatedWrap {
+  display: grid;
+  grid-template-columns: 72px 24px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+  margin-top: 10px;
 }
 
 .undatedOnly {
   max-width: 720px;
-  margin: 44px 0 0;
+  margin: 44px auto 0;
 }
 
 .undatedHeading {
@@ -919,7 +924,7 @@
 }
 
 @media (max-width: 767px) {
-  .undatedAfterTimeline,
+  .undatedWrap,
   .undatedOnly {
     max-width: none;
     margin-left: 0;

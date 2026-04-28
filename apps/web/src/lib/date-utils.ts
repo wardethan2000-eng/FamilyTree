@@ -23,10 +23,11 @@ export function extractYear(text: string | null | undefined): number | null {
 
   const twoDigit = trimmed.match(/(?:^|\D)(\d{2})(?:\D|$)/g);
   if (twoDigit) {
+    const currentYear = new Date().getFullYear();
     for (const frag of twoDigit) {
       const num = parseInt(frag.replace(/\D/g, ""), 10);
-      const expanded = num > 50 ? 1900 + num : 2000 + num;
-      if (expanded >= 1800 && expanded <= new Date().getFullYear() + 1) return expanded;
+      const expanded = num > currentYear - 1900 ? 1900 + num : 2000 + num;
+      if (expanded >= 1800 && expanded <= currentYear + 1) return expanded;
     }
   }
 

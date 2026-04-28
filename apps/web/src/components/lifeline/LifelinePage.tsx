@@ -144,8 +144,10 @@ export function LifelinePageContent({
 
   const grouped = useMemo(() => {
     if (!person) return { years: [] as LifelineYearGroupType[], undated: [] as LifelineMemory[] };
-    const direct = person.directMemories ?? person.memories.filter((m) => m.memoryContext !== "contextual");
-    const contextual = person.contextualMemories ?? [];
+    const direct = person.directMemories?.length
+      ? person.directMemories
+      : person.memories.filter((m) => m.memoryContext !== "contextual");
+    const contextual = person.contextualMemories?.length ? person.contextualMemories : [];
     const allMem = [...direct, ...contextual];
     const by = extractYear(person.birthDateText);
 
@@ -162,9 +164,15 @@ export function LifelinePageContent({
     }
     for (const yearMemories of map.values()) {
       yearMemories.sort((a, b) => {
+        // Direct memories first, then contextual
         if (a.memoryContext === "contextual" && b.memoryContext !== "contextual") return 1;
         if (a.memoryContext !== "contextual" && b.memoryContext === "contextual") return -1;
-        return 0;
+        // Stable secondary sort by date text, then title, then id
+        if (a.dateOfEventText && b.dateOfEventText && a.dateOfEventText !== b.dateOfEventText) {
+          return a.dateOfEventText.localeCompare(b.dateOfEventText);
+        }
+        if (a.title !== b.title) return a.title.localeCompare(b.title);
+        return a.id.localeCompare(b.id);
       });
     }
 
@@ -370,7 +378,7 @@ export function LifelinePageContent({
             )}
 
             {hasDatedTimeline && grouped.undated.length > 0 && (
-              <div className={styles.undatedAfterTimeline}>
+              <div className={styles.undatedWrap}>
                 <LifelineUndated
                   memories={grouped.undated}
                   treeId={treeId}
