@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import type { TreeHomeMemory } from "../homeTypes";
 import { isVideoMemory } from "../homeUtils";
 
@@ -126,14 +126,17 @@ export function ImmersivePhotoSection({
   const contextRef = useRef<HTMLDivElement>(null);
   const [contextVisible, setContextVisible] = useState(false);
   const [mediaShouldLoad, setMediaShouldLoad] = useState(false);
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start end", "end start"],
+  const reduceMotion = useReducedMotion();
+  const mediaInView = useInView(sectionRef, {
+    once: true,
+    amount: 0.42,
+    margin: "-8% 0px -18% 0px",
   });
-
-  const mediaScale = useTransform(scrollYProgress, [0.1, 0.35], [0.35, 1]);
-  const vignetteOpacity = useTransform(scrollYProgress, [0.15, 0.35], [0, 1]);
-  const mediaOpacity = useTransform(scrollYProgress, [0, 0.1, 0.88, 1], [0, 1, 1, 0]);
+  const mediaVisible = reduceMotion || mediaInView;
+  const mediaTransition = {
+    duration: reduceMotion ? 0 : 0.82,
+    ease: [0.22, 0.61, 0.36, 1] as const,
+  };
 
   const isVideo = isVideoMemory(memory);
   const relatedPeople = getRelatedPeople(memory, people);
@@ -180,7 +183,11 @@ export function ImmersivePhotoSection({
     <div
       ref={sectionRef}
       className="immersive-photo-section"
-      style={{ position: "relative", height: "180vh" }}
+      style={{
+        position: "relative",
+        height: "118vh",
+        scrollSnapAlign: "start",
+      }}
     >
       <div
         style={{
@@ -232,11 +239,15 @@ export function ImmersivePhotoSection({
         >
           <motion.div
             className="immersive-media-card"
+            initial={false}
+            animate={{
+              opacity: mediaVisible ? 1 : 0,
+            }}
+            transition={mediaTransition}
             style={{
               position: "relative",
               width: "100%",
               height: "100%",
-              opacity: mediaOpacity,
               overflow: "visible",
             }}
           >
@@ -258,43 +269,56 @@ export function ImmersivePhotoSection({
                   autoPlay={mediaShouldLoad}
                   loop
                   preload="metadata"
+                  initial={false}
+                  animate={{
+                    scale: mediaVisible ? 1 : 0.36,
+                  }}
+                  transition={mediaTransition}
                   style={{
                     position: "absolute",
                     inset: 0,
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
-                    scale: mediaScale,
+                    transformOrigin: "center",
                   }}
                 />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
                 <motion.img
                   src={mediaShouldLoad ? mediaUrl : undefined}
                   alt={memory.title}
                   loading="lazy"
                   decoding="async"
                   onError={handleMediaError}
+                  initial={false}
+                  animate={{
+                    scale: mediaVisible ? 1 : 0.36,
+                  }}
+                  transition={mediaTransition}
                   style={{
                     position: "absolute",
                     inset: 0,
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
-                    scale: mediaScale,
+                    transformOrigin: "center",
                   }}
                 />
               )}
 
               <motion.div
                 aria-hidden
+                initial={false}
+                animate={{
+                  opacity: mediaVisible ? 1 : 0,
+                }}
+                transition={mediaTransition}
                 style={{
                   position: "absolute",
                   inset: 0,
                   background:
                     "radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(13,11,8,0.6) 100%), " +
                     "linear-gradient(180deg, rgba(13,11,8,0.12) 0%, transparent 30%, transparent 55%, rgba(13,11,8,0.8) 100%)",
-                  opacity: vignetteOpacity,
                   pointerEvents: "none",
                 }}
               />

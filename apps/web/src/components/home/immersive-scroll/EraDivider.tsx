@@ -12,11 +12,12 @@ export function EraDivider({ label }: { label: string }) {
       ref={ref}
       style={{
         position: "relative",
-        height: "25vh",
+        minHeight: "18vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         background: "#0f0d0a",
+        scrollSnapAlign: "center",
       }}
     >
       <motion.div

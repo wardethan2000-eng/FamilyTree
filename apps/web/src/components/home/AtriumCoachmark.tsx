@@ -9,14 +9,14 @@ interface AtriumCoachmarkProps {
   treeId: string;
   treeName: string;
   onAddMemory: () => void;
-  familyTreeHref: string;
+  treeHref: string;
 }
 
 export function AtriumCoachmark({
   treeId,
   treeName,
   onAddMemory,
-  familyTreeHref,
+  treeHref,
 }: AtriumCoachmarkProps) {
   // Start hidden to avoid SSR/CSR mismatch; decide after mount.
   const [visible, setVisible] = useState(false);
@@ -159,7 +159,7 @@ export function AtriumCoachmark({
             Add a memory
           </button>
           <Link
-            href={familyTreeHref}
+            href={treeHref}
             style={{
               fontFamily: "var(--font-ui)",
               fontSize: 14,

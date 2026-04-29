@@ -10,7 +10,6 @@ export function AtriumStage({
   featuredMemory,
   branchCue,
   memoryHref,
-  branchHref,
   fullTreeHref,
   resurfacingCount,
   onDrift,
@@ -347,12 +346,6 @@ export function AtriumStage({
                 }}
               >
                 Continue with this memory
-              </Link>
-            )}
-
-            {branchHref && (
-              <Link href={branchHref} style={secondaryLinkStyle}>
-                Follow this branch
               </Link>
             )}
 

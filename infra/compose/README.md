@@ -1,6 +1,6 @@
 # Data services — Docker Compose
 
-This directory contains the Docker Compose configuration for Tessera's self-hosted data services, intended for the **data VM** (`familytree-data`, default IP `192.168.68.111`).
+This directory contains the Docker Compose configuration for Tessera's self-hosted data services, intended for the **data VM** (`tessera-data`, default IP `192.168.68.111`).
 
 ---
 

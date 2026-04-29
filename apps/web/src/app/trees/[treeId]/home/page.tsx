@@ -885,7 +885,7 @@ export default function AtriumPage() {
         treeId={treeId}
         treeName={tree?.name ?? "your family archive"}
         onAddMemory={() => setWizardOpen(true)}
-        familyTreeHref={`/trees/${treeId}/tree`}
+        treeHref={`/trees/${treeId}/tree`}
       />
 
       {!mosaic.loading && !mosaic.loadError && mosaic.summaries.length > 0 && (

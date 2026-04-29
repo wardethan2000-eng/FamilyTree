@@ -29,7 +29,11 @@ export function ImmersiveStorySection({
   return (
     <div
       ref={sectionRef}
-      style={{ position: "relative", height: "160vh" }}
+      style={{
+        position: "relative",
+        height: "130vh",
+        scrollSnapAlign: "start",
+      }}
     >
       <div
         style={{

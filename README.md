@@ -96,8 +96,8 @@ The self-hosted layout uses two VMs:
 
 | VM           | Purpose                              | Default IP       |
 |--------------|--------------------------------------|------------------|
-| `familytree-app`  | Next.js frontend + Fastify API  | 192.168.68.110   |
-| `familytree-data` | Postgres, MinIO, Mailpit        | 192.168.68.111   |
+| `tessera-app`  | Next.js frontend + Fastify API  | 192.168.68.110   |
+| `tessera-data` | Postgres, MinIO, Mailpit        | 192.168.68.111   |
 
 ### Bring up data services
 

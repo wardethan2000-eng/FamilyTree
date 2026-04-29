@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { getProxiedMediaUrl } from "@/lib/media-url";
 import type { AtriumSharedProps } from "../AtriumModeRouter";
 import type { TreeHomeMemory } from "../homeTypes";
@@ -18,6 +18,20 @@ export function ImmersiveScroll({
   onPersonClick,
   onMemoryClick,
 }: AtriumSharedProps) {
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousSnapType = root.style.scrollSnapType;
+    const previousScrollPaddingTop = root.style.scrollPaddingTop;
+
+    root.style.scrollSnapType = "y proximity";
+    root.style.scrollPaddingTop = "52px";
+
+    return () => {
+      root.style.scrollSnapType = previousSnapType;
+      root.style.scrollPaddingTop = previousScrollPaddingTop;
+    };
+  }, []);
+
   const allMemories = useMemo(() => {
     const result: TreeHomeMemory[] = [];
     if (featuredMemory) result.push(featuredMemory);

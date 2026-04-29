@@ -10,7 +10,7 @@ Both VMs and the Proxmox host are joined to the same Tailscale network (`wardeth
 
 | Device | Tailscale IP | LAN IP |
 |--------|-------------|--------|
-| app VM (`familytree-app`) | `100.96.74.16` | `192.168.68.110` |
+| app VM (`tessera-app`) | `100.96.74.16` | `192.168.68.110` |
 | Proxmox host (`proxmox-homelab`) | `100.120.201.97` | `192.168.68.50` |
 | Data VM | (not yet joined) | `192.168.68.111` |
 
@@ -52,8 +52,8 @@ ssh -i ~/.ssh/proxmox_key ubuntu@100.96.74.16 'sudo systemctl status cloudflared
 ## Topology
 
 - Proxmox host: `192.168.68.50` / Tailscale `100.120.201.97`
-- App VM: `familytree-app` at `192.168.68.110` / Tailscale `100.96.74.16`
-- Data VM: `familytree-data` at `192.168.68.111`
+- App VM: `tessera-app` at `192.168.68.110` / Tailscale `100.96.74.16`
+- Data VM: `tessera-data` at `192.168.68.111`
 
 Tailscale addresses verified on 2026-04-24:
 
@@ -64,8 +64,8 @@ Tailscale addresses verified on 2026-04-24:
 
 Verified Proxmox VM IDs:
 
-- `110` → `familytree-app`
-- `111` → `familytree-data`
+- `110` → `tessera-app`
+- `111` → `tessera-data`
 
 ## SSH Access
 
@@ -124,14 +124,16 @@ These were the non-obvious parts:
 - A later cutover temporarily ran from a non-git live directory:
   - `/home/ubuntu/heirloom-memory-pages-live`
 - The current live deployment was moved back to a clean git checkout:
-  - `/home/ubuntu/heirloom-dashboard-redesign-live`
+  - `/home/ubuntu/tessera-dashboard-redesign-live`
+
+> **Note**: Historical checkout paths kept as-is for forensics. New deployments should use `tessera-<branch>-live` naming.
 
 ## Current Running App
 
 At the time this was last updated, the running app processes were launched from:
 
-- API: `/home/ubuntu/heirloom-homepage-revise-live/apps/api`
-- Web: `/home/ubuntu/heirloom-homepage-revise-live/apps/web`
+- API: `/home/ubuntu/tessera-mosaic-integration-live/apps/api`
+- Web: `/home/ubuntu/tessera-mosaic-integration-live/apps/web`
 
 Local health checks:
 
@@ -154,31 +156,31 @@ ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 
 Current verified live pids after mosaic integration deploy on 2026-04-28:
 
-- API listener pid: `199462`
-- Web listener pid: `199463`
+- API listener pid: `215076`
+- Web listener pid: (check `cat ~/tessera-mosaic-integration-live/web.pid`)
 
 ## Historical Startup Shape On The App VM
 
 There is a user systemd unit:
 
 ```bash
-systemctl --user cat heirloom.service
+systemctl --user cat tessera.service
 ```
 
 It points to:
 
 ```bash
-/home/ubuntu/start-heirloom.sh
+/home/ubuntu/start-tessera.sh
 ```
 
 That script historically started:
 
-- API from `~/heirloom/apps/api` via `node dist/server.js`
-- Web from `~/heirloom` via `pnpm --filter @tessera/web start`
+- API from `~/tessera/apps/api` via `node dist/server.js`
+- Web from `~/tessera` via `pnpm --filter @tessera/web start`
 
 Important:
 
-- `heirloom.service` was found **inactive** during inspection.
+- `tessera.service` was found **inactive** during inspection.
 - The live app processes were running as background processes, not as an active systemd-managed deployment.
 
 If you want a cleaner deployment next time, convert the current live checkout to a real persistent systemd service instead of relying on manual background processes.
@@ -219,14 +221,14 @@ The safest workflow used here was:
 2. SSH to the app VM as `ubuntu`.
 3. Clone the branch into a separate checkout instead of overwriting the dirty or non-git live directory.
 4. Reuse env files from the existing deployment:
-   - `~/heirloom-memory-pages-live/.env`
-   - `~/heirloom-memory-pages-live/apps/api/.env`
-   - `~/heirloom-memory-pages-live/apps/web/.env.local`
+   - `~/tessera-memory-pages-live/.env`
+   - `~/tessera-memory-pages-live/apps/api/.env`
+   - `~/tessera-memory-pages-live/apps/web/.env.local`
 5. Run:
 
 ```bash
 source ~/.nvm/nvm.sh
-cd ~/heirloom-dashboard-redesign-live
+cd ~/tessera-dashboard-redesign-live
 pnpm install --frozen-lockfile
 set -a
 . apps/api/.env
@@ -238,7 +240,7 @@ pnpm build
 6. Restart the live checkout with the checked-in helper:
 
 ```bash
-cd ~/heirloom-dashboard-redesign-live
+cd ~/tessera-dashboard-redesign-live
 bash infra/restart-live-checkout.sh
 ```
 
@@ -252,17 +254,16 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 
 - Old live checkout: `/home/ubuntu/heirloom`
 - Alternate checkout: `/home/ubuntu/FamilyTree`
-- Current feature deployment checkout: `/home/ubuntu/heirloom-feature-family-map`
+- Previous feature deployment checkout: `/home/ubuntu/heirloom-feature-family-map`
 - Previous non-git live directory: `/home/ubuntu/heirloom-memory-pages-live`
-- Current live checkout: `/home/ubuntu/heirloom-decade-rail-live`
+- Previous live checkout: `/home/ubuntu/heirloom-decade-rail-live`
 - Previous live checkout: `/home/ubuntu/tessera-onboarding-live`
 - Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
 - Previous live checkout: `/home/ubuntu/heirloom-immersive-scroll-live`
-- Current live checkout: `/home/ubuntu/heirloom-mosaic-integration-live`
+- Current live checkout: `/home/ubuntu/tessera-mosaic-integration-live`
 - Previous live checkout: `/home/ubuntu/heirloom-corkboard-rev1-live`
-- Previous live checkout: `/home/ubuntu/heirloom-decade-rail-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
-- Backup directory on data VM: `~/familytree-backups`
+- Backup directory on data VM: `~/tessera-backups` (historically `~/familytree-backups`)
 
 ## Media Bucket Notes
 
@@ -281,7 +282,7 @@ If images/videos fail again, verify both:
 
 ```bash
 ssh -i ~/.ssh/proxmox_key ubuntu@100.96.74.16 \
-  'grep "^MINIO_BUCKET=" ~/heirloom-decade-rail-live/apps/api/.env'
+  'grep "^MINIO_BUCKET=" ~/tessera-mosaic-integration-live/apps/api/.env'
 ```
 
 ```bash
@@ -293,7 +294,7 @@ ssh -i ~/.ssh/proxmox_key -J ubuntu@100.96.74.16 ubuntu@192.168.68.111 \
 
 - SSH directly to the VMs, not through the Proxmox shell, unless you need `qm` inspection.
 - Use the data VM for direct Postgres work.
-- Treat `/home/ubuntu/heirloom` as potentially dirty until it is cleaned up.
+- Treat `/home/ubuntu/heirloom` (old checkout) as potentially dirty until cleaned up.
 - Prefer deploying new branches into a separate checkout, then cut over deliberately.
 - Do not assume the pid files are current; verify the live listeners with `ss -ltnp` and `pwdx`.
 - Replace the manual background-process launch with real systemd units once the deployment path stabilizes.
