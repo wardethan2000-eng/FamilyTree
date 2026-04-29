@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2020",
+    "types": []
+  },
+  "include": ["src/archive-viewer/**/*.ts", "src/archive-viewer/**/*.tsx"],
+  "exclude": ["node_modules"]
+}

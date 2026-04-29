@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "node scripts/build-cast-receiver.mjs && next build",
     "build:cast": "node scripts/build-cast-receiver.mjs",
+    "build:viewer": "vite build --config vite.archive-viewer.config.ts",
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test \"src/**/*.test.ts\"",
@@ -17,12 +18,14 @@
     "better-auth": "^1.6.5",
     "framer-motion": "^12.38.0",
     "next": "16.2.4",
+    "preact": "^10.29.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
-    "@tessera/typescript-config": "workspace:*",
+    "@preact/preset-vite": "^2.10.5",
     "@tailwindcss/postcss": "^4",
+    "@tessera/typescript-config": "workspace:*",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -30,6 +33,7 @@
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.0.10"
   }
 }
