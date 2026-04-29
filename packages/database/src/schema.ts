@@ -790,6 +790,11 @@ export const importBatchItems = pgTable(
       .default("needs_review")
       .notNull(),
     errorMessage: text("error_message"),
+    attempts: integer("attempts").default(0).notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    runAfter: timestamp("run_after", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    perceptualHash: varchar("perceptual_hash", { length: 18 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -800,6 +805,8 @@ export const importBatchItems = pgTable(
     index("import_batch_items_memory_idx").on(table.memoryId),
     index("import_batch_items_status_idx").on(table.status),
     index("import_batch_items_review_state_idx").on(table.reviewState),
+    index("import_batch_items_locking_idx").on(table.status, table.runAfter),
+    index("import_batch_items_phash_idx").on(table.treeId, table.perceptualHash),
   ],
 );
 

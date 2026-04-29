@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { startMetadataExtractionWorker } from "./lib/metadata-extraction.js";
 import { ensureBucket } from "./lib/storage.js";
 import { startTranscriptionWorker } from "./lib/transcription.js";
+import { startZipExtractionWorker } from "./lib/zip-extraction.js";
 import { startPromptCampaignScheduler } from "./routes/prompt-campaigns.js";
 
 const port = Number.parseInt(process.env.PORT ?? "4000", 10);
@@ -23,6 +24,8 @@ const stopMetadataWorker =
     ? null
     : startMetadataExtractionWorker(app.log);
 
+const stopZipWorker = startZipExtractionWorker(app.log);
+
 const stopPromptCampaignScheduler =
   process.env.DISABLE_PROMPT_CAMPAIGN_SCHEDULER === "1"
     ? null
@@ -31,6 +34,7 @@ const stopPromptCampaignScheduler =
 app.addHook("onClose", async () => {
   stopTranscriptionWorker?.();
   stopMetadataWorker?.();
+  stopZipWorker?.();
   stopPromptCampaignScheduler?.();
 });
 

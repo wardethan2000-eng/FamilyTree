@@ -30,6 +30,8 @@ export const ALLOWED_MIME_TYPES = new Set([
   "image/gif",
   "image/webp",
   "image/tiff",
+  "image/heic",
+  "image/heif",
   // Video
   "video/mp4",
   "video/quicktime",
@@ -64,6 +66,8 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/gif": "gif",
   "image/webp": "webp",
   "image/tiff": "tiff",
+  "image/heic": "heic",
+  "image/heif": "heif",
   "video/mp4": "mp4",
   "video/quicktime": "mov",
   "video/webm": "webm",

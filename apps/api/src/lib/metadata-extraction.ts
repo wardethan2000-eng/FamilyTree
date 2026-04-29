@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lt, lte } from "drizzle-orm";
 import * as schema from "@tessera/database";
 import { db } from "./db.js";
+import { imageDimensions } from "./image-geometry.js";
+import { computeDHash, hammingDistance } from "./perceptual-hash.js";
 import { MEDIA_BUCKET, s3 } from "./storage.js";
 
 const POLL_INTERVAL_MS = 10_000;
+const MAX_ATTEMPTS = 3;
+const BASE_RETRY_SECONDS = 60;
+const STALE_LOCK_THRESHOLD_MS = 10 * 60 * 1_000;
+const BATCH_SIZE = 5;
+const DUPLICATE_HAMMING_THRESHOLD = 10;
 
 type LoggerLike = {
   info: (obj: unknown, msg?: string) => void;
@@ -42,6 +49,9 @@ async function bodyToBuffer(body: unknown): Promise<Buffer> {
 interface ExtractedMetadata {
   checksum: string;
   capturedAt: string | null;
+  width: number | null;
+  height: number | null;
+  perceptualHash: string | null;
   extra: Record<string, unknown>;
 }
 
@@ -55,6 +65,7 @@ function extractExifDateFromJpeg(buffer: Buffer): string | null {
     const marker = buffer.readUInt16BE(offset);
     if (marker === 0xffe1) {
       const segmentLength = buffer.readUInt16BE(offset + 2);
+      if (segmentLength < 2) return null;
       const segStart = offset + 4;
       if (segStart + 6 <= buffer.length) {
         const exifHeader = buffer.toString("ascii", segStart, segStart + 6);
@@ -67,6 +78,7 @@ function extractExifDateFromJpeg(buffer: Buffer): string | null {
     } else if ((marker & 0xff00) === 0xff00 && marker !== 0xffda) {
       if (offset + 4 > buffer.length) break;
       const segmentLength = buffer.readUInt16BE(offset + 2);
+      if (segmentLength < 2) return null;
       offset += 2 + segmentLength;
     } else {
       break;
@@ -110,6 +122,9 @@ async function extractMetadataFromS3(
   const checksum = createHash("sha256").update(buffer).digest("hex");
 
   let capturedAt: string | null = null;
+  let width: number | null = null;
+  let height: number | null = null;
+  let perceptualHash: string | null = null;
   const extra: Record<string, unknown> = {};
 
   if (mimeType.startsWith("image/jpeg") || mimeType.startsWith("image/tiff")) {
@@ -118,20 +133,21 @@ async function extractMetadataFromS3(
   }
 
   if (mimeType.startsWith("image/")) {
-    try {
-      for (let i = 0; i < buffer.length - 1; i++) {
-        if (buffer[i] === 0xff && buffer[i + 1] === 0xd8) {
-          extra.width = 0;
-          extra.height = 0;
-          break;
-        }
-      }
-    } catch {
-      // Dimensions extraction is best-effort
+    const dims = imageDimensions(buffer, mimeType);
+    if (dims) {
+      width = dims.width;
+      height = dims.height;
+      extra.dimensionsSource = "header";
     }
+    perceptualHash = await computeDHash(buffer);
   }
 
-  return { checksum, capturedAt, extra };
+  return { checksum, capturedAt, width, height, perceptualHash, extra };
+}
+
+function nextRetryDate(attempts: number): Date {
+  const seconds = BASE_RETRY_SECONDS * 2 ** Math.max(0, attempts - 1);
+  return new Date(Date.now() + seconds * 1000);
 }
 
 export function startMetadataExtractionWorker(logger: LoggerLike): () => void {
@@ -142,109 +158,199 @@ export function startMetadataExtractionWorker(logger: LoggerLike): () => void {
     running = true;
 
     try {
-      const nextItem = await db.query.importBatchItems.findFirst({
-        where: (item, { and, eq, isNull }) =>
-          and(eq(item.status, "uploaded"), isNull(item.checksum)),
+      const now = new Date();
+      const staleThreshold = new Date(now.getTime() - STALE_LOCK_THRESHOLD_MS);
+
+      await db
+        .update(schema.importBatchItems)
+        .set({ status: "uploaded", lockedAt: null, updatedAt: now })
+        .where(
+          and(
+            eq(schema.importBatchItems.status, "processing"),
+            isNotNull(schema.importBatchItems.lockedAt),
+            lte(schema.importBatchItems.lockedAt, staleThreshold),
+            lt(schema.importBatchItems.attempts, MAX_ATTEMPTS),
+          ),
+        );
+
+      const candidates = await db.query.importBatchItems.findMany({
+        where: (row, { and, eq, isNull, lte }) =>
+          and(
+            eq(row.status, "uploaded"),
+            isNull(row.checksum),
+            lte(row.runAfter, now),
+          ),
         with: {
           media: {
             columns: { id: true, objectKey: true, mimeType: true },
           },
         },
-        orderBy: (item) => [asc(item.createdAt)],
+        orderBy: [asc(schema.importBatchItems.runAfter), asc(schema.importBatchItems.createdAt)],
+        limit: BATCH_SIZE,
       });
 
-      if (!nextItem || !nextItem.media) {
-        return;
-      }
+      for (const nextItem of candidates) {
+        if (!nextItem.media) continue;
 
-      try {
-        const meta = await extractMetadataFromS3(
-          nextItem.media.objectKey,
-          nextItem.media.mimeType,
-        );
-
-        const updateData: Record<string, unknown> = {
-          checksum: meta.checksum,
-          metadata: meta.extra,
-          updatedAt: new Date(),
-        };
-
-        if (meta.capturedAt) {
-          try {
-            updateData.capturedAt = new Date(meta.capturedAt);
-          } catch {
-            // Invalid date format, skip
-          }
-        }
-
-        // Check for exact duplicates by checksum within this tree
-        const existingWithChecksum = await db.query.importBatchItems.findFirst({
-          where: (item, { and, eq, isNotNull }) =>
-            and(
-              eq(item.checksum, meta.checksum),
-              eq(item.treeId, nextItem.treeId),
-              isNotNull(item.memoryId),
-            ),
-          columns: { id: true, memoryId: true },
-        });
-
-        if (existingWithChecksum) {
-          updateData.reviewState = "needs_duplicate_review";
-          logger.info(
-            {
-              itemId: nextItem.id,
-              existingItemId: existingWithChecksum.id,
-              checksum: meta.checksum.slice(0, 16),
-            },
-            "Possible duplicate detected by checksum",
-          );
-        }
-
-        await db
-          .update(schema.importBatchItems)
-          .set(updateData)
-          .where(eq(schema.importBatchItems.id, nextItem.id));
-
-        // If we extracted a date and this item has a linked memory, update the memory too
-        if (meta.capturedAt && nextItem.memoryId) {
-          const memory = await db.query.memories.findFirst({
-            where: (m, { and, eq, isNull }) =>
-              and(eq(m.id, nextItem.memoryId!), isNull(m.dateOfEventText)),
-            columns: { id: true },
-          });
-
-          if (memory) {
-            await db
-              .update(schema.memories)
-              .set({
-                dateOfEventText: meta.capturedAt,
-                captureConfidenceJson: { dateSource: "exif", confidence: 0.7 },
-                updatedAt: new Date(),
-              })
-              .where(eq(schema.memories.id, memory.id));
-
-            await db
-              .update(schema.importBatchItems)
-              .set({ reviewState: "needs_place" })
-              .where(eq(schema.importBatchItems.id, nextItem.id));
-          }
-        }
-
-        logger.info(
-          { itemId: nextItem.id, checksum: meta.checksum.slice(0, 16), capturedAt: meta.capturedAt },
-          "Metadata extracted for import item",
-        );
-      } catch (err) {
-        const errorText = err instanceof Error ? err.message : String(err);
-        logger.warn({ itemId: nextItem.id, error: errorText }, "Metadata extraction failed for item");
-
-        await db
+        const [locked] = await db
           .update(schema.importBatchItems)
           .set({
-            errorMessage: errorText.slice(0, 4000),
+            status: "processing",
+            lockedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(eq(schema.importBatchItems.id, nextItem.id));
+          .where(
+            and(
+              eq(schema.importBatchItems.id, nextItem.id),
+              eq(schema.importBatchItems.status, "uploaded"),
+            ),
+          )
+          .returning();
+        if (!locked) continue;
+
+        try {
+          const meta = await extractMetadataFromS3(
+            nextItem.media.objectKey,
+            nextItem.media.mimeType,
+          );
+
+          const updateData: Record<string, unknown> = {
+            checksum: meta.checksum,
+            metadata: {
+              ...meta.extra,
+              ...(meta.width != null && meta.height != null ? { width: meta.width, height: meta.height } : {}),
+            },
+            updatedAt: new Date(),
+          };
+
+          if (meta.capturedAt) {
+            try {
+              updateData.capturedAt = new Date(meta.capturedAt);
+            } catch {
+              // Invalid date format, skip
+            }
+          }
+
+          if (meta.perceptualHash) {
+            updateData.perceptualHash = meta.perceptualHash;
+          }
+
+          const existingWithChecksum = await db.query.importBatchItems.findFirst({
+            where: (item, { and, eq, isNotNull }) =>
+              and(
+                eq(item.checksum, meta.checksum),
+                eq(item.treeId, nextItem.treeId),
+                isNotNull(item.memoryId),
+              ),
+            columns: { id: true, memoryId: true },
+          });
+
+          if (existingWithChecksum) {
+            updateData.reviewState = "needs_duplicate_review";
+            logger.info(
+              {
+                itemId: nextItem.id,
+                existingItemId: existingWithChecksum.id,
+                checksum: meta.checksum.slice(0, 16),
+              },
+              "Possible duplicate detected by checksum",
+            );
+          } else if (meta.perceptualHash) {
+            const nearDupes = await db.query.importBatchItems.findMany({
+              where: (item, { and, eq, isNotNull }) =>
+                and(
+                  eq(item.treeId, nextItem.treeId),
+                  isNotNull(item.perceptualHash),
+                  isNotNull(item.memoryId),
+                ),
+              columns: { id: true, perceptualHash: true },
+              limit: 200,
+            });
+            const nearDupe = nearDupes.find((candidate) => {
+              if (!candidate.perceptualHash) return false;
+              return hammingDistance(meta.perceptualHash!, candidate.perceptualHash) <= DUPLICATE_HAMMING_THRESHOLD;
+            });
+            if (nearDupe) {
+              updateData.reviewState = "needs_duplicate_review";
+              logger.info(
+                {
+                  itemId: nextItem.id,
+                  existingItemId: nearDupe.id,
+                  hammingDistance: hammingDistance(meta.perceptualHash!, nearDupe.perceptualHash!),
+                },
+                "Near duplicate detected by perceptual hash",
+              );
+            }
+          }
+
+          await db
+            .update(schema.importBatchItems)
+            .set({
+              ...updateData,
+              status: "imported",
+              lockedAt: null,
+              lastError: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.importBatchItems.id, nextItem.id));
+
+          if (meta.capturedAt && nextItem.memoryId) {
+            const memory = await db.query.memories.findFirst({
+              where: (m, { and, eq, isNull }) =>
+                and(eq(m.id, nextItem.memoryId!), isNull(m.dateOfEventText)),
+              columns: { id: true },
+            });
+
+            if (memory) {
+              await db
+                .update(schema.memories)
+                .set({
+                  dateOfEventText: meta.capturedAt,
+                  captureConfidenceJson: { dateSource: "exif", confidence: 0.7 },
+                  updatedAt: new Date(),
+                })
+                .where(eq(schema.memories.id, memory.id));
+
+              await db
+                .update(schema.importBatchItems)
+                .set({ reviewState: "needs_place" })
+                .where(eq(schema.importBatchItems.id, nextItem.id));
+            }
+          }
+
+          logger.info(
+            { itemId: nextItem.id, checksum: meta.checksum.slice(0, 16), capturedAt: meta.capturedAt },
+            "Metadata extracted for import item",
+          );
+        } catch (err) {
+          const attempts = locked.attempts + 1;
+          const isPermanentFailure = attempts >= MAX_ATTEMPTS;
+          const errorText = err instanceof Error ? err.message : String(err);
+          const now2 = new Date();
+
+          await db
+            .update(schema.importBatchItems)
+            .set({
+              status: isPermanentFailure ? "failed" : "uploaded",
+              attempts,
+              runAfter: isPermanentFailure ? locked.runAfter : nextRetryDate(attempts),
+              lockedAt: null,
+              lastError: errorText.slice(0, 4000),
+              errorMessage: errorText.slice(0, 4000),
+              updatedAt: now2,
+            })
+            .where(eq(schema.importBatchItems.id, nextItem.id));
+
+          logger.warn(
+            {
+              itemId: nextItem.id,
+              attempts,
+              permanent: isPermanentFailure,
+              error: errorText,
+            },
+            "Metadata extraction failed for item",
+          );
+        }
       }
     } catch (err) {
       logger.error(
