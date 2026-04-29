@@ -132,8 +132,8 @@ These were the non-obvious parts:
 
 At the time this was last updated, the running app processes were launched from:
 
-- API: `/home/ubuntu/tessera-mosaic-integration-live/apps/api`
-- Web: `/home/ubuntu/tessera-mosaic-integration-live/apps/web`
+- API: `/home/ubuntu/heirloom-mosaic-integration-live/apps/api`
+- Web: `/home/ubuntu/heirloom-mosaic-integration-live/apps/web`
 
 Local health checks:
 
@@ -157,7 +157,7 @@ ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 Current verified live pids after mosaic integration deploy on 2026-04-28:
 
 - API listener pid: `215076`
-- Web listener pid: (check `cat ~/tessera-mosaic-integration-live/web.pid`)
+- Web listener pid: (check `cat ~/heirloom-mosaic-integration-live/web.pid`)
 
 ## Historical Startup Shape On The App VM
 
@@ -260,7 +260,7 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 - Previous live checkout: `/home/ubuntu/tessera-onboarding-live`
 - Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
 - Previous live checkout: `/home/ubuntu/heirloom-immersive-scroll-live`
-- Current live checkout: `/home/ubuntu/tessera-mosaic-integration-live`
+- Current live checkout: `/home/ubuntu/heirloom-mosaic-integration-live`
 - Previous live checkout: `/home/ubuntu/heirloom-corkboard-rev1-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
 - Backup directory on data VM: `~/tessera-backups` (historically `~/familytree-backups`)
