@@ -237,6 +237,12 @@ pnpm db:migrate
 pnpm build
 ```
 
+As of 2026-04-29, `pnpm db:migrate` on the app VM exits `1` without a surfaced
+Drizzle error even when the deployed diff contains no migration files. Do not
+skip migrations for schema changes, but for UI-only deploys first confirm the
+diff does not touch `drizzle/`, `packages/database/`, or `drizzle.config.ts`;
+then build and restart production without rerunning the failing migration step.
+
 6. Restart the live checkout with the checked-in helper:
 
 ```bash
@@ -245,6 +251,12 @@ bash infra/restart-live-checkout.sh
 ```
 
 This helper intentionally avoids `pkill -f "next start"` style matches, kills listeners by pid file and port, and starts the web process with `exec node node_modules/next/dist/bin/next start` so the stored pid is the actual long-lived process rather than a shell wrapper.
+
+If the migration failure above is still present on a UI-only deploy, do not use
+the helper because it reruns `pnpm db:migrate` before restart. Use the same
+pid-file/port stop strategy from the helper, then start `apps/api` with
+`node dist/server.js` and `apps/web` with
+`node node_modules/next/dist/bin/next start`.
 
 7. Verify:
    - `curl http://127.0.0.1:4000/health`
