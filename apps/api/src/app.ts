@@ -5,6 +5,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import { invitationsPlugin } from "./routes/invitations.js";
 import { exportPlugin } from "./routes/export.js";
+import { archiveCollectionsPlugin } from "./routes/archive-collections.js";
 import { treesPlugin } from "./routes/trees.js";
 import { peoplePlugin } from "./routes/people.js";
 import { mediaPlugin } from "./routes/media.js";
@@ -21,6 +22,7 @@ import { mePlugin } from "./routes/me.js";
 import { driftPlugin } from "./routes/drift.js";
 import { castTokenPlugin } from "./routes/cast-token.js";
 import { branchesPlugin } from "./routes/branches.js";
+import { searchPlugin } from "./routes/search.js";
 
 export function buildApp() {
   const trustedOriginsEnv = process.env.TRUSTED_ORIGINS;
@@ -121,6 +123,7 @@ export function buildApp() {
   app.register(relationshipsPlugin);
   app.register(invitationsPlugin);
   app.register(exportPlugin);
+  app.register(archiveCollectionsPlugin);
   app.register(promptsPlugin);
   app.register(promptCampaignsPlugin);
   app.register(elderCapturePlugin);
@@ -132,6 +135,7 @@ export function buildApp() {
   app.register(driftPlugin);
   app.register(castTokenPlugin);
   app.register(branchesPlugin);
+  app.register(searchPlugin);
 
   return app;
 }

@@ -14,12 +14,11 @@ import {
 import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { createMemoryWithPrimaryTag } from "../lib/cross-tree-write-service.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
-import { processBatchItemMetadata } from "../lib/media-metadata.js";
-import { s3, MEDIA_BUCKET } from "../lib/storage.js";
 
 const CreateBatchBody = z.object({
   label: z.string().min(1).max(200),
   defaultPersonId: z.string().uuid(),
+  sourceKind: z.enum(["multi_file_upload", "zip_upload"]).default("multi_file_upload"),
 });
 
 const PresignItemsBody = z.object({
@@ -38,6 +37,12 @@ const PresignItemsBody = z.object({
 
 const CompleteBatchBody = z.object({
   createMemories: z.boolean().default(true),
+});
+
+const PresignZipBody = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.literal("application/zip"),
+  sizeBytes: z.number().int().positive().max(2 * 1024 * 1024 * 1024),
 });
 
 function canImport(role: string): boolean {
@@ -239,6 +244,7 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
         createdByUserId: session.user.id,
         label: parsed.data.label,
         defaultPersonId: parsed.data.defaultPersonId,
+        sourceKind: parsed.data.sourceKind,
       })
       .returning();
 
@@ -377,6 +383,9 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
 
       const batch = await verifyBatch(treeId, batchId);
       if (!batch) return reply.status(404).send({ error: "Batch not found" });
+      if (batch.status === "completed" || batch.status === "failed") {
+        return reply.status(409).send({ error: "Batch has already been completed" });
+      }
       if (!batch.defaultPersonId) {
         return reply.status(400).send({
           error: "This import needs a default person before memories can be created",
@@ -437,6 +446,13 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
               mediaIds: item.mediaId ? [item.mediaId] : [],
             });
             await tx
+              .update(schema.memories)
+              .set({
+                sourceBatchId: batchId,
+                sourceFilename: item.originalFilename,
+              })
+              .where(eq(schema.memories.id, createdMemory.id));
+            await tx
               .update(schema.importBatchItems)
               .set({
                 memoryId: createdMemory.id,
@@ -468,19 +484,6 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
         await enqueueMemoryTranscription(memoryId, treeId);
       }
 
-      for (const item of items) {
-        if (item.media) {
-          void processBatchItemMetadata(s3, MEDIA_BUCKET, {
-            id: item.id,
-            mediaId: item.mediaId,
-            detectedMimeType: item.media.mimeType,
-            originalFilename: item.originalFilename,
-          }).catch(() => {
-            // best-effort; log and continue
-          });
-        }
-      }
-
       await db
         .update(schema.importBatches)
         .set({
@@ -495,29 +498,8 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
     },
   );
 
-  const BulkReviewAction = z.object({
-    actions: z
-      .array(
-        z.object({
-          itemId: z.string().uuid(),
-          action: z.enum([
-            "assign_date",
-            "assign_place",
-            "assign_person",
-            "approve",
-            "reject",
-          ]),
-          dateOfEventText: z.string().max(200).optional(),
-          placeLabelOverride: z.string().max(255).optional(),
-          personId: z.string().uuid().optional(),
-        }),
-      )
-      .min(1)
-      .max(100),
-  });
-
-  app.patch(
-    "/api/trees/:treeId/import-batches/:batchId/items",
+  app.post(
+    "/api/trees/:treeId/import-batches/:batchId/zip-presign",
     async (request, reply) => {
       const session = await getSession(request.headers);
       if (!session) return reply.status(401).send({ error: "Unauthorized" });
@@ -529,199 +511,337 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
       const membership = await verifyMembership(treeId, session.user.id);
       if (!membership) return reply.status(403).send({ error: "Not a member" });
       if (!canImport(membership.role)) {
-        return reply.status(403).send({ error: "Viewers cannot review items" });
+        return reply.status(403).send({ error: "Viewers cannot import memories" });
       }
 
       const batch = await verifyBatch(treeId, batchId);
       if (!batch) return reply.status(404).send({ error: "Batch not found" });
+      if (batch.sourceKind !== "zip_upload") {
+        return reply.status(400).send({ error: "Batch is not a ZIP import" });
+      }
 
-      const parsed = BulkReviewAction.safeParse(request.body);
+      const parsed = PresignZipBody.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ error: "Invalid request body" });
       }
 
-      const results: Array<{
-        itemId: string;
-        action: string;
-        success: boolean;
-        error?: string;
-      }> = [];
+      const objectKey = `trees/${treeId}/imports/${batchId}/${randomUUID()}.zip`;
+      const uploadUrl = await getPresignedUploadUrl(objectKey, "application/zip");
 
-      for (const action of parsed.data.actions) {
-        const item = await db.query.importBatchItems.findFirst({
-          where: (candidate, { and, eq: eqFn }) =>
-            and(eqFn(candidate.id, action.itemId), eqFn(candidate.batchId, batchId)),
-        });
-
-        if (!item) {
-          results.push({
-            itemId: action.itemId,
-            action: action.action,
-            success: false,
-            error: "Item not found in this batch",
-          });
-          continue;
-        }
-
-        if (!item.memoryId) {
-          results.push({
-            itemId: action.itemId,
-            action: action.action,
-            success: false,
-            error: "Item has no associated memory",
-          });
-          continue;
-        }
-
-        try {
-          switch (action.action) {
-            case "assign_date": {
-              if (!action.dateOfEventText) {
-                results.push({
-                  itemId: action.itemId,
-                  action: action.action,
-                  success: false,
-                  error: "dateOfEventText is required for assign_date",
-                });
-                continue;
-              }
-              await db
-                .update(schema.memories)
-                .set({ dateOfEventText: action.dateOfEventText, updatedAt: new Date() })
-                .where(eq(schema.memories.id, item.memoryId));
-              await db
-                .update(schema.importBatchItems)
-                .set({ reviewState: "done", updatedAt: new Date() })
-                .where(eq(schema.importBatchItems.id, item.id));
-              results.push({ itemId: action.itemId, action: action.action, success: true });
-              break;
-            }
-
-            case "assign_place": {
-              if (!action.placeLabelOverride) {
-                results.push({
-                  itemId: action.itemId,
-                  action: action.action,
-                  success: false,
-                  error: "placeLabelOverride is required for assign_place",
-                });
-                continue;
-              }
-              await db
-                .update(schema.memories)
-                .set({ placeLabelOverride: action.placeLabelOverride, updatedAt: new Date() })
-                .where(eq(schema.memories.id, item.memoryId));
-              await db
-                .update(schema.importBatchItems)
-                .set({ reviewState: "done", updatedAt: new Date() })
-                .where(eq(schema.importBatchItems.id, item.id));
-              results.push({ itemId: action.itemId, action: action.action, success: true });
-              break;
-            }
-
-            case "assign_person": {
-              if (!action.personId) {
-                results.push({
-                  itemId: action.itemId,
-                  action: action.action,
-                  success: false,
-                  error: "personId is required for assign_person",
-                });
-                continue;
-              }
-              const personInScope = await verifyPersonInTreeScope(treeId, action.personId);
-              if (!personInScope) {
-                results.push({
-                  itemId: action.itemId,
-                  action: action.action,
-                  success: false,
-                  error: "Person not found in this tree",
-                });
-                continue;
-              }
-              await db.insert(schema.memoryPersonTags).values({
-                memoryId: item.memoryId,
-                personId: action.personId,
-                treeId,
-              }).onConflictDoNothing();
-              await db
-                .update(schema.importBatchItems)
-                .set({ reviewState: "done", updatedAt: new Date() })
-                .where(eq(schema.importBatchItems.id, item.id));
-              results.push({ itemId: action.itemId, action: action.action, success: true });
-              break;
-            }
-
-            case "approve": {
-              await db
-                .update(schema.importBatchItems)
-                .set({ reviewState: "done", updatedAt: new Date() })
-                .where(eq(schema.importBatchItems.id, item.id));
-              results.push({ itemId: action.itemId, action: action.action, success: true });
-              break;
-            }
-
-            case "reject": {
-              await db
-                .update(schema.importBatchItems)
-                .set({ reviewState: "rejected", updatedAt: new Date() })
-                .where(eq(schema.importBatchItems.id, item.id));
-              results.push({ itemId: action.itemId, action: action.action, success: true });
-              break;
-            }
-          }
-        } catch (error) {
-          request.log.error({ error, itemId: action.itemId }, "Bulk review action failed");
-          results.push({
-            itemId: action.itemId,
-            action: action.action,
-            success: false,
-            error: "Internal error",
-          });
-        }
+      const capacity = await checkTreeCanAdd(treeId, "media", parsed.data.sizeBytes);
+      if (!capacity.allowed) {
+        return reply.status(capacity.status).send({ error: capacity.reason });
       }
 
-      return reply.send({ results });
+      const [mediaRecord] = await db
+        .insert(schema.media)
+        .values({
+          treeId,
+          contributingTreeId: treeId,
+          uploadedByUserId: session.user.id,
+          objectKey,
+          originalFilename: parsed.data.filename,
+          mimeType: "application/zip",
+          sizeBytes: parsed.data.sizeBytes,
+          storageProvider: "minio",
+        })
+        .returning();
+
+      if (!mediaRecord) {
+        return reply.status(500).send({ error: "Failed to create media record" });
+      }
+
+      const [batchItem] = await db
+        .insert(schema.importBatchItems)
+        .values({
+          batchId,
+          treeId,
+          mediaId: mediaRecord.id,
+          originalFilename: parsed.data.filename,
+          relativePath: "__archive__",
+          detectedMimeType: "application/zip",
+          sizeBytes: parsed.data.sizeBytes,
+        })
+        .returning();
+
+      if (!batchItem) {
+        return reply.status(500).send({ error: "Failed to create batch item" });
+      }
+
+      return reply.status(201).send({
+        itemId: batchItem.id,
+        mediaId: mediaRecord.id,
+        uploadUrl,
+        objectKey,
+      });
     },
   );
 
-  app.patch(
-    "/api/trees/:treeId/import-batches/:batchId/items/:itemId/reviewState",
+  app.post(
+    "/api/trees/:treeId/import-batches/:batchId/extract-zip",
     async (request, reply) => {
       const session = await getSession(request.headers);
       if (!session) return reply.status(401).send({ error: "Unauthorized" });
 
-      const { treeId, batchId, itemId } = request.params as {
+      const { treeId, batchId } = request.params as {
         treeId: string;
         batchId: string;
-        itemId: string;
       };
       const membership = await verifyMembership(treeId, session.user.id);
       if (!membership) return reply.status(403).send({ error: "Not a member" });
       if (!canImport(membership.role)) {
-        return reply.status(403).send({ error: "Viewers cannot review items" });
+        return reply.status(403).send({ error: "Viewers cannot import memories" });
       }
 
-      const body = request.body as { reviewState?: string };
-      const validStates = ["needs_review", "needs_date", "needs_place", "needs_people", "needs_duplicate_review", "done", "rejected"];
-      if (!body.reviewState || !validStates.includes(body.reviewState)) {
-        return reply.status(400).send({
-          error: `reviewState must be one of: ${validStates.join(", ")}`,
-        });
+      const batch = await verifyBatch(treeId, batchId);
+      if (!batch) return reply.status(404).send({ error: "Batch not found" });
+      if (batch.sourceKind !== "zip_upload") {
+        return reply.status(400).send({ error: "Batch is not a ZIP import" });
       }
-
-      const item = await db.query.importBatchItems.findFirst({
-        where: (candidate, { and, eq }) =>
-          and(eq(candidate.id, itemId), eq(candidate.batchId, batchId)),
-      });
-      if (!item) return reply.status(404).send({ error: "Item not found" });
 
       await db
-        .update(schema.importBatchItems)
-        .set({ reviewState: body.reviewState, updatedAt: new Date() })
-        .where(eq(schema.importBatchItems.id, itemId));
+        .update(schema.importBatches)
+        .set({ status: "awaiting_extraction", updatedAt: new Date() })
+        .where(eq(schema.importBatches.id, batchId));
 
-      return reply.send({ id: itemId, reviewState: body.reviewState });
+      return reply.send({ status: "awaiting_extraction" });
+    },
+  );
+
+  const BulkReviewAction = z.object({
+    itemIds: z.array(z.string().uuid()).min(1).max(200),
+    action: z.enum([
+      "mark_reviewed",
+      "mark_duplicate",
+      "mark_not_duplicate",
+      "skip",
+      "reassign_person",
+    ]),
+    personId: z.string().uuid().optional(),
+  });
+
+  app.patch("/api/trees/:treeId/import-batches/:batchId/items", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, batchId } = request.params as {
+      treeId: string;
+      batchId: string;
+    };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) return reply.status(403).send({ error: "Not a member" });
+    if (!canImport(membership.role)) {
+      return reply.status(403).send({ error: "Viewers cannot review imports" });
+    }
+
+    const batch = await verifyBatch(treeId, batchId);
+    if (!batch) return reply.status(404).send({ error: "Batch not found" });
+
+    const parsed = BulkReviewAction.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid request body" });
+    }
+
+    const { itemIds, action, personId } = parsed.data;
+
+    const items = await db.query.importBatchItems.findMany({
+      where: (item, { and, eq, inArray: inArr }) =>
+        and(eq(item.batchId, batchId), eq(item.treeId, treeId), inArr(item.id, itemIds)),
+      columns: { id: true, memoryId: true, reviewState: true },
+    });
+
+    if (items.length === 0) {
+      return reply.status(404).send({ error: "No matching items found" });
+    }
+
+    const validIds = items.map((i) => i.id);
+    let applied = 0;
+
+    switch (action) {
+      case "mark_reviewed": {
+        await db
+          .update(schema.importBatchItems)
+          .set({ reviewState: "done", updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.importBatchItems.batchId, batchId),
+              inArray(schema.importBatchItems.id, validIds),
+            ),
+          );
+        applied = validIds.length;
+        break;
+      }
+
+      case "mark_duplicate": {
+        await db
+          .update(schema.importBatchItems)
+          .set({ reviewState: "needs_duplicate_review", updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.importBatchItems.batchId, batchId),
+              inArray(schema.importBatchItems.id, validIds),
+            ),
+          );
+        applied = validIds.length;
+        break;
+      }
+
+      case "mark_not_duplicate": {
+        const dedupedItems = items.filter((i) => i.reviewState === "needs_duplicate_review");
+        if (dedupedItems.length > 0) {
+          await db
+            .update(schema.importBatchItems)
+            .set({ reviewState: "needs_date", updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.importBatchItems.batchId, batchId),
+                inArray(
+                  schema.importBatchItems.id,
+                  dedupedItems.map((i) => i.id),
+                ),
+              ),
+            );
+        }
+        applied = dedupedItems.length;
+        break;
+      }
+
+      case "skip": {
+        await db
+          .update(schema.importBatchItems)
+          .set({ status: "skipped", reviewState: "done", updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.importBatchItems.batchId, batchId),
+              inArray(schema.importBatchItems.id, validIds),
+            ),
+          );
+        applied = validIds.length;
+        break;
+      }
+
+      case "reassign_person": {
+        if (!personId) {
+          return reply.status(400).send({ error: "personId is required for reassign_person" });
+        }
+        const personInScope = await verifyPersonInTreeScope(treeId, personId);
+        if (!personInScope) {
+          return reply.status(400).send({ error: "Person not found in this tree" });
+        }
+        const itemsWithMemory = items.filter((i) => i.memoryId);
+        for (const item of itemsWithMemory) {
+          await db
+            .update(schema.memories)
+            .set({ primaryPersonId: personId, updatedAt: new Date() })
+            .where(eq(schema.memories.id, item.memoryId!));
+        }
+        if (validIds.length > 0) {
+          await db
+            .update(schema.importBatchItems)
+            .set({ reviewState: "needs_date", updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.importBatchItems.batchId, batchId),
+                inArray(schema.importBatchItems.id, validIds),
+              ),
+            );
+        }
+        applied = itemsWithMemory.length;
+        break;
+      }
+    }
+
+    return reply.send({ applied });
+  });
+
+  app.get(
+    "/api/trees/:treeId/import-batches/:batchId/duplicates",
+    async (request, reply) => {
+      const session = await getSession(request.headers);
+      if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+      const { treeId, batchId } = request.params as {
+        treeId: string;
+        batchId: string;
+      };
+      const membership = await verifyMembership(treeId, session.user.id);
+      if (!membership) return reply.status(403).send({ error: "Not a member" });
+
+      const batch = await verifyBatch(treeId, batchId);
+      if (!batch) return reply.status(404).send({ error: "Batch not found" });
+
+      const dupItems = await db.query.importBatchItems.findMany({
+        where: (item, { and, eq }) =>
+          and(eq(item.batchId, batchId), eq(item.treeId, treeId), eq(item.reviewState, "needs_duplicate_review")),
+        with: {
+          media: {
+            columns: { id: true, objectKey: true, mimeType: true },
+          },
+          memory: {
+            columns: { id: true, title: true, kind: true },
+          },
+        },
+        orderBy: (item, { asc }) => [asc(item.createdAt)],
+      });
+
+      const groups: Array<{
+        checksum: string | null;
+        perceptualHash: string | null;
+        items: Array<{
+          id: string;
+          originalFilename: string;
+          mediaUrl: string | null;
+          memoryId: string | null;
+          memoryTitle: string | null;
+        }>;
+      }> = [];
+
+      const byChecksum = new Map<string, typeof dupItems>();
+      const byPhash = new Map<string, typeof dupItems>();
+      const assigned = new Set<string>();
+
+      for (const item of dupItems) {
+        if (assigned.has(item.id)) continue;
+        if (item.checksum) {
+          const group = byChecksum.get(item.checksum) ?? [];
+          group.push(item);
+          byChecksum.set(item.checksum, group);
+        }
+        if (item.perceptualHash) {
+          const group = byPhash.get(item.perceptualHash) ?? [];
+          group.push(item);
+          byPhash.set(item.perceptualHash, group);
+        }
+      }
+
+      for (const [checksum, items] of byChecksum) {
+        if (items.length < 2) continue;
+        const groupItems = items.map((item) => ({
+          id: item.id,
+          originalFilename: item.originalFilename,
+          mediaUrl: item.media ? mediaUrl(item.media.objectKey) : null,
+          memoryId: item.memoryId,
+          memoryTitle: item.memory?.title ?? null,
+        }));
+        for (const item of items) assigned.add(item.id);
+        groups.push({ checksum, perceptualHash: items[0]?.perceptualHash ?? null, items: groupItems });
+      }
+
+      for (const [phash, items] of byPhash) {
+        const unassigned = items.filter((i) => !assigned.has(i.id));
+        if (unassigned.length < 2) continue;
+        const groupItems = unassigned.map((item) => ({
+          id: item.id,
+          originalFilename: item.originalFilename,
+          mediaUrl: item.media ? mediaUrl(item.media.objectKey) : null,
+          memoryId: item.memoryId,
+          memoryTitle: item.memory?.title ?? null,
+        }));
+        for (const item of unassigned) assigned.add(item.id);
+        groups.push({ checksum: unassigned[0]?.checksum ?? null, perceptualHash: phash, items: groupItems });
+      }
+
+      return reply.send({ groups });
     },
   );
 }

@@ -13,8 +13,15 @@ import {
   uniqueIndex,
   uuid,
   varchar,
+  customType,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
@@ -70,6 +77,58 @@ export const exportStatusEnum = pgEnum("export_status", [
   "failed",
 ]);
 
+export const collectionScopeKindEnum = pgEnum("collection_scope_kind", [
+  "person",
+  "couple",
+  "branch",
+  "event",
+  "place",
+  "theme",
+  "manual",
+]);
+
+export const collectionViewModeEnum = pgEnum("collection_view_mode", [
+  "chapter",
+  "drift",
+  "gallery",
+  "storybook",
+  "kiosk",
+]);
+
+export const collectionVisibilityEnum = pgEnum("collection_visibility", [
+  "private",
+  "tree_members",
+  "stewards",
+]);
+
+export const collectionSectionKindEnum = pgEnum("collection_section_kind", [
+  "intro",
+  "chapter",
+  "gallery",
+  "timeline",
+  "drift",
+  "people",
+  "custom",
+]);
+
+export const collectionItemKindEnum = pgEnum("collection_item_kind", [
+  "person",
+  "memory",
+  "place",
+  "relationship",
+]);
+
+export const exportOutputKindEnum = pgEnum("export_output_kind", [
+  "full_zip",
+  "mini_zip",
+]);
+
+export const mediaQualityEnum = pgEnum("media_quality", [
+  "original",
+  "web",
+  "small",
+]);
+
 export const promptStatusEnum = pgEnum("prompt_status", [
   "pending",
   "answered",
@@ -94,6 +153,7 @@ export const transcriptionJobStatusEnum = pgEnum("transcription_job_status", [
 export const promptReplyLinkStatusEnum = pgEnum("prompt_reply_link_status", [
   "pending",
   "used",
+  "skipped",
   "revoked",
   "expired",
 ]);
@@ -128,6 +188,49 @@ export const treeSubscriptionStatusEnum = pgEnum("tree_subscription_status", [
   "grace_period",
   "dormant",
   "cancelled",
+]);
+
+export const promptLibraryThemeEnum = pgEnum("prompt_library_theme", [
+  "warmup",
+  "childhood",
+  "family_home",
+  "work",
+  "service",
+  "courtship",
+  "holidays",
+  "food",
+  "migration",
+  "legacy",
+  "grief_safe",
+]);
+
+export const promptLibraryTierEnum = pgEnum("prompt_library_tier", [
+  "warm_up",
+  "middle",
+  "deep",
+  "legacy",
+]);
+
+export const promptLibrarySensitivityEnum = pgEnum("prompt_library_sensitivity", [
+  "ordinary",
+  "careful",
+  "grief_safe",
+]);
+
+export const promptCampaignTypeEnum = pgEnum("prompt_campaign_type", [
+  "one_relative",
+  "about_person",
+  "photo_identify",
+  "reunion",
+  "anniversary",
+  "place_drive",
+  "theme_based",
+]);
+
+export const recipientStatusEnum = pgEnum("recipient_status", [
+  "active",
+  "bounced",
+  "opted_out",
 ]);
 
 // ── Better Auth core tables ────────────────────────────────────────────────────
@@ -326,6 +429,7 @@ export const places = pgTable(
     }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    searchVector: tsvector("search_vector"),
   },
   (table) => [
     uniqueIndex("places_tree_normalized_label_unique_idx").on(
@@ -334,6 +438,7 @@ export const places = pgTable(
     ),
     index("places_tree_idx").on(table.treeId),
     index("places_created_by_idx").on(table.createdByUserId),
+    index("places_search_gin_idx").on(table.searchVector),
   ],
 );
 
@@ -372,6 +477,7 @@ export const people = pgTable(
     }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    searchVector: tsvector("search_vector"),
   },
   (table) => [
     index("people_tree_idx").on(table.treeId),
@@ -380,6 +486,7 @@ export const people = pgTable(
     index("people_portrait_media_idx").on(table.portraitMediaId),
     index("people_birth_place_idx").on(table.birthPlaceId),
     index("people_death_place_idx").on(table.deathPlaceId),
+    index("people_search_gin_idx").on(table.searchVector),
   ],
 );
 
@@ -503,6 +610,7 @@ export const promptCampaigns = pgTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 200 }).notNull(),
+    campaignType: promptCampaignTypeEnum("campaign_type").default("about_person"),
     cadenceDays: integer("cadence_days").default(7).notNull(),
     status: promptCampaignStatusEnum("status").default("active").notNull(),
     nextSendAt: timestamp("next_send_at", { withTimezone: true })
@@ -557,12 +665,21 @@ export const promptCampaignRecipients = pgTable(
       .notNull()
       .references(() => promptCampaigns.id, { onDelete: "cascade" }),
     email: varchar("email", { length: 320 }).notNull(),
+    status: recipientStatusEnum("status").default("active").notNull(),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
+    repliedCount: integer("replied_count").default(0).notNull(),
+    reminderCount: integer("reminder_count").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (table) => [
     index("prompt_campaign_recipients_campaign_idx").on(table.campaignId),
+    index("prompt_campaign_recipients_status_idx").on(table.status),
   ],
 );
 
@@ -673,8 +790,16 @@ export const memories = pgTable(
       .notNull(),
     transcriptError: text("transcript_error"),
     transcriptUpdatedAt: timestamp("transcript_updated_at", { withTimezone: true }),
+    sourceBatchId: uuid("source_batch_id").references(() => importBatches.id, {
+      onDelete: "set null",
+    }),
+    sourceFilename: text("source_filename"),
+    captureConfidenceJson: jsonb("capture_confidence_json").$type<
+      Record<string, unknown> | null
+    >(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    searchVector: tsvector("search_vector"),
   },
   (table) => [
     index("memories_tree_idx").on(table.treeId),
@@ -686,6 +811,8 @@ export const memories = pgTable(
     index("memories_linked_media_item_idx").on(table.linkedMediaProviderItemId),
     index("memories_place_idx").on(table.placeId),
     index("memories_transcript_status_idx").on(table.transcriptStatus),
+    index("memories_source_batch_idx").on(table.sourceBatchId),
+    index("memories_search_gin_idx").on(table.searchVector),
   ],
 );
 
@@ -704,6 +831,7 @@ export const importBatchItems = pgTable(
       onDelete: "set null",
     }),
     originalFilename: text("original_filename").notNull(),
+    relativePath: text("relative_path"),
     detectedMimeType: varchar("detected_mime_type", { length: 255 }),
     sizeBytes: bigint("size_bytes", { mode: "number" }),
     checksum: varchar("checksum", { length: 128 }),
@@ -714,6 +842,11 @@ export const importBatchItems = pgTable(
       .default("needs_review")
       .notNull(),
     errorMessage: text("error_message"),
+    attempts: integer("attempts").default(0).notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    runAfter: timestamp("run_after", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    perceptualHash: varchar("perceptual_hash", { length: 18 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -724,6 +857,66 @@ export const importBatchItems = pgTable(
     index("import_batch_items_memory_idx").on(table.memoryId),
     index("import_batch_items_status_idx").on(table.status),
     index("import_batch_items_review_state_idx").on(table.reviewState),
+    index("import_batch_items_locking_idx").on(table.status, table.runAfter),
+    index("import_batch_items_phash_idx").on(table.treeId, table.perceptualHash),
+  ],
+);
+
+export const promptLibraryQuestions = pgTable(
+  "prompt_library_questions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    theme: promptLibraryThemeEnum("theme").notNull(),
+    tier: promptLibraryTierEnum("tier").default("middle").notNull(),
+    questionText: text("question_text").notNull(),
+    sensitivity: promptLibrarySensitivityEnum("sensitivity").default("ordinary").notNull(),
+    recommendedPosition: integer("recommended_position").default(0).notNull(),
+    followUpTags: text("follow_up_tags").array().default([]).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("prompt_library_theme_idx").on(table.theme),
+    index("prompt_library_tier_idx").on(table.tier),
+    index("prompt_library_sensitivity_idx").on(table.sensitivity),
+  ],
+);
+
+export const promptCampaignTemplates = pgTable(
+  "prompt_campaign_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 200 }).notNull(),
+    description: text("description"),
+    campaignType: promptCampaignTypeEnum("campaign_type").default("about_person").notNull(),
+    theme: promptLibraryThemeEnum("theme").default("warmup").notNull(),
+    defaultCadenceDays: integer("default_cadence_days").default(7).notNull(),
+    sensitivityCeiling: promptLibrarySensitivityEnum("sensitivity_ceiling").default("ordinary").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("prompt_campaign_templates_type_idx").on(table.campaignType),
+    index("prompt_campaign_templates_theme_idx").on(table.theme),
+  ],
+);
+
+export const promptCampaignTemplateQuestions = pgTable(
+  "prompt_campaign_template_questions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => promptCampaignTemplates.id, { onDelete: "cascade" }),
+    libraryQuestionId: uuid("library_question_id")
+      .notNull()
+      .references(() => promptLibraryQuestions.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("prompt_campaign_template_questions_template_idx").on(table.templateId),
+    index("prompt_campaign_template_questions_library_idx").on(table.libraryQuestionId),
+    index("prompt_campaign_template_questions_position_idx").on(table.templateId, table.position),
   ],
 );
 
@@ -1061,15 +1254,113 @@ export const archiveExports = pgTable(
       .references(() => trees.id, { onDelete: "cascade" }),
     requestedByUserId: text("requested_by_user_id")
       .references(() => users.id, { onDelete: "set null" }),
+    collectionId: uuid("collection_id").references(() => archiveCollections.id, {
+      onDelete: "set null",
+    }),
     status: exportStatusEnum("status").default("queued").notNull(),
+    outputKind: exportOutputKindEnum("output_kind").default("full_zip").notNull(),
+    mediaQuality: mediaQualityEnum("media_quality").default("web").notNull(),
+    manifestVersion: integer("manifest_version").default(1).notNull(),
+    manifestJson: jsonb("manifest_json").$type<Record<string, unknown>>(),
     storagePath: text("storage_path"),
     fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
+    errorCode: varchar("error_code", { length: 80 }),
+    errorMessage: text("error_message"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
     index("archive_exports_tree_idx").on(table.treeId),
     index("archive_exports_requested_by_idx").on(table.requestedByUserId),
+    index("archive_exports_collection_idx").on(table.collectionId),
+  ],
+);
+
+export const archiveCollections = pgTable(
+  "archive_collections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id")
+      .references(() => users.id, { onDelete: "set null" }),
+    name: varchar("name", { length: 200 }).notNull(),
+    slug: varchar("slug", { length: 220 }).notNull(),
+    description: text("description"),
+    scopeKind: collectionScopeKindEnum("scope_kind").notNull(),
+    scopeJson: jsonb("scope_json").$type<Record<string, unknown>>(),
+    introText: text("intro_text"),
+    dedicationText: text("dedication_text"),
+    defaultViewMode: collectionViewModeEnum("default_view_mode")
+      .default("chapter")
+      .notNull(),
+    visibility: collectionVisibilityEnum("visibility")
+      .default("private")
+      .notNull(),
+    includeRelationships: boolean("include_relationships").default(true).notNull(),
+    includeRelatedMemories: boolean("include_related_memories").default(true).notNull(),
+    includePlaces: boolean("include_places").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("archive_collections_tree_slug_idx").on(table.treeId, table.slug),
+    index("archive_collections_tree_idx").on(table.treeId),
+    index("archive_collections_created_by_idx").on(table.createdByUserId),
+  ],
+);
+
+export const archiveCollectionSections = pgTable(
+  "archive_collection_sections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => archiveCollections.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 200 }).notNull(),
+    body: text("body"),
+    sectionKind: collectionSectionKindEnum("section_kind").default("chapter").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    settingsJson: jsonb("settings_json").$type<Record<string, unknown>>(),
+  },
+  (table) => [
+    index("archive_collection_sections_collection_idx").on(table.collectionId),
+    index("archive_collection_sections_sort_idx").on(table.collectionId, table.sortOrder),
+  ],
+);
+
+export const archiveCollectionItems = pgTable(
+  "archive_collection_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => archiveCollections.id, { onDelete: "cascade" }),
+    sectionId: uuid("section_id").references(() => archiveCollectionSections.id, {
+      onDelete: "set null",
+    }),
+    personId: uuid("person_id").references(() => people.id, { onDelete: "cascade" }),
+    memoryId: uuid("memory_id").references(() => memories.id, { onDelete: "cascade" }),
+    placeId: uuid("place_id").references(() => places.id, { onDelete: "cascade" }),
+    relationshipId: uuid("relationship_id").references(() => relationships.id, {
+      onDelete: "cascade",
+    }),
+    itemKind: collectionItemKindEnum("item_kind").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    captionOverride: text("caption_override"),
+    includeRelationships: boolean("include_relationships"),
+    includeRelatedMemories: boolean("include_related_memories"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("archive_collection_items_collection_idx").on(table.collectionId),
+    index("archive_collection_items_section_idx").on(table.sectionId),
+    index("archive_collection_items_person_idx").on(table.personId),
+    index("archive_collection_items_memory_idx").on(table.memoryId),
+    index("archive_collection_items_place_idx").on(table.placeId),
+    index("archive_collection_items_relationship_idx").on(table.relationshipId),
+    index("archive_collection_items_collection_sort_idx").on(table.collectionId, table.sortOrder),
   ],
 );
 
@@ -1109,6 +1400,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   memories: many(memories),
   invitationsSent: many(invitations),
   archiveExportsRequested: many(archiveExports),
+  archiveCollectionsCreated: many(archiveCollections),
   promptsSent: many(prompts),
   promptReplyLinksCreated: many(promptReplyLinks),
   personScopesAdded: many(treePersonScope),
@@ -1149,6 +1441,7 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
   memoryPersonSuppressions: many(memoryPersonSuppressions),
   invitations: many(invitations),
   archiveExports: many(archiveExports),
+  archiveCollections: many(archiveCollections),
   prompts: many(prompts),
   promptReplyLinks: many(promptReplyLinks),
   importBatches: many(importBatches),
@@ -1199,6 +1492,7 @@ export const placesRelations = relations(places, ({ one, many }) => ({
   birthForPeople: many(people, { relationName: "person_birth_place" }),
   deathForPeople: many(people, { relationName: "person_death_place" }),
   memories: many(memories),
+  collectionItems: many(archiveCollectionItems),
 }));
 
 export const peopleRelations = relations(people, ({ one, many }) => ({
@@ -1246,6 +1540,7 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
   invitations: many(invitations),
   promptsReceived: many(prompts),
   defaultForImportBatches: many(importBatches),
+  collectionItems: many(archiveCollectionItems),
 }));
 
 export const relationshipsRelations = relations(relationships, ({ one, many }) => ({
@@ -1270,6 +1565,7 @@ export const relationshipsRelations = relations(relationships, ({ one, many }) =
     relationName: "relationship_to_person",
   }),
   treeVisibility: many(treeRelationshipVisibility),
+  collectionItems: many(archiveCollectionItems),
 }));
 
 export const memoriesRelations = relations(memories, ({ one, many }) => ({
@@ -1303,6 +1599,11 @@ export const memoriesRelations = relations(memories, ({ one, many }) => ({
   personSuppressions: many(memoryPersonSuppressions),
   branches: many(memoryBranches),
   importBatchItems: many(importBatchItems),
+  sourceBatch: one(importBatches, {
+    fields: [memories.sourceBatchId],
+    references: [importBatches.id],
+  }),
+  collectionItems: many(archiveCollectionItems),
 }));
 
 export const promptsRelations = relations(prompts, ({ one, many }) => ({
@@ -1392,6 +1693,9 @@ export const importBatchesRelations = relations(importBatches, ({ one, many }) =
     references: [people.id],
   }),
   items: many(importBatchItems),
+  sourcedMemories: many(memories, {
+    relationName: "importBatchMemories",
+  }),
 }));
 
 export const importBatchItemsRelations = relations(importBatchItems, ({ one }) => ({
@@ -1447,7 +1751,63 @@ export const archiveExportsRelations = relations(archiveExports, ({ one }) => ({
     fields: [archiveExports.requestedByUserId],
     references: [users.id],
   }),
+  collection: one(archiveCollections, {
+    fields: [archiveExports.collectionId],
+    references: [archiveCollections.id],
+  }),
 }));
+
+export const archiveCollectionsRelations = relations(archiveCollections, ({ one, many }) => ({
+  tree: one(trees, { fields: [archiveCollections.treeId], references: [trees.id] }),
+  createdBy: one(users, {
+    fields: [archiveCollections.createdByUserId],
+    references: [users.id],
+  }),
+  sections: many(archiveCollectionSections),
+  items: many(archiveCollectionItems),
+  exports: many(archiveExports),
+}));
+
+export const archiveCollectionSectionsRelations = relations(
+  archiveCollectionSections,
+  ({ one, many }) => ({
+    collection: one(archiveCollections, {
+      fields: [archiveCollectionSections.collectionId],
+      references: [archiveCollections.id],
+    }),
+    items: many(archiveCollectionItems),
+  }),
+);
+
+export const archiveCollectionItemsRelations = relations(
+  archiveCollectionItems,
+  ({ one }) => ({
+    collection: one(archiveCollections, {
+      fields: [archiveCollectionItems.collectionId],
+      references: [archiveCollections.id],
+    }),
+    section: one(archiveCollectionSections, {
+      fields: [archiveCollectionItems.sectionId],
+      references: [archiveCollectionSections.id],
+    }),
+    person: one(people, {
+      fields: [archiveCollectionItems.personId],
+      references: [people.id],
+    }),
+    memory: one(memories, {
+      fields: [archiveCollectionItems.memoryId],
+      references: [memories.id],
+    }),
+    place: one(places, {
+      fields: [archiveCollectionItems.placeId],
+      references: [places.id],
+    }),
+    relationship: one(relationships, {
+      fields: [archiveCollectionItems.relationshipId],
+      references: [relationships.id],
+    }),
+  }),
+);
 
 export const transcriptionJobsRelations = relations(
   transcriptionJobs,
@@ -1606,3 +1966,25 @@ export const personMergeAuditRelations = relations(personMergeAudit, ({ one }) =
     references: [users.id],
   }),
 }));
+
+export const promptLibraryQuestionsRelations = relations(promptLibraryQuestions, ({ many }) => ({
+  templateQuestions: many(promptCampaignTemplateQuestions),
+}));
+
+export const promptCampaignTemplatesRelations = relations(promptCampaignTemplates, ({ many }) => ({
+  questions: many(promptCampaignTemplateQuestions),
+}));
+
+export const promptCampaignTemplateQuestionsRelations = relations(
+  promptCampaignTemplateQuestions,
+  ({ one }) => ({
+    template: one(promptCampaignTemplates, {
+      fields: [promptCampaignTemplateQuestions.templateId],
+      references: [promptCampaignTemplates.id],
+    }),
+    libraryQuestion: one(promptLibraryQuestions, {
+      fields: [promptCampaignTemplateQuestions.libraryQuestionId],
+      references: [promptLibraryQuestions.id],
+    }),
+  }),
+);
