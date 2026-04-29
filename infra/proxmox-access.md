@@ -132,8 +132,8 @@ These were the non-obvious parts:
 
 At the time this was last updated, the running app processes were launched from:
 
-- API: `/home/ubuntu/heirloom-mosaic-integration-live/apps/api`
-- Web: `/home/ubuntu/heirloom-mosaic-integration-live/apps/web`
+- API: `/home/ubuntu/tessera-archive-viewer-live/apps/api`
+- Web: `/home/ubuntu/tessera-archive-viewer-live/apps/web`
 
 Local health checks:
 
@@ -154,10 +154,10 @@ To confirm the working directories:
 ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 ```
 
-Current verified live pids after mosaic integration deploy on 2026-04-28:
+Current verified live pids after archive viewer deploy on 2026-04-29:
 
-- API listener pid: `215076`
-- Web listener pid: (check `cat ~/heirloom-mosaic-integration-live/web.pid`)
+- API listener pid: check `cat ~/tessera-archive-viewer-live/api.pid`
+- Web listener pid: check `cat ~/tessera-archive-viewer-live/web.pid`
 
 ## Historical Startup Shape On The App VM
 
@@ -272,8 +272,9 @@ pid-file/port stop strategy from the helper, then start `apps/api` with
 - Previous live checkout: `/home/ubuntu/tessera-onboarding-live`
 - Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
 - Previous live checkout: `/home/ubuntu/heirloom-immersive-scroll-live`
-- Current live checkout: `/home/ubuntu/heirloom-mosaic-integration-live`
+- Previous live checkout: `/home/ubuntu/heirloom-mosaic-integration-live`
 - Previous live checkout: `/home/ubuntu/heirloom-corkboard-rev1-live`
+- Current live checkout: `/home/ubuntu/tessera-archive-viewer-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
 - Backup directory on data VM: `~/tessera-backups` (historically `~/familytree-backups`)
 
