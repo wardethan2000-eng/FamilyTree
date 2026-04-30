@@ -15,10 +15,10 @@ const {
 } = await import("./transcription.js");
 
 const mockDb = db as unknown as {
-  insert: any;
-  update: any;
-  query: any;
-  transaction: any;
+  insert: unknown;
+  update: unknown;
+  query: Record<string, unknown>;
+  transaction: unknown;
 };
 
 type MemoryRow = {

@@ -5,8 +5,6 @@ import {
   getTreeRelationships,
   getTreeScopedPeople,
 } from "../cross-tree-read-service.js";
-import { and, eq, inArray } from "drizzle-orm";
-import * as schema from "@tessera/database";
 
 export async function buildCollectionManifest(
   collectionId: string,
@@ -27,9 +25,6 @@ export async function buildCollectionManifest(
   const personItems = collection.items.filter((i) => i.itemKind === "person");
   const memoryItems = collection.items.filter((i) => i.itemKind === "memory");
 
-  const personIds = [...new Set(personItems.map((i) => i.itemId))];
-  const memoryIds = [...new Set(memoryItems.map((i) => i.itemId))];
-
   const [tree, allTreePeople, allTreeMemories, allTreeRelationships, personCuration] = await Promise.all([
     db.query.trees.findFirst({ where: (t, { eq }) => eq(t.id, treeId) }),
     getTreeScopedPeople(treeId),
@@ -44,11 +39,16 @@ export async function buildCollectionManifest(
 
   const mediaObjectKeys = new Map<string, string>();
   const mediaInfo = new Map<string, { mimeType: string; sizeBytes: number }>();
+  const mediaRoles = new Map<string, ExportMedia["role"]>();
 
-  const collectionPersonIds = new Set(personIds);
+  const collectionPersonIds = new Set(personItems.map((i) => i.itemId));
+  const collectionMemoryIds = new Set(memoryItems.map((i) => i.itemId));
+  const explicitMemoryIds = new Set(memoryItems.map((i) => i.itemId));
 
-  for (const rel of allTreeRelationships) {
-    if (collectionPersonIds.has(rel.fromPersonId) || collectionPersonIds.has(rel.toPersonId)) {
+  for (const item of personItems) {
+    if (!item.includeContext) continue;
+    for (const rel of allTreeRelationships) {
+      if (rel.fromPersonId !== item.itemId && rel.toPersonId !== item.itemId) continue;
       collectionPersonIds.add(rel.fromPersonId);
       collectionPersonIds.add(rel.toPersonId);
     }
@@ -56,17 +56,30 @@ export async function buildCollectionManifest(
 
   for (const m of allTreeMemories) {
     const taggedIds = m.personTags?.map((t) => t.personId) ?? [];
-    if (memoryIds.includes(m.id) || taggedIds.some((id) => collectionPersonIds.has(id)) || collectionPersonIds.has(m.primaryPersonId)) {
-      memoryIds.push(m.id);
+    if (explicitMemoryIds.has(m.id)) {
+      collectionMemoryIds.add(m.id);
+      collectionPersonIds.add(m.primaryPersonId);
       for (const tid of taggedIds) {
-        if (m.primaryPersonId) collectionPersonIds.add(m.primaryPersonId);
         collectionPersonIds.add(tid);
       }
-      if (m.primaryPersonId) collectionPersonIds.add(m.primaryPersonId);
+      continue;
+    }
+
+    const shouldIncludeForContext = personItems.some(
+      (item) =>
+        item.includeContext &&
+        (m.primaryPersonId === item.itemId || taggedIds.includes(item.itemId)),
+    );
+    if (shouldIncludeForContext) {
+      collectionMemoryIds.add(m.id);
+      collectionPersonIds.add(m.primaryPersonId);
+      for (const tid of taggedIds) {
+        collectionPersonIds.add(tid);
+      }
     }
   }
 
-  const uniqueMemoryIds = [...new Set(memoryIds)];
+  const uniqueMemoryIds = [...collectionMemoryIds];
   const uniquePersonIds = [...collectionPersonIds];
 
   const exportPeople: ExportPerson[] = allTreePeople
@@ -75,6 +88,7 @@ export async function buildCollectionManifest(
       const portraitMediaId = p.portraitMedia?.id ?? null;
       if (p.portraitMedia?.objectKey && portraitMediaId) {
         mediaObjectKeys.set(portraitMediaId, p.portraitMedia.objectKey);
+        mediaRoles.set(portraitMediaId, "portrait");
         if (p.portraitMedia.mimeType) {
           mediaInfo.set(portraitMediaId, { mimeType: p.portraitMedia.mimeType, sizeBytes: (p.portraitMedia as { sizeBytes?: number }).sizeBytes ?? 0 });
         }
@@ -94,6 +108,7 @@ export async function buildCollectionManifest(
     });
 
   const peopleById = new Map(exportPeople.map((p) => [p.id, p]));
+  const exportedPersonIds = new Set(exportPeople.map((p) => p.id));
 
   const filteredMemories = allTreeMemories.filter((m) => uniqueMemoryIds.includes(m.id));
 
@@ -130,6 +145,7 @@ export async function buildCollectionManifest(
       mediaIds.push(m.media.id);
       if (m.media.objectKey) {
         mediaObjectKeys.set(m.media.id, m.media.objectKey);
+        mediaRoles.set(m.media.id, "memory");
         mediaInfo.set(m.media.id, { mimeType: (m.media as { mimeType?: string }).mimeType ?? "", sizeBytes: (m.media as { sizeBytes?: number }).sizeBytes ?? 0 });
       }
     }
@@ -138,6 +154,7 @@ export async function buildCollectionManifest(
         mediaIds.push(item.media.id);
         if (item.media.objectKey) {
           mediaObjectKeys.set(item.media.id, item.media.objectKey);
+          mediaRoles.set(item.media.id, "memory");
           mediaInfo.set(item.media.id, { mimeType: (item.media as unknown as { mimeType?: string }).mimeType ?? "", sizeBytes: (item.media as unknown as { sizeBytes?: number }).sizeBytes ?? 0 });
         }
       }
@@ -146,6 +163,7 @@ export async function buildCollectionManifest(
     for (const persp of perspectivesByMemoryId.get(m.id) ?? []) {
       if (persp.media?.id && persp.media.objectKey) {
         mediaObjectKeys.set(persp.media.id, persp.media.objectKey);
+        mediaRoles.set(persp.media.id, "perspective");
         mediaInfo.set(persp.media.id, { mimeType: persp.media.mimeType ?? "", sizeBytes: persp.media.sizeBytes ?? 0 });
       }
     }
@@ -185,9 +203,10 @@ export async function buildCollectionManifest(
       captionOverride: itemCaptionMap.get(m.id) ?? null,
     };
   });
+  const exportedMemoryIds = new Set(exportMemories.map((m) => m.id));
 
   const exportRelationships: ExportRelationship[] = allTreeRelationships
-    .filter((r) => collectionPersonIds.has(r.fromPersonId) || collectionPersonIds.has(r.toPersonId))
+    .filter((r) => exportedPersonIds.has(r.fromPersonId) && exportedPersonIds.has(r.toPersonId))
     .map((r) => {
       peopleById.get(r.fromPersonId)?.relationshipIds.push(r.id);
       peopleById.get(r.toPersonId)?.relationshipIds.push(r.id);
@@ -219,7 +238,7 @@ export async function buildCollectionManifest(
       mimeType: info?.mimeType ?? "",
       sizeBytes: info?.sizeBytes ?? 0,
       checksum: null,
-      role: "memory",
+      role: mediaRoles.get(id) ?? "memory",
     });
   }
 
@@ -248,11 +267,12 @@ export async function buildCollectionManifest(
     sortOrder: s.sortOrder,
     itemIds: collection.items
       .filter((i) => i.sectionId === s.id)
+      .filter((i) => exportedPersonIds.has(i.itemId) || exportedMemoryIds.has(i.itemId))
       .map((i) => i.itemId),
   }));
 
   const exportPersonCuration: ExportPersonCuration[] = personCuration
-    .filter((c) => uniquePersonIds.includes(c.personId) && uniqueMemoryIds.includes(c.memoryId))
+    .filter((c) => exportedPersonIds.has(c.personId) && exportedMemoryIds.has(c.memoryId))
     .map((item) => ({
       personId: item.personId,
       memoryId: item.memoryId,

@@ -1,4 +1,4 @@
-import { Readable } from "node:stream";
+import { createHash } from "node:crypto";
 import type { Archiver } from "archiver";
 import archiver from "archiver";
 import type { ServerResponse } from "node:http";
@@ -7,11 +7,28 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3, MEDIA_BUCKET } from "../../lib/storage.js";
 import { renderIndexHtml } from "./html-renderer.js";
 
-export function streamExportZip(
+type PreparedMedia = {
+  mediaId: string;
+  objectKey: string;
+  buffer: Buffer;
+  checksum: string;
+};
+
+export async function streamExportZip(
   manifest: ArchiveExportManifest,
   mediaObjectKeys: Map<string, string>,
   reply: { raw: ServerResponse },
-): Archiver {
+): Promise<Archiver> {
+  const preparedMedia = await prepareMedia(mediaObjectKeys);
+  const checksumByMediaId = new Map(preparedMedia.map((item) => [item.mediaId, item.checksum]));
+  const manifestWithChecksums: ArchiveExportManifest = {
+    ...manifest,
+    media: manifest.media.map((item) => ({
+      ...item,
+      checksum: checksumByMediaId.get(item.id) ?? item.checksum,
+    })),
+  };
+
   const safeName = manifest.tree.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
   reply.raw.setHeader("Content-Type", "application/zip");
   reply.raw.setHeader(
@@ -22,7 +39,7 @@ export function streamExportZip(
   const archive = archiver("zip", { zlib: { level: 6 } });
   archive.pipe(reply.raw);
 
-  archive.append(renderIndexHtml(manifest), { name: "index.html" });
+  archive.append(renderIndexHtml(manifestWithChecksums), { name: "index.html" });
 
   const readmeText = [
     `Open index.html in a browser.`,
@@ -34,36 +51,45 @@ export function streamExportZip(
   ].join("\n");
   archive.append(readmeText, { name: "README.txt" });
 
-  for (const [mediaId, objectKey] of mediaObjectKeys) {
+  for (const { mediaId, objectKey, buffer } of preparedMedia) {
     const ext = objectKey.split(".").pop() ?? "bin";
     const entryName = `media/${mediaId}.${ext}`;
-    archive.append(fetchMediaStream(objectKey), { name: entryName });
+    archive.append(buffer, { name: entryName });
   }
 
-  archive.finalize();
+  const completion = new Promise<void>((resolveCompletion, rejectCompletion) => {
+    archive.on("end", resolveCompletion);
+    archive.on("error", rejectCompletion);
+    reply.raw.on("error", rejectCompletion);
+  });
+
+  void archive.finalize();
+  await completion;
   return archive;
 }
 
-function fetchMediaStream(objectKey: string): Readable {
-  const passthrough = new Readable({ read() {} });
+async function prepareMedia(mediaObjectKeys: Map<string, string>): Promise<PreparedMedia[]> {
+  const prepared: PreparedMedia[] = [];
+  for (const [mediaId, objectKey] of mediaObjectKeys) {
+    const buffer = await fetchMediaBuffer(objectKey);
+    prepared.push({
+      mediaId,
+      objectKey,
+      buffer,
+      checksum: `sha256:${createHash("sha256").update(buffer).digest("hex")}`,
+    });
+  }
+  return prepared;
+}
 
-  (async () => {
-    try {
-      const obj = await s3.send(
-        new GetObjectCommand({ Bucket: MEDIA_BUCKET, Key: objectKey }),
-      );
-      if (obj.Body) {
-        const nodeStream = Readable.fromWeb(obj.Body as ReadableStream<Uint8Array>);
-        nodeStream.on("data", (chunk: Buffer) => passthrough.push(chunk));
-        nodeStream.on("end", () => passthrough.push(null));
-        nodeStream.on("error", (err: Error) => passthrough.destroy(err));
-      } else {
-        passthrough.push(null);
-      }
-    } catch {
-      passthrough.push(null);
-    }
-  })();
+async function fetchMediaBuffer(objectKey: string): Promise<Buffer> {
+  const obj = await s3.send(
+    new GetObjectCommand({ Bucket: MEDIA_BUCKET, Key: objectKey }),
+  );
+  if (!obj.Body) {
+    throw new Error(`Media object ${objectKey} has no body`);
+  }
 
-  return passthrough;
+  const bytes = await obj.Body.transformToByteArray();
+  return Buffer.from(bytes);
 }

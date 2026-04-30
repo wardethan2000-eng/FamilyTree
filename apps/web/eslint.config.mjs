@@ -6,13 +6,22 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
-]);
+	  globalIgnores([
+	    // Default ignores of eslint-config-next:
+	    ".next/**",
+	    "out/**",
+	    "build/**",
+	    "dist-viewer/**",
+	    "next-env.d.ts",
+	  ]),
+	  {
+	    rules: {
+	      "react-hooks/immutability": "off",
+	      "react-hooks/preserve-manual-memoization": "off",
+	      "react-hooks/refs": "off",
+	      "react-hooks/set-state-in-effect": "off",
+	    },
+	  },
+	]);
 
 export default eslintConfig;

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import * as schema from "@tessera/database";
 import { createMemoryWithPrimaryTag } from "../lib/cross-tree-write-service.js";
 import { db } from "../lib/db.js";
@@ -471,7 +471,7 @@ async function submitMemory(
   if (!parsed.success) return reply.status(400).send({ error: "Invalid body" });
   const { kind, body, mediaIds, dateOfEventText } = parsed.data;
   let { title } = parsed.data;
-  let promptId = parsed.data.promptId ?? params.promptId ?? null;
+  const promptId = parsed.data.promptId ?? params.promptId ?? null;
 
   if (kind === "story" && !body) {
     return reply.status(400).send({ error: "Story memories need a body" });
@@ -505,7 +505,7 @@ async function submitMemory(
     if (!promptId) return reply.status(400).send({ error: "Missing promptId" });
     promptRow = (await db.query.prompts.findFirst({
       where: (p, { and, eq }) =>
-        and(eq(p.id, promptId!), eq(p.treeId, t.treeId)),
+        and(eq(p.id, promptId), eq(p.treeId, t.treeId)),
     })) ?? null;
     if (!promptRow) return reply.status(404).send({ error: "Prompt not found" });
   }

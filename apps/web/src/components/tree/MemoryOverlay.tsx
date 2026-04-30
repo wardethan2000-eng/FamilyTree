@@ -157,7 +157,7 @@ export function MemoryOverlay({
                   textDecoration: "underline",
                 }}
               >
-                Open {person.name}'s archive →
+                Open {person.name}&apos;s archive →
               </button>
             </div>
           </motion.div>

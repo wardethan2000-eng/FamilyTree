@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as schema from "@tessera/database";
 import { getIdentityStatusForUser } from "../lib/account-identity-service.js";
 import {
@@ -414,7 +414,7 @@ export async function peoplePlugin(app: FastifyInstance): Promise<void> {
     const people = await getTreeScopedPeople(treeId);
 
     return reply.send(
-      people.map(({ linkedUserId, ...p }) => ({
+      people.map((p) => ({
         ...p,
         portraitUrl: p.portraitMedia ? mediaUrl(p.portraitMedia.objectKey) : null,
         birthPlaceResolved: serializePlace(p.birthPlaceRef),

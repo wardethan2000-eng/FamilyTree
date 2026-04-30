@@ -8,11 +8,10 @@ import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
 import { escapeHtml } from "../lib/email-templates.js";
-import { suggestFollowUps, dismissSuggestion, approveSuggestion } from "../lib/follow-up-suggestions.js";
+import { dismissSuggestion, approveSuggestion } from "../lib/follow-up-suggestions.js";
 import { mayEmailUser } from "./me.js";
 import { sendInstallEmail as sendElderInstallEmail } from "./elder-capture.js";
 import { mediaUrl } from "../lib/storage.js";
-import { validateCastToken } from "./cast-token.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
@@ -1224,5 +1223,4 @@ export function startPromptCampaignScheduler(
     }
   };
 }
-
 

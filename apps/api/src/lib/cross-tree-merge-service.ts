@@ -20,7 +20,6 @@ type FieldSource = "survivor" | "merged";
 type FieldResolutions = Partial<Record<MergeableField, FieldSource>>;
 type TxClient = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type RelationshipType = typeof schema.relationships.$inferSelect.type;
-type SpouseStatus = typeof schema.relationships.$inferSelect.spouseStatus;
 
 export type MergeRelationshipRecord = Pick<
   typeof schema.relationships.$inferSelect,

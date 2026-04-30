@@ -76,7 +76,7 @@ export function SearchPage({ manifest, query, onNavigate }: Props) {
           )}
 
           {results.people.length === 0 && results.memories.length === 0 && (
-            <p class="empty">No results for "{query}"</p>
+            <p class="empty">No results for &quot;{query}&quot;</p>
           )}
         </>
       )}

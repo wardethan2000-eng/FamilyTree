@@ -597,7 +597,7 @@ function PromptReplyContent() {
             </label>
 
             <label style={smallLabelStyle}>
-              Title (we'll write one for you if blank)
+              Title (we&apos;ll write one for you if blank)
               <input
                 value={titleOverride}
                 onChange={(e) => setTitleOverride(e.target.value)}

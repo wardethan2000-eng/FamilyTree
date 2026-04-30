@@ -25,6 +25,7 @@ export async function buildFullTreeManifest(
 
   const mediaObjectKeys = new Map<string, string>();
   const mediaInfo = new Map<string, { mimeType: string; sizeBytes: number }>();
+  const mediaRoles = new Map<string, ExportMedia["role"]>();
 
   const memoryPerspectives =
     memories.length > 0
@@ -53,6 +54,7 @@ export async function buildFullTreeManifest(
     const portraitMediaId = p.portraitMedia?.id ?? null;
     if (p.portraitMedia?.objectKey && portraitMediaId) {
       mediaObjectKeys.set(portraitMediaId, p.portraitMedia.objectKey);
+      mediaRoles.set(portraitMediaId, "portrait");
       if (p.portraitMedia.mimeType) {
         mediaInfo.set(portraitMediaId, { mimeType: p.portraitMedia.mimeType, sizeBytes: (p.portraitMedia as { sizeBytes?: number }).sizeBytes ?? 0 });
       }
@@ -85,6 +87,7 @@ export async function buildFullTreeManifest(
       mediaIds.push(m.media.id);
       if (m.media.objectKey) {
         mediaObjectKeys.set(m.media.id, m.media.objectKey);
+        mediaRoles.set(m.media.id, "memory");
         mediaInfo.set(m.media.id, { mimeType: (m.media as { mimeType?: string }).mimeType ?? "", sizeBytes: (m.media as { sizeBytes?: number }).sizeBytes ?? 0 });
       }
     }
@@ -93,6 +96,7 @@ export async function buildFullTreeManifest(
         mediaIds.push(item.media.id);
         if (item.media.objectKey) {
           mediaObjectKeys.set(item.media.id, item.media.objectKey);
+          mediaRoles.set(item.media.id, "memory");
           mediaInfo.set(item.media.id, { mimeType: (item.media as unknown as { mimeType?: string }).mimeType ?? "", sizeBytes: (item.media as unknown as { sizeBytes?: number }).sizeBytes ?? 0 });
         }
       }
@@ -101,6 +105,7 @@ export async function buildFullTreeManifest(
     for (const persp of perspectivesByMemoryId.get(m.id) ?? []) {
       if (persp.media?.id && persp.media.objectKey) {
         mediaObjectKeys.set(persp.media.id, persp.media.objectKey);
+        mediaRoles.set(persp.media.id, "perspective");
         mediaInfo.set(persp.media.id, { mimeType: persp.media.mimeType ?? "", sizeBytes: persp.media.sizeBytes ?? 0 });
       }
     }
@@ -168,7 +173,7 @@ export async function buildFullTreeManifest(
       mimeType: info?.mimeType ?? "",
       sizeBytes: info?.sizeBytes ?? 0,
       checksum: null,
-      role: "memory",
+      role: mediaRoles.get(id) ?? "memory",
     });
   }
 

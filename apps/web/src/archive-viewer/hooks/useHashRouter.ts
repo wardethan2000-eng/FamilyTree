@@ -5,16 +5,30 @@ export type Route =
   | { view: "person"; personId: string }
   | { view: "memory"; memoryId: string }
   | { view: "drift" }
+  | { view: "gallery" }
+  | { view: "storybook" }
+  | { view: "kiosk" }
   | { view: "search"; query: string }
   | { view: "section"; sectionId: string };
 
-function parseHash(hash: string): Route {
-  if (!hash || hash === "#" || hash === "#/") return { view: "home" };
+function defaultRoute(defaultViewMode: string): Route {
+  if (defaultViewMode === "drift") return { view: "drift" };
+  if (defaultViewMode === "gallery") return { view: "gallery" };
+  if (defaultViewMode === "storybook") return { view: "storybook" };
+  if (defaultViewMode === "kiosk") return { view: "kiosk" };
+  return { view: "home" };
+}
+
+function parseHash(hash: string, defaultViewMode: string): Route {
+  if (!hash || hash === "#" || hash === "#/") return defaultRoute(defaultViewMode);
   const path = hash.replace(/^#\/?/, "");
   if (path.startsWith("people/")) return { view: "person", personId: path.slice(7) };
   if (path.startsWith("memories/")) return { view: "memory", memoryId: path.slice(9) };
   if (path.startsWith("sections/")) return { view: "section", sectionId: path.slice(9) };
   if (path === "drift") return { view: "drift" };
+  if (path === "gallery") return { view: "gallery" };
+  if (path === "storybook") return { view: "storybook" };
+  if (path === "kiosk") return { view: "kiosk" };
   if (path.startsWith("search")) {
     const q = path.includes("?") ? new URLSearchParams(path.split("?")[1]).get("q") ?? "" : "";
     return { view: "search", query: q };
@@ -29,18 +43,21 @@ function routeToHash(route: Route): string {
     case "memory": return `#/memories/${route.memoryId}`;
     case "section": return `#/sections/${route.sectionId}`;
     case "drift": return "#/drift";
+    case "gallery": return "#/gallery";
+    case "storybook": return "#/storybook";
+    case "kiosk": return "#/kiosk";
     case "search": return `#/search?q=${encodeURIComponent(route.query)}`;
   }
 }
 
-export function useHashRouter() {
-  const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
+export function useHashRouter(defaultViewMode = "chapter") {
+  const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash, defaultViewMode));
 
   useEffect(() => {
-    const handler = () => setRoute(parseHash(window.location.hash));
+    const handler = () => setRoute(parseHash(window.location.hash, defaultViewMode));
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
-  }, []);
+  }, [defaultViewMode]);
 
   const navigate = useCallback((route: Route) => {
     window.location.hash = routeToHash(route);

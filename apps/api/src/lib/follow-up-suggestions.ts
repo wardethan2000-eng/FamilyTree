@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 
@@ -42,7 +42,7 @@ export async function suggestFollowUps(
   const sentQuestionIds = sentQuestions.map((q) => q.id);
 
   const libraryQuestion = await db.query.promptLibraryQuestions.findFirst({
-    where: (lq, { eq, sql }) =>
+    where: (lq, { sql }) =>
       sql`${lq.questionText} = ${prompt.questionText}`,
   });
 
@@ -140,6 +140,7 @@ export async function dismissSuggestion(
   treeId: string,
   userId: string,
 ): Promise<boolean> {
+  void userId;
   const result = await db
     .update(schema.prompts)
     .set({ suggestionStatus: "dismissed", updatedAt: new Date() })

@@ -645,7 +645,10 @@ function PhotoIdentificationWizard({
         const res = await fetch(`${API}/api/trees/${treeId}/memories?limit=100`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
-          const photoMemories = Array.isArray(data) ? data : (data.memories ?? []).filter((m: any) => m.kind === "photo");
+          const memoryData = data as Memory[] | { memories?: Memory[] };
+          const photoMemories = Array.isArray(memoryData)
+            ? memoryData
+            : (memoryData.memories ?? []).filter((m) => m.kind === "photo");
           setPhotos(photoMemories.slice(0, 100)); // Limit to 100 as requested
         }
       } catch (e) {

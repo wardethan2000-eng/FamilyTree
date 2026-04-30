@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/build-cast-receiver.mjs && next build",
+    "build": "pnpm build:viewer && node scripts/build-cast-receiver.mjs && next build",
     "build:cast": "node scripts/build-cast-receiver.mjs",
     "build:viewer": "vite build --config vite.archive-viewer.config.ts",
     "start": "next start",

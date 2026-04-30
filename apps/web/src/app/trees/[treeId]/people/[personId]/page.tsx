@@ -1803,7 +1803,7 @@ export default function PersonPage({
                 )}
                 {lifeFacts.length === 0 && sortedVisibleTrees.length === 0 && !person.linkedUserId && (
                   <p style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--ink-faded)", margin: 0, lineHeight: 1.6 }}>
-                    This chapter is still waiting for the first details of {person.displayName.split(" ")[0]}'s life.
+                    This chapter is still waiting for the first details of {person.displayName.split(" ")[0]}&apos;s life.
                   </p>
                 )}
               </div>
@@ -2925,7 +2925,7 @@ function MemoryStudioRail({
             lineHeight: 1.2,
           }}
         >
-          Add to {personName.split(" ")[0]}'s chapter
+          Add to {personName.split(" ")[0]}&apos;s chapter
         </h3>
       </div>
       <p style={{ fontFamily: "var(--font-body)", fontSize: 15, lineHeight: 1.65, color: "var(--ink-soft)", margin: 0 }}>

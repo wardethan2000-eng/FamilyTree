@@ -330,7 +330,7 @@ export function AddMemoryWizard({
                   lineHeight: 1.4,
                 }}
               >
-                "{promptQuestion}"
+                &quot;{promptQuestion}&quot;
               </div>
             )}
             {!promptQuestion && (
@@ -1152,7 +1152,7 @@ export function AddMemoryWizard({
                       lineHeight: 1.4,
                     }}
                   >
-                    Other relatives in this memory. They'll see it on their pages too, but it stays attributed to the person above.
+                    Other relatives in this memory. They&apos;ll see it on their pages too, but it stays attributed to the person above.
                   </div>
                   <div
                     style={{
@@ -1378,7 +1378,7 @@ export function AddMemoryWizard({
                 }}
               >
                  A <strong style={{ color: "var(--ink)" }}>{memoryKindLabel}</strong> memory titled{" "}
-                <em style={{ color: "var(--ink)" }}>"{step2.title}"</em>
+                <em style={{ color: "var(--ink)" }}>&quot;{step2.title}&quot;</em>
                 {step3.personId && people.find((p) => p.id === step3.personId) && (
                   <>
                     {" "}assigned to{" "}

@@ -8,7 +8,6 @@ import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { validateCastToken } from "./cast-token.js";
-import { mediaUrl } from "../lib/storage.js";
 import {
   contentDisposition,
   extForMimeType,

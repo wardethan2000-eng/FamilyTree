@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { getApiBase } from "@/lib/api-base";
@@ -141,7 +142,7 @@ function AcceptInvitationContent() {
           <p style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)", margin: "0 0 24px" }}>
             {error}
           </p>
-          <a href="/" style={linkStyle}>Go home</a>
+          <Link href="/" style={linkStyle}>Go home</Link>
         </div>
       </main>
     );
@@ -327,7 +328,7 @@ function AcceptInvitationContent() {
           >
             {accepting ? "Accepting…" : "Accept invitation"}
           </button>
-          <a href="/" style={linkStyle}>Not now</a>
+          <Link href="/" style={linkStyle}>Not now</Link>
         </div>
 
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)", marginTop: 20 }}>

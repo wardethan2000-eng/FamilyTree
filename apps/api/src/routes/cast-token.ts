@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { getSession } from "../lib/session.js";
 import { db } from "../lib/db.js";
 import { castTokens } from "@tessera/database";
-import { eq, and, gt } from "drizzle-orm";
+import { gt } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 
 const TOKEN_LIFETIME_MS = 2 * 60 * 60 * 1000;

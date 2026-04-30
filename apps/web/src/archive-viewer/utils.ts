@@ -6,6 +6,21 @@ export function getMediaUrl(manifest: ArchiveExportManifest, mediaId: string | n
   return media ? media.localPath : null;
 }
 
+export function getMedia(manifest: ArchiveExportManifest, mediaId: string | null | undefined): ExportMedia | null {
+  if (!mediaId) return null;
+  return manifest.media.find((m) => m.id === mediaId) ?? null;
+}
+
+export function isAudioMedia(media: ExportMedia | null | undefined): boolean {
+  if (!media) return false;
+  return media.mimeType.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|webm)$/i.test(media.localPath);
+}
+
+export function isImageMedia(media: ExportMedia | null | undefined): boolean {
+  if (!media) return false;
+  return media.mimeType.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|avif)$/i.test(media.localPath);
+}
+
 export function getPerson(manifest: ArchiveExportManifest, personId: string): ExportPerson | undefined {
   return manifest.people.find((p) => p.id === personId);
 }

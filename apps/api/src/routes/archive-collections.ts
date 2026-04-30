@@ -1,16 +1,19 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
-import { buildFullTreeManifest } from "../lib/archive-export/manifest-builder.js";
 import { buildCollectionManifest } from "../lib/archive-export/collection-manifest-builder.js";
 import { streamExportZip } from "../lib/archive-export/zip-writer.js";
-import { renderIndexHtml } from "../lib/archive-export/html-renderer.js";
+import { getTreeMemories } from "../lib/cross-tree-read-service.js";
 
 function canManage(role: string | null): boolean {
   return role === "founder" || role === "admin" || role === "editor";
 }
+
+const validScopeKinds = ["person", "couple", "branch", "event", "place", "theme", "manual"] as const;
+const validViewModes = ["chapter", "drift", "gallery", "storybook", "kiosk"] as const;
+const validZipOutputKinds = ["full_zip", "mini_zip", "kiosk_package"] as const;
 
 export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<void> {
 
@@ -28,9 +31,11 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
     const body = request.body as { scopeKind: string; scope?: Record<string, string>; defaultViewMode?: string };
     if (!body.scopeKind) return reply.status(400).send({ error: "scopeKind is required" });
 
-    const validScopeKinds = ["person", "couple", "branch", "event", "place", "theme", "manual"];
-    if (!validScopeKinds.includes(body.scopeKind)) {
+    if (!validScopeKinds.includes(body.scopeKind as typeof validScopeKinds[number])) {
       return reply.status(400).send({ error: `Invalid scopeKind. Must be one of: ${validScopeKinds.join(", ")}` });
+    }
+    if (body.defaultViewMode && !validViewModes.includes(body.defaultViewMode as typeof validViewModes[number])) {
+      return reply.status(400).send({ error: `Invalid defaultViewMode. Must be one of: ${validViewModes.join(", ")}` });
     }
 
     if (body.scopeKind === "person") {
@@ -43,27 +48,10 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       });
       if (!person) return reply.status(404).send({ error: "Person not found" });
 
-      const personMemories = await db.query.memories.findMany({
-        where: (m, { and, eq }) => and(eq(m.primaryPersonId, personId), eq(m.treeId, treeId)),
-        with: {
-          media: { columns: { id: true, objectKey: true, mimeType: true, sizeBytes: true } },
-          mediaItems: { with: { media: { columns: { id: true, objectKey: true, mimeType: true, sizeBytes: true } } } },
-          personTags: { columns: { personId: true } },
-        },
-        limit: 5,
-      });
-
-      const taggedMemories = await db.query.memoryPersonTags.findMany({
-        where: (t, { eq }) => eq(t.personId, personId),
-        with: {
-          memory: {
-            columns: { id: true, title: true, kind: true },
-            with: {
-              media: { columns: { id: true } },
-            },
-          },
-        },
-        limit: 10,
+      const visiblePersonMemories = await getTreeMemories(treeId, {
+        personId,
+        viewerUserId: session.user.id,
+        limit: 15,
       });
 
       const relationships = await db.query.relationships.findMany({
@@ -94,14 +82,8 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
         }
       }
 
-      for (const m of personMemories) {
+      for (const m of visiblePersonMemories) {
         draftItems.push({ itemKind: "memory", itemId: m.id, label: m.title });
-      }
-
-      for (const tp of taggedMemories) {
-        if (!draftItems.find((d) => d.itemId === tp.memory.id)) {
-          draftItems.push({ itemKind: "memory", itemId: tp.memory.id, label: tp.memory.title });
-        }
       }
 
       return reply.send({
@@ -176,6 +158,12 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
     };
 
     if (!body.name?.trim()) return reply.status(400).send({ error: "name is required" });
+    if (!validScopeKinds.includes(body.scopeKind as typeof validScopeKinds[number])) {
+      return reply.status(400).send({ error: `Invalid scopeKind. Must be one of: ${validScopeKinds.join(", ")}` });
+    }
+    if (body.defaultViewMode && !validViewModes.includes(body.defaultViewMode as typeof validViewModes[number])) {
+      return reply.status(400).send({ error: `Invalid defaultViewMode. Must be one of: ${validViewModes.join(", ")}` });
+    }
 
     const [collection] = await db.insert(schema.archiveCollections).values({
       treeId,
@@ -256,7 +244,12 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
     if (body.description !== undefined) updates.description = body.description;
     if (body.introText !== undefined) updates.introText = body.introText;
     if (body.dedicationText !== undefined) updates.dedicationText = body.dedicationText;
-    if (body.defaultViewMode !== undefined) updates.defaultViewMode = body.defaultViewMode;
+    if (body.defaultViewMode !== undefined) {
+      if (!validViewModes.includes(body.defaultViewMode as typeof validViewModes[number])) {
+        return reply.status(400).send({ error: `Invalid defaultViewMode. Must be one of: ${validViewModes.join(", ")}` });
+      }
+      updates.defaultViewMode = body.defaultViewMode;
+    }
     if (body.visibility !== undefined) updates.visibility = body.visibility;
 
     await db.update(schema.archiveCollections).set(updates).where(
@@ -426,6 +419,9 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
 
     const body = request.body as { outputKind?: string };
     const outputKind = (body.outputKind ?? "mini_zip") as typeof schema.exportOutputKindEnum.enumValues[number];
+    if (!validZipOutputKinds.includes(outputKind as typeof validZipOutputKinds[number])) {
+      return reply.status(400).send({ error: "This export endpoint only supports ZIP-based offline packages" });
+    }
 
     const collection = await db.query.archiveCollections.findFirst({
       where: (c, { and, eq }) => and(eq(c.id, collectionId), eq(c.treeId, treeId)),
@@ -445,7 +441,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
     }).returning();
 
     try {
-      streamExportZip(manifest, mediaObjectKeys, reply);
+      await streamExportZip(manifest, mediaObjectKeys, reply);
 
       await db.update(schema.archiveExports).set({
         status: "completed",

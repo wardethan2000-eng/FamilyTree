@@ -23,6 +23,6 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
       membership.role,
     );
 
-    streamExportZip(manifest, mediaObjectKeys, reply);
+    await streamExportZip(manifest, mediaObjectKeys, reply);
   });
 }
