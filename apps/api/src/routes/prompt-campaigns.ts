@@ -701,6 +701,96 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
     return reply.send({ sent, totalRecipients: campaign.recipients.length });
   });
 
+  /** GET /api/trees/:treeId/prompts/:promptId/follow-up-suggestions */
+  app.get("/api/trees/:treeId/prompts/:promptId/follow-up-suggestions", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, promptId } = request.params as { treeId: string; promptId: string };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) return reply.status(403).send({ error: "Not a member" });
+
+    const prompt = await db.query.prompts.findFirst({
+      where: (p, { and, eq }) => and(eq(p.id, promptId), eq(p.treeId, treeId)),
+    });
+    if (!prompt) return reply.status(404).send({ error: "Prompt not found" });
+
+    const campaignQuestion = await db.query.promptCampaignQuestions.findFirst({
+      where: (q, { eq }) => eq(q.sentPromptId, promptId),
+      with: { campaign: true },
+    });
+
+    const campaignType = campaignQuestion?.campaign?.campaignType ?? "about_person";
+    const sensitivityCeiling = campaignQuestion?.campaign?.campaignType
+      ? "careful"
+      : "ordinary";
+
+    const sensitivityOrder = ["ordinary", "careful", "grief_safe"] as const;
+    const maxSensitivityIndex = sensitivityOrder.indexOf(sensitivityCeiling);
+
+    const libraryQuestions = await db.query.promptLibraryQuestions.findMany({
+      orderBy: (q, { asc }) => [asc(q.theme), asc(q.recommendedPosition)],
+    });
+
+    const alreadySentTexts = new Set<string>();
+
+    if (campaignQuestion) {
+      const allQuestions = await db.query.promptCampaignQuestions.findMany({
+        where: (q, { eq }) => eq(q.campaignId, campaignQuestion.campaignId),
+      });
+      for (const q of allQuestions) {
+        alreadySentTexts.add(q.questionText.trim().toLowerCase());
+      }
+    }
+
+    const existingPrompt = await db.query.prompts.findFirst({
+      where: (p, { and, eq }) => and(eq(p.id, promptId), eq(p.treeId, treeId)),
+    });
+    if (existingPrompt) {
+      alreadySentTexts.add(existingPrompt.questionText.trim().toLowerCase());
+    }
+
+    let matchingLibraryQs = libraryQuestions.filter((q) => {
+      const sIdx = sensitivityOrder.indexOf(q.sensitivity);
+      if (sIdx > maxSensitivityIndex) return false;
+      if (alreadySentTexts.has(q.questionText.trim().toLowerCase())) return false;
+      return true;
+    });
+
+    if (campaignType) {
+      const themeOrder: Record<string, number> = {};
+      const campaignThemesByType: Record<string, string[]> = {
+        one_relative: ["warmup", "childhood", "family_home"],
+        about_person: ["warmup", "childhood", "family_home", "work", "courtship", "legacy"],
+        photo_identify: ["family_home", "childhood", "holidays"],
+        reunion: ["warmup", "holidays", "childhood", "food"],
+        anniversary: ["courtship", "family_home", "food", "holidays"],
+        place_drive: ["family_home", "childhood", "migration", "work"],
+        theme_based: ["food", "holidays", "family_home"],
+      };
+      const prioritizedThemes = campaignThemesByType[campaignType] ?? ["warmup", "childhood", "family_home"];
+      prioritizedThemes.forEach((t, i) => { themeOrder[t] = i; });
+
+      matchingLibraryQs.sort((a, b) => {
+        const aPri = themeOrder[a.theme] ?? 99;
+        const bPri = themeOrder[b.theme] ?? 99;
+        if (aPri !== bPri) return aPri - bPri;
+        return a.recommendedPosition - b.recommendedPosition;
+      });
+    }
+
+    const suggestions = matchingLibraryQs.slice(0, 5).map((q) => ({
+      id: q.id,
+      theme: q.theme,
+      tier: q.tier,
+      questionText: q.questionText,
+      sensitivity: q.sensitivity,
+      followUpTags: q.followUpTags,
+    }));
+
+    return reply.send({ suggestions });
+  });
+
   /** POST /api/trees/:treeId/prompts/:promptId/follow-ups */
   app.post("/api/trees/:treeId/prompts/:promptId/follow-ups", async (request, reply) => {
     const session = await getSession(request.headers);

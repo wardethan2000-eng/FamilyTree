@@ -58,6 +58,16 @@ interface CampaignTemplate {
   questions: TemplateQuestion[];
 }
 
+const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
+  one_relative: "One relative",
+  about_person: "About a person",
+  photo_identify: "Photo identification",
+  reunion: "Reunion",
+  anniversary: "Anniversary",
+  place_drive: "Place memories",
+  theme_based: "Theme-based",
+};
+
 const STEPS = [
   { label: "Type", icon: "1" },
   { label: "Subject", icon: "2" },
@@ -397,7 +407,7 @@ function CampaignCard({
                   borderRadius: 999,
                 }}
               >
-                {campaign.campaignType.replace(/_/g, " ")}
+                {CAMPAIGN_TYPE_LABELS[campaign.campaignType] ?? campaign.campaignType?.replace(/_/g, " ") ?? ""}
               </span>
             )}
           </div>

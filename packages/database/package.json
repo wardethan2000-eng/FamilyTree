@@ -20,7 +20,8 @@
     "db:migrate": "drizzle-kit migrate --config ../../drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config ../../drizzle.config.ts",
     "db:backfill:cross-tree": "pnpm build && node dist/scripts/cross-tree-backfill.js",
-    "db:backfill:branches": "pnpm build && node dist/scripts/branch-backfill.js"
+    "db:backfill:branches": "pnpm build && node dist/scripts/branch-backfill.js",
+    "db:seed:prompt-library": "pnpm build && node dist/scripts/seed-prompt-library.js"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.7",

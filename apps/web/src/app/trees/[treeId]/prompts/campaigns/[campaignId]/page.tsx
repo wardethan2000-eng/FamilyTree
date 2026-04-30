@@ -8,6 +8,16 @@ import { getApiBase } from "@/lib/api-base";
 
 const API = getApiBase();
 
+const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
+  one_relative: "One relative",
+  about_person: "About a person",
+  photo_identify: "Photo identification",
+  reunion: "Reunion",
+  anniversary: "Anniversary",
+  place_drive: "Place memories",
+  theme_based: "Theme-based",
+};
+
 interface ActivityQuestion {
   id: string;
   questionText: string;
@@ -233,7 +243,7 @@ function CampaignHeader({
                 borderRadius: 999,
               }}
             >
-              {activity.campaignType.replace(/_/g, " ")}
+              {CAMPAIGN_TYPE_LABELS[activity.campaignType] ?? activity.campaignType?.replace(/_/g, " ") ?? ""}
             </span>
           )}
         </div>
@@ -526,6 +536,24 @@ function QuestionsTab({
   const [followUpQuestion, setFollowUpQuestion] = useState("");
   const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
   const [followUpTarget, setFollowUpTarget] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; questionText: string; theme: string }>>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  async function loadSuggestions(promptId: string) {
+    setSuggestionsLoading(true);
+    setSuggestions([]);
+    try {
+      const res = await fetch(
+        `${API}/api/trees/${treeId}/prompts/${promptId}/follow-up-suggestions`,
+        { credentials: "include" },
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { suggestions: Array<{ id: string; questionText: string; theme: string }> };
+        setSuggestions(data.suggestions);
+      }
+    } catch {}
+    setSuggestionsLoading(false);
+  }
 
   async function submitFollowUp(promptId: string) {
     if (!followUpQuestion.trim()) return;
@@ -620,7 +648,13 @@ function QuestionsTab({
                 {q.sentPromptId && (
                   <button
                     type="button"
-                    onClick={() => setFollowUpTarget(followUpTarget === q.sentPromptId ? null : q.sentPromptId!)}
+                    onClick={() => {
+                      const newTarget = followUpTarget === q.sentPromptId ? null : q.sentPromptId!;
+                      setFollowUpTarget(newTarget);
+                      setFollowUpQuestion("");
+                      setSuggestions([]);
+                      if (newTarget) void loadSuggestions(q.sentPromptId!);
+                    }}
                     style={{
                       background: "none",
                       border: "1px solid var(--rule)",
@@ -641,45 +675,103 @@ function QuestionsTab({
                   style={{
                     marginTop: 8,
                     display: "flex",
-                    gap: 6,
-                    alignItems: "flex-start",
+                    flexDirection: "column",
+                    gap: 8,
                   }}
                 >
-                  <input
-                    type="text"
-                    value={followUpQuestion}
-                    onChange={(e) => setFollowUpQuestion(e.target.value)}
-                    placeholder="Type a follow-up question&hellip;"
+                  <div
                     style={{
-                      flex: 1,
-                      fontFamily: "var(--font-ui)",
-                      fontSize: 13,
-                      padding: "6px 10px",
-                      border: "1px solid var(--rule)",
-                      borderRadius: 4,
-                      background: "var(--paper-deep)",
-                      color: "var(--ink)",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => submitFollowUp(q.sentPromptId!)}
-                    disabled={!followUpQuestion.trim() || followUpSubmitting}
-                    style={{
-                      fontFamily: "var(--font-ui)",
-                      fontSize: 12,
-                      padding: "6px 12px",
-                      background: "var(--moss)",
-                      color: "var(--paper)",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: followUpQuestion.trim() ? "pointer" : "not-allowed",
-                      opacity: followUpSubmitting ? 0.6 : 1,
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "flex-start",
                     }}
                   >
-                    {followUpSubmitting ? "Adding\u2026" : "Add"}
-                  </button>
+                    <input
+                      type="text"
+                      value={followUpQuestion}
+                      onChange={(e) => setFollowUpQuestion(e.target.value)}
+                      placeholder="Type a follow-up question…"
+                      style={{
+                        flex: 1,
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 13,
+                        padding: "6px 10px",
+                        border: "1px solid var(--rule)",
+                        borderRadius: 4,
+                        background: "var(--paper-deep)",
+                        color: "var(--ink)",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => submitFollowUp(q.sentPromptId!)}
+                      disabled={!followUpQuestion.trim() || followUpSubmitting}
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 12,
+                        padding: "6px 12px",
+                        background: "var(--moss)",
+                        color: "var(--paper)",
+                        border: "none",
+                        borderRadius: 4,
+                        cursor: followUpQuestion.trim() ? "pointer" : "not-allowed",
+                        opacity: followUpSubmitting ? 0.6 : 1,
+                      }}
+                    >
+                      {followUpSubmitting ? "Adding…" : "Add"}
+                    </button>
+                  </div>
+                  {suggestionsLoading && (
+                    <div style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)" }}>
+                      Loading suggestions…
+                    </div>
+                  )}
+                  {!suggestionsLoading && suggestions.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)", textTransform: "uppercase", letterSpacing: 0.8 }}>
+                        Suggested follow-ups
+                      </div>
+                      {suggestions.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setFollowUpQuestion(s.questionText);
+                          }}
+                          style={{
+                            textAlign: "left",
+                            background: "var(--paper-deep)",
+                            border: "1px solid var(--rule)",
+                            borderRadius: 4,
+                            padding: "6px 10px",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-body)",
+                            fontSize: 13,
+                            color: "var(--ink-soft)",
+                            lineHeight: 1.45,
+                            display: "flex",
+                            alignItems: "baseline",
+                            gap: 8,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "var(--font-ui)",
+                              fontSize: 9,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.6,
+                              color: "var(--ink-faded)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {s.theme.replace(/_/g, " ")}
+                          </span>
+                          <span>{s.questionText}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
