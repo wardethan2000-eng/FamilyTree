@@ -130,8 +130,8 @@ These were the non-obvious parts:
 
 At the time this was last updated, the running app processes were launched from:
 
-- API: `/home/ubuntu/heirloom-homepage-revise-live/apps/api`
-- Web: `/home/ubuntu/heirloom-homepage-revise-live/apps/web`
+- API: `/home/ubuntu/tessera-prompt-lib-live/apps/api`
+- Web: `/home/ubuntu/tessera-prompt-lib-live/apps/web`
 
 Local health checks:
 
@@ -152,10 +152,10 @@ To confirm the working directories:
 ssh -i ~/.ssh/proxmox_key ubuntu@192.168.68.110 'pwdx <pid>'
 ```
 
-Current verified live pids after mosaic integration deploy on 2026-04-28:
+Current verified live pids after prompt-lib deploy on 2026-04-30:
 
-- API listener pid: `199462`
-- Web listener pid: `199463`
+- API listener pid: check `~/tessera-prompt-lib-live/api.pid`
+- Web listener pid: check `~/tessera-prompt-lib-live/web.pid`
 
 ## Historical Startup Shape On The App VM
 
@@ -259,7 +259,8 @@ This helper intentionally avoids `pkill -f "next start"` style matches, kills li
 - Previous live checkout: `/home/ubuntu/heirloom-media-fix-live`
 - Previous live checkout: `/home/ubuntu/heirloom-immersive-scroll-live`
 - Current live checkout: `/home/ubuntu/heirloom-mosaic-integration-live`
-- Previous live checkout: `/home/ubuntu/heirloom-corkboard-rev1-live`
+- Previous live checkout: `/home/ubuntu/tessera-archive-viewer-live`
+- Current live checkout: `/home/ubuntu/tessera-prompt-lib-live`
 - Previous live checkout: `/home/ubuntu/heirloom-decade-rail-live`
 - Historical launcher script: `/home/ubuntu/start-heirloom.sh`
 - Backup directory on data VM: `~/familytree-backups`
