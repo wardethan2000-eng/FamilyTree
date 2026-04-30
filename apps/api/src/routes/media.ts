@@ -2,12 +2,16 @@ import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID, createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { validateCastToken } from "./cast-token.js";
+import {
+  getVisibleMemoryIdsForTree,
+  isMemoryInTreeScope,
+} from "../lib/cross-tree-read-service.js";
 import {
   contentDisposition,
   extForMimeType,
@@ -85,7 +89,12 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
           and(eq(m.treeId, mediaRecord.treeId), eq(m.userId, userId)),
       });
 
-      if (!directMembership) {
+      if (directMembership) {
+        const allowed = await checkDirectTreeMediaAccess(mediaRecord, userId);
+        if (!allowed) {
+          return reply.status(403).send({ error: "Access denied" });
+        }
+      } else {
         const allowed = await checkCrossTreeAccess(mediaRecord, userId);
         if (!allowed) {
           return reply.status(403).send({ error: "Access denied" });
@@ -221,6 +230,49 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
 
 type MediaRecord = { treeId: string; id: string };
 
+async function getMemoryIdsForMedia(mediaId: string): Promise<string[]> {
+  const [legacyMemoryRows, memoryMediaRows, perspectiveRows] = await Promise.all([
+    db.query.memories.findMany({
+      where: (candidate) => eq(candidate.mediaId, mediaId),
+      columns: { id: true },
+    }),
+    db.query.memoryMedia.findMany({
+      where: (candidate, { eq }) => eq(candidate.mediaId, mediaId),
+      columns: { memoryId: true },
+    }),
+    db.query.memoryPerspectives.findMany({
+      where: (candidate, { eq }) => eq(candidate.mediaId, mediaId),
+      columns: { memoryId: true },
+    }),
+  ]);
+
+  return [
+    ...new Set([
+      ...legacyMemoryRows.map((row) => row.id),
+      ...memoryMediaRows.map((row) => row.memoryId),
+      ...perspectiveRows.map((row) => row.memoryId),
+    ]),
+  ];
+}
+
+async function checkDirectTreeMediaAccess(
+  mediaRecord: MediaRecord,
+  userId: string,
+): Promise<boolean> {
+  const memoryIds = await getMemoryIdsForMedia(mediaRecord.id);
+  if (memoryIds.length === 0) {
+    return true;
+  }
+
+  const viewableIds = await getVisibleMemoryIdsForTree(
+    mediaRecord.treeId,
+    memoryIds,
+    userId,
+  );
+
+  return viewableIds.length > 0;
+}
+
 /**
  * Returns true if userId may access media from mediaRecord's tree via an
  * active cross-tree connection:
@@ -240,6 +292,11 @@ async function checkScopedTreeAccess(
   mediaRecord: MediaRecord,
   userId: string,
 ): Promise<boolean> {
+  const memoryIds = await getMemoryIdsForMedia(mediaRecord.id);
+  if (memoryIds.length === 0) {
+    return false;
+  }
+
   const memberships = await db.query.treeMemberships.findMany({
     where: (membership) => eq(membership.userId, userId),
     columns: {
@@ -251,45 +308,48 @@ async function checkScopedTreeAccess(
     return false;
   }
 
-  const [linkedMemoryRow, legacyMemory] = await Promise.all([
-    db.query.memoryMedia.findFirst({
-      where: (candidate, { eq }) => eq(candidate.mediaId, mediaRecord.id),
-      columns: {
-        memoryId: true,
-      },
+  const visibleMemoryIdsByTree = await Promise.all(
+    userTreeIds.map(async (treeId) => {
+      const scopedMemoryFlags = await Promise.all(
+        memoryIds.map(async (memoryId) => ({
+          memoryId,
+          inScope: await isMemoryInTreeScope(treeId, memoryId),
+        })),
+      );
+      const scopedMemoryIds = scopedMemoryFlags
+        .filter((memory) => memory.inScope)
+        .map((memory) => memory.memoryId);
+      if (scopedMemoryIds.length === 0) return [];
+
+      return getVisibleMemoryIdsForTree(
+        treeId,
+        scopedMemoryIds,
+        userId,
+      );
     }),
-    db.query.memories.findFirst({
-      where: (candidate) => eq(candidate.mediaId, mediaRecord.id),
-      columns: {
-        id: true,
-        primaryPersonId: true,
-      },
-    }),
-  ]);
-  const memory = legacyMemory
-    ? legacyMemory
-    : linkedMemoryRow
-      ? await db.query.memories.findFirst({
-          where: (candidate, { eq }) => eq(candidate.id, linkedMemoryRow.memoryId),
-          columns: {
-            id: true,
-            primaryPersonId: true,
-          },
-        })
-      : null;
-  if (!memory) {
+  );
+  const accessibleMemoryIds = [...new Set(visibleMemoryIdsByTree.flat())];
+  if (accessibleMemoryIds.length === 0) {
     return false;
   }
 
-  const tagRows = await db
-    .select({ personId: schema.memoryPersonTags.personId })
-    .from(schema.memoryPersonTags)
-    .where(eq(schema.memoryPersonTags.memoryId, memory.id));
+  const [memories, tagRows] = await Promise.all([
+    db.query.memories.findMany({
+      where: (candidate, { inArray }) => inArray(candidate.id, accessibleMemoryIds),
+      columns: {
+        primaryPersonId: true,
+      },
+    }),
+    db
+      .select({ personId: schema.memoryPersonTags.personId })
+      .from(schema.memoryPersonTags)
+      .where(inArray(schema.memoryPersonTags.memoryId, accessibleMemoryIds)),
+  ]);
 
   const candidatePersonIds =
     tagRows.length > 0
       ? [...new Set(tagRows.map((row) => row.personId))]
-      : [memory.primaryPersonId];
+      : [...new Set(memories.map((memory) => memory.primaryPersonId))];
 
   const [scopeMatch, legacyMatch] = await Promise.all([
     db.query.treePersonScope.findFirst({

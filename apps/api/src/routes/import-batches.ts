@@ -568,6 +568,14 @@ export async function importBatchesPlugin(app: FastifyInstance): Promise<void> {
         return reply.status(500).send({ error: "Failed to create batch item" });
       }
 
+      await db
+        .update(schema.importBatches)
+        .set({
+          totalItems: sql`${schema.importBatches.totalItems} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.importBatches.id, batchId));
+
       return reply.status(201).send({
         itemId: batchItem.id,
         mediaId: mediaRecord.id,

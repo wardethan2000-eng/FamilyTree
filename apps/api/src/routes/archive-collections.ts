@@ -5,11 +5,12 @@ import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { buildCollectionManifest } from "../lib/archive-export/collection-manifest-builder.js";
 import { streamExportZip } from "../lib/archive-export/zip-writer.js";
-import { getTreeMemories } from "../lib/cross-tree-read-service.js";
-
-function canManage(role: string | null): boolean {
-  return role === "founder" || role === "admin" || role === "editor";
-}
+import {
+  getTreeMemories,
+  getTreePersonRelationships,
+  getTreeScopedPerson,
+} from "../lib/cross-tree-read-service.js";
+import { canManageTreeScope } from "../lib/cross-tree-permission-service.js";
 
 const validScopeKinds = ["person", "couple", "branch", "event", "place", "theme", "manual"] as const;
 const validViewModes = ["chapter", "drift", "gallery", "storybook", "kiosk"] as const;
@@ -42,10 +43,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       const personId = body.scope?.personId;
       if (!personId) return reply.status(400).send({ error: "personId is required for person scope" });
 
-      const person = await db.query.people.findFirst({
-        where: (p, { and, eq }) => and(eq(p.id, personId), eq(p.treeId, treeId)),
-        with: { portraitMedia: { columns: { id: true, objectKey: true, mimeType: true } } },
-      });
+      const person = await getTreeScopedPerson(treeId, personId);
       if (!person) return reply.status(404).send({ error: "Person not found" });
 
       const visiblePersonMemories = await getTreeMemories(treeId, {
@@ -54,14 +52,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
         limit: 15,
       });
 
-      const relationships = await db.query.relationships.findMany({
-        where: (r, { and, or, eq }) =>
-          and(eq(r.treeId, treeId), or(eq(r.fromPersonId, personId), eq(r.toPersonId, personId))),
-        with: {
-          fromPerson: { columns: { id: true, displayName: true } },
-          toPerson: { columns: { id: true, displayName: true } },
-        },
-      });
+      const relationships = await getTreePersonRelationships(treeId, personId);
 
       const relatedPersonIds = new Set<string>();
       for (const r of relationships) {
@@ -143,7 +134,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     const body = request.body as {
       name: string;
@@ -228,7 +219,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     const body = request.body as {
       name?: string;
@@ -269,7 +260,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     await db.delete(schema.archiveCollections).where(
       and(eq(schema.archiveCollections.id, collectionId), eq(schema.archiveCollections.treeId, treeId)),
@@ -288,7 +279,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     const body = request.body as {
       itemKind: string;
@@ -328,7 +319,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     const body = request.body as { sortOrder?: number; captionOverride?: string; sectionId?: string; includeContext?: boolean };
     const updates: Record<string, unknown> = {};
@@ -356,7 +347,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     await db.delete(schema.archiveCollectionItems).where(
       and(eq(schema.archiveCollectionItems.id, itemId), eq(schema.archiveCollectionItems.collectionId, collectionId)),
@@ -375,7 +366,7 @@ export async function archiveCollectionsPlugin(app: FastifyInstance): Promise<vo
       where: (t, { and, eq }) => and(eq(t.treeId, treeId), eq(t.userId, session.user.id)),
     });
     if (!membership) return reply.status(403).send({ error: "Not a member" });
-    if (!canManage(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+    if (!canManageTreeScope(membership.role)) return reply.status(403).send({ error: "Not allowed" });
 
     const body = request.body as { title: string; body?: string; sectionKind?: string; sortOrder?: number };
     if (!body.title?.trim()) return reply.status(400).send({ error: "title is required" });

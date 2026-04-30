@@ -287,7 +287,7 @@ export function startMetadataExtractionWorker(logger: LoggerLike): () => void {
             .update(schema.importBatchItems)
             .set({
               ...updateData,
-              status: "imported",
+              status: nextItem.memoryId ? "imported" : "uploaded",
               lockedAt: null,
               lastError: null,
               updatedAt: new Date(),

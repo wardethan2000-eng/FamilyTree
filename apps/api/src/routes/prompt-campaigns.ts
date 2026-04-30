@@ -982,7 +982,12 @@ async function processCampaignOnce(
   const recipients = await db
     .select()
     .from(schema.promptCampaignRecipients)
-    .where(eq(schema.promptCampaignRecipients.campaignId, campaign.id));
+    .where(
+      and(
+        eq(schema.promptCampaignRecipients.campaignId, campaign.id),
+        eq(schema.promptCampaignRecipients.status, "active"),
+      ),
+    );
 
   if (recipients.length === 0) {
     log.warn({ campaignId: campaign.id }, "Campaign has no recipients; pausing");
@@ -1223,4 +1228,3 @@ export function startPromptCampaignScheduler(
     }
   };
 }
-

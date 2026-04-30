@@ -508,14 +508,25 @@ async function submitMemory(
         and(eq(p.id, promptId), eq(p.treeId, t.treeId)),
     })) ?? null;
     if (!promptRow) return reply.status(404).send({ error: "Prompt not found" });
+    if (promptRow.toPersonId !== t.associatedPersonId) {
+      return reply.status(403).send({ error: "This prompt is not assigned to this link" });
+    }
+    if (promptRow.status !== "pending") {
+      return reply.status(409).send({ error: "This prompt has already been answered or closed" });
+    }
   }
 
   if (mediaIds?.length) {
     for (const mid of mediaIds) {
       const m = await db.query.media.findFirst({
         where: (mm, { and, eq }) => and(eq(mm.id, mid), eq(mm.treeId, t.treeId)),
+        columns: { id: true, objectKey: true },
       });
       if (!m) return reply.status(400).send({ error: "Media not in this tree" });
+      const expectedPrefix = `trees/${t.treeId}/elder-capture/${t.id}/`;
+      if (!m.objectKey.startsWith(expectedPrefix)) {
+        return reply.status(403).send({ error: "Media was not uploaded with this link" });
+      }
     }
   }
 
