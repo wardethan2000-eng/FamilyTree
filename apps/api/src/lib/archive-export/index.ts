@@ -1,7 +1,6 @@
 export { buildFullTreeManifest, buildPersonManifest, buildMediaLocalPath } from "./manifest-builder.js";
-export { streamMediaFiles, collectMediaKeys } from "./media-export.js";
-export { streamArchiveZip } from "./zip-writer.js";
-export { buildOfflineViewerHtml } from "./html-renderer.js";
+export { streamExportZip } from "./zip-writer.js";
+export { renderIndexHtml } from "./html-renderer.js";
 export type {
   ArchiveExportManifest,
   ExportPerson,
@@ -11,6 +10,7 @@ export type {
   ExportPlace,
   ExportSection,
   ExportMedia,
+  ExportPersonCuration,
   MediaQuality,
   ExportOutputKind,
 } from "./types.js";

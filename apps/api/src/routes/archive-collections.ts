@@ -11,7 +11,7 @@ import {
   getTreeScopedPersonIds,
 } from "../lib/cross-tree-read-service.js";
 import { buildPersonManifest } from "../lib/archive-export/manifest-builder.js";
-import { streamArchiveZip } from "../lib/archive-export/zip-writer.js";
+import { streamExportZip } from "../lib/archive-export/zip-writer.js";
 
 function slugify(name: string): string {
   return name
@@ -427,7 +427,7 @@ export async function archiveCollectionsPlugin(
         collection.scopeKind === "person" &&
         collection.scopeJson?.personId
       ) {
-        const manifest = await buildPersonManifest({
+        const { manifest } = await buildPersonManifest({
           treeId,
           viewerUserId: session.user.id,
           viewerRole: membership.role,
@@ -467,12 +467,12 @@ export async function archiveCollectionsPlugin(
       if (!collection)
         return reply.status(404).send({ error: "Collection not found" });
 
-      let manifest;
+      let manifest, mediaObjectKeys;
       if (
         collection.scopeKind === "person" &&
         collection.scopeJson?.personId
       ) {
-        manifest = await buildPersonManifest({
+        const result = await buildPersonManifest({
           treeId,
           viewerUserId: session.user.id,
           viewerRole: membership.role,
@@ -480,15 +480,13 @@ export async function archiveCollectionsPlugin(
           collectionName: collection.name,
           collectionDescription: collection.description,
         });
+        manifest = result.manifest;
+        mediaObjectKeys = result.mediaObjectKeys;
       } else {
         return reply.status(400).send({ error: "Unsupported collection scope" });
       }
 
-      await streamArchiveZip(reply, {
-        manifest,
-        media: manifest.media,
-        treeName: collection.slug,
-      });
+      streamExportZip(manifest, mediaObjectKeys, reply);
     },
   );
 }

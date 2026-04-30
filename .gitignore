@@ -16,3 +16,4 @@ apps/*/.next/
 packages/*/node_modules/
 
 packages/database/tsconfig.tsbuildinfo
+apps/web/dist-viewer/

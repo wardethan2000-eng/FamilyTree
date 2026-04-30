@@ -1,24 +1,17 @@
 import archiver from "archiver";
 import type { FastifyReply } from "fastify";
 import type { Readable } from "node:stream";
-import type { ArchiveExportManifest, ExportMedia, MediaQuality } from "./types.js";
-import { streamMediaFiles } from "./media-export.js";
-import { buildOfflineViewerHtml } from "./html-renderer.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { s3, MEDIA_BUCKET } from "../../lib/storage.js";
+import type { ArchiveExportManifest } from "./types.js";
+import { renderIndexHtml } from "./html-renderer.js";
 
-type ZipOptions = {
-  manifest: ArchiveExportManifest;
-  media: ExportMedia[];
-  mediaQuality?: MediaQuality;
-  treeName: string;
-};
-
-export async function streamArchiveZip(
+export function streamExportZip(
+  manifest: ArchiveExportManifest,
+  mediaObjectKeys: Map<string, string>,
   reply: FastifyReply,
-  options: ZipOptions,
-): Promise<void> {
-  const { manifest, media, mediaQuality = "web", treeName } = options;
-
-  const safeName = treeName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+): void {
+  const safeName = manifest.tree.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
   reply.raw.setHeader("Content-Type", "application/zip");
   reply.raw.setHeader(
     "Content-Disposition",
@@ -28,34 +21,14 @@ export async function streamArchiveZip(
   const archive = archiver("zip", { zlib: { level: 6 } });
   archive.pipe(reply.raw);
 
-  const viewerHtml = buildOfflineViewerHtml(manifest);
-  archive.append(viewerHtml, { name: "index.html" });
+  archive.append(renderIndexHtml(manifest), { name: "index.html" });
 
-  archive.append(buildReadmeTxt(manifest, treeName), { name: "README.txt" });
-
-  for await (const file of streamMediaFiles(media, mediaQuality)) {
-    archive.append(file.stream as Readable, { name: file.name });
-  }
-
-  await archive.finalize();
-}
-
-function buildReadmeTxt(
-  manifest: ArchiveExportManifest,
-  treeName: string,
-): string {
-  const date = new Date(manifest.exportedAt).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  return [
-    `${treeName} — Tessera Local Archive`,
+  const readmeText = [
+    `${manifest.collection.name} — Tessera Local Archive`,
     ``,
     `Open index.html in a browser.`,
     ``,
-    `This local archive was prepared from Tessera on ${date}.`,
+    `This local archive was prepared from Tessera on ${new Date(manifest.exportedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.`,
     `It does not require an internet connection.`,
     `Anyone with this folder can view its contents.`,
     `Keep the media folder beside index.html.`,
@@ -65,8 +38,42 @@ function buildReadmeTxt(
     `People: ${manifest.people.length}`,
     `Memories: ${manifest.memories.length}`,
     `Media files: ${manifest.media.length}`,
-    ``,
-    `Exported by: ${manifest.permissions.exportedByUserId}`,
-    `Role at time of export: ${manifest.permissions.exportedByRole}`,
   ].join("\n");
+  archive.append(readmeText, { name: "README.txt" });
+
+  for (const [mediaId, objectKey] of mediaObjectKeys) {
+    archive.append(fetchMediaStream(objectKey), { name: `media/${mediaId}.${extFromKey(objectKey)}` });
+  }
+
+  archive.finalize();
+}
+
+function extFromKey(objectKey: string): string {
+  const dotIndex = objectKey.lastIndexOf(".");
+  if (dotIndex === -1) return "bin";
+  return objectKey.slice(dotIndex + 1) || "bin";
+}
+
+function fetchMediaStream(objectKey: string): Readable {
+  const passthrough = new Readable({ read() {} });
+
+  (async () => {
+    try {
+      const obj = await s3.send(
+        new GetObjectCommand({ Bucket: MEDIA_BUCKET, Key: objectKey }),
+      );
+      if (obj.Body) {
+        const nodeStream = Readable.fromWeb(obj.Body as ReadableStream<Uint8Array>);
+        nodeStream.on("data", (chunk: Buffer) => passthrough.push(chunk));
+        nodeStream.on("end", () => passthrough.push(null));
+        nodeStream.on("error", (err: Error) => passthrough.destroy(err));
+      } else {
+        passthrough.push(null);
+      }
+    } catch {
+      passthrough.push(null);
+    }
+  })();
+
+  return passthrough;
 }

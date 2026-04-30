@@ -835,9 +835,9 @@ Files modified:
 
 - `apps/api/src/routes/export.ts` — refactored to use new modules; added `GET /person/:personId` route
 
-Not yet done:
+ Not yet done:
 
-- [ ] Basic tests for manifest shape and media path mapping (deferred)
+- [x] Basic tests for manifest shape and media path mapping
 - [ ] `file://` video/audio browser testing (pre-Phase-2 manual test)
 
 ### Phase 2: Person Mini-Archive — 🔄 IN PROGRESS
@@ -868,22 +868,56 @@ Completed tasks:
 - [x] Add export endpoint `POST /:collectionId/export`
 - [x] Add `person/:personId` export route for direct person mini-archive without creating a collection
 - [x] Generate Drizzle migration `0031_blue_ulik.sql`
+- [x] Preact offline viewer scaffold with Vite build pipeline
+- [x] Replace string-template HTML with Preact-built viewer
+- [x] Add simple UI entry from person page ("Download local archive" button)
+
+Preact viewer features completed:
+
+- [x] Hash-based routing (`#/people/:id`, `#/memories/:id`, `#/drift`, `#/search?q=`)
+- [x] Home screen with collection info, intro/dedication text, recent memories
+- [x] Person page with portrait, life dates, essence line, alsoKnownAs, connections, place context, memory cards with kind icons
+- [x] Memory detail overlay with video playback, image gallery, audio player, transcript, perspectives (image/video/audio), place context, related memories, tagged people, caption override
+- [x] Sidebar with person list, search/filter, mobile hamburger menu
+- [x] Drift mode with video autoplay, audio playback, voice transcript preview, place labels, keyboard controls
+- [x] Search page with full-text search across people, memories, places with highlighted results
+- [x] Responsive layout with 768px breakpoint
+- [x] Tessera design system (paper/ink/moss palette)
+
+Manifest builder improvements:
+
+- [x] Top-level perspectives array (no longer inline on memories)
+- [x] Person curation data (`personCuration` array) for featured memory and sort ordering
+- [x] `ExportMedia.localPath` replaces `objectKey` (no S3 key leak)
+- [x] Manifest builder returns `{manifest, mediaObjectKeys}` for consistent zip-writer usage
+- [x] Viewer and backend types aligned (`ExportPlace`, `ExportSection`, `ExportPerspective`, `ExportPersonCuration`)
 
 Files created:
 
 - `apps/api/src/routes/archive-collections.ts`
+- `apps/web/src/archive-viewer/` (8 source files + test)
+- `apps/web/vite.archive-viewer.config.ts`
+- `apps/web/tsconfig.archive-viewer.json`
+- `apps/api/src/lib/archive-export/manifest-builder.test.ts`
 
 Files modified:
 
 - `packages/database/src/schema.ts` — new enums, tables, relations
 - `apps/api/src/app.ts` — registered `archiveCollectionsPlugin`
+- `apps/api/src/lib/archive-export/types.ts` — aligned with viewer types
+- `apps/api/src/lib/archive-export/manifest-builder.ts` — unified builder, top-level perspectives, personCuration
+- `apps/api/src/lib/archive-export/html-renderer.ts` — Preact bundle loader (replaced 423-line string template)
+- `apps/api/src/lib/archive-export/zip-writer.ts` — `streamExportZip(manifest, mediaObjectKeys, reply)`
+- `apps/api/src/lib/archive-export/index.ts` — updated barrel exports
+- `apps/api/src/routes/export.ts` — uses new manifest builder + zip writer signatures
+- `apps/api/src/routes/archive-collections.ts` — uses new signatures
+- `apps/web/package.json` — added preact, @preact/preset-vite, vite, build:viewer script
+- `apps/web/src/app/trees/[treeId]/people/[personId]/page.tsx` — "Download local archive" button
 
 Not yet done:
 
 - [ ] Add simple UI entry from person page (frontend)
 - [ ] Add review screen with included memories and people (frontend)
-- [ ] Preact offline viewer scaffold with Vite build pipeline
-- [ ] Replace string-template HTML with Preact-built viewer
 - [ ] Extract corkboard into `packages/corkboard/` shared package
 
 Acceptance criteria (partially met):

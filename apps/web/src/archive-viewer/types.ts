@@ -27,8 +27,8 @@ export type ArchiveExportManifest = {
   media: ExportMedia[];
   personCuration: ExportPersonCuration[];
   permissions: {
-    exportedByUserId: string;
-    exportedByRole: string;
+    viewerUserId: string;
+    generatedFromRole: string;
     visibilityResolvedAt: string;
   };
 };
@@ -65,14 +65,6 @@ export type ExportMemory = {
   captionOverride: string | null;
 };
 
-export type ExportPerspective = {
-  id: string;
-  memoryId: string;
-  body: string | null;
-  mediaId: string | null;
-  contributorName: string | null;
-};
-
 export type ExportRelationship = {
   id: string;
   fromPersonId: string;
@@ -87,9 +79,6 @@ export type ExportPlace = {
   label: string;
   latitude: number | null;
   longitude: number | null;
-  locality?: string;
-  adminRegion?: string;
-  countryCode?: string;
 };
 
 export type ExportSection = {
@@ -110,13 +99,17 @@ export type ExportMedia = {
   role: "portrait" | "memory" | "perspective" | "attachment";
 };
 
+export type ExportPerspective = {
+  id: string;
+  memoryId: string;
+  body: string | null;
+  mediaId: string | null;
+  contributorName: string | null;
+};
+
 export type ExportPersonCuration = {
   personId: string;
   memoryId: string;
   isFeatured: boolean;
   sortOrder: number;
 };
-
-export type MediaQuality = "original" | "web" | "small";
-
-export type ExportOutputKind = "full_zip" | "mini_zip";

@@ -3,7 +3,6 @@ import * as schema from "@tessera/database";
 import { eq, inArray } from "drizzle-orm";
 import {
   getTreeScopedPeople,
-  getTreeScopedPeople as _getTreeScopedPeople,
   getTreeMemories,
   getTreeRelationships,
 } from "../cross-tree-read-service.js";
@@ -16,8 +15,8 @@ import type {
   ExportSection,
   ExportMedia,
   ExportPerspective,
+  ExportPersonCuration,
   MediaQuality,
-  ExportOutputKind,
 } from "./types.js";
 
 type ScopedPerson = Awaited<ReturnType<typeof getTreeScopedPeople>>[number];
@@ -31,30 +30,39 @@ type ManifestOptions = {
   scopeKind?: string;
   scopePersonId?: string;
   mediaQuality?: MediaQuality;
-  outputKind?: ExportOutputKind;
   includeRelationships?: boolean;
   includeRelatedMemories?: boolean;
   includePlaces?: boolean;
 };
 
-function addMediaFromRow(
-  mediaRow: { id: string; objectKey: string; mimeType: string; sizeBytes: number | bigint; checksum: string | null } | null | undefined,
+type ManifestResult = {
+  manifest: ArchiveExportManifest;
+  mediaObjectKeys: Map<string, string>;
+};
+
+function addMedia(
+  id: string,
+  objectKey: string,
+  mimeType: string,
+  sizeBytes: number,
+  checksum: string | null,
   role: ExportMedia["role"],
   mediaMap: Map<string, ExportMedia>,
   mediaIdSet: Set<string>,
+  mediaObjectKeys: Map<string, string>,
 ): void {
-  if (!mediaRow) return;
-  if (mediaIdSet.has(mediaRow.id)) return;
-  mediaIdSet.add(mediaRow.id);
-  mediaMap.set(mediaRow.id, {
-    id: mediaRow.id,
-    objectKey: mediaRow.objectKey,
-    localPath: buildMediaLocalPath(mediaRow.id, mediaRow.mimeType),
-    mimeType: mediaRow.mimeType,
-    sizeBytes: Number(mediaRow.sizeBytes),
-    checksum: mediaRow.checksum,
+  if (mediaIdSet.has(id)) return;
+  mediaIdSet.add(id);
+  const ext = extForMimeType(mimeType) || "bin";
+  mediaMap.set(id, {
+    id,
+    localPath: `media/${id}.${ext}`,
+    mimeType,
+    sizeBytes,
+    checksum,
     role,
   });
+  mediaObjectKeys.set(id, objectKey);
 }
 
 function buildExportPerson(
@@ -68,7 +76,7 @@ function buildExportPerson(
     id: p.id,
     displayName: p.displayName,
     canonicalDisplayName: ("canonicalDisplayName" in p ? (p as Record<string, unknown>).canonicalDisplayName : p.displayName) as string,
-    alsoKnownAs: ("alsoKnownAs" in p ? (Array.isArray((p as Record<string, unknown>).alsoKnownAs) ? (p as Record<string, unknown>).alsoKnownAs as string[] : []) : []) ,
+    alsoKnownAs: ("alsoKnownAs" in p ? (Array.isArray((p as Record<string, unknown>).alsoKnownAs) ? (p as Record<string, unknown>).alsoKnownAs as string[] : []) : []),
     birthDateText: p.birthDateText,
     deathDateText: p.deathDateText,
     essenceLine: p.essenceLine,
@@ -80,25 +88,24 @@ function buildExportPerson(
 
 function buildExportMemory(
   m: Awaited<ReturnType<typeof getTreeMemories>>[number],
-  perspectivesByMemoryId: Map<string, { id: string; body: string | null; contributorName: string | null; mediaId: string | null; mimeType: string | null }[]>,
+  perspectiveIdsByMemory: Map<string, string[]>,
 ): ExportMemory {
   return {
     id: m.id,
     primaryPersonId: m.primaryPersonId,
     title: m.title,
-    kind: m.kind,
+    kind: m.kind as ExportMemory["kind"],
     body: m.body,
     dateOfEventText: m.dateOfEventText,
-    placeId: m.placeId,
+    placeId: m.placeId ?? null,
     placeLabel: m.place?.label ?? m.placeLabelOverride ?? null,
     transcriptText: m.transcriptText,
     mediaIds: [
       ...(m.media ? [m.media.id] : []),
       ...(m.mediaItems?.map((item: { media: { id: string } | null }) => item.media?.id).filter((id: string | null | undefined): id is string => id != null) ?? []),
     ],
-    primaryMediaId: m.media?.id ?? null,
     taggedPersonIds: m.personTags?.map((tag: { personId: string }) => tag.personId) ?? [],
-    perspectiveIds: perspectivesByMemoryId.get(m.id) ?? [],
+    perspectiveIds: perspectiveIdsByMemory.get(m.id) ?? [],
     relatedMemoryIds: [],
     contributorName: m.primaryPerson?.displayName ?? null,
     sectionIds: [],
@@ -106,15 +113,15 @@ function buildExportMemory(
   };
 }
 
-export async function buildFullTreeManifest(
-  options: ManifestOptions,
-): Promise<ArchiveExportManifest> {
-  const {
-    treeId,
-    viewerUserId,
-    viewerRole,
-  } = options;
-
+async function buildManifest(
+  treeId: string,
+  viewerUserId: string,
+  viewerRole: string,
+  people: ScopedPerson[],
+  memories: Awaited<ReturnType<typeof getTreeMemories>>,
+  relationships: Awaited<ReturnType<typeof getTreeRelationships>>,
+  collectionOptions: ManifestOptions & { collectionId?: string | null },
+): Promise<ManifestResult> {
   const tree = await db.query.trees.findFirst({
     where: (t, { eq }) => eq(t.id, treeId),
   });
@@ -124,10 +131,6 @@ export async function buildFullTreeManifest(
     where: (u, { eq }) => eq(u.id, viewerUserId),
     columns: { id: true, name: true },
   });
-
-  const people = await getTreeScopedPeople(treeId);
-  const memories = await getTreeMemories(treeId, { viewerUserId });
-  const relationships = await getTreeRelationships(treeId);
 
   const perspectiveMemoryIds = memories.map((m) => m.id);
   const memoryPerspectives =
@@ -142,18 +145,19 @@ export async function buildFullTreeManifest(
         })
       : [];
 
-  const perspectivesByMemoryId = new Map<string, { id: string; body: string | null; contributorName: string | null; mediaId: string | null; mimeType: string | null }[]>();
-  for (const p of memoryPerspectives) {
-    const entry: { id: string; body: string | null; contributorName: string | null; mediaId: string | null; mimeType: string | null } = {
-      id: p.id,
-      body: p.body,
-      contributorName: p.contributorPerson?.displayName ?? p.contributor?.name ?? null,
-      mediaId: p.media?.id ?? null,
-      mimeType: p.media?.mimeType ?? null,
-    };
-    const current = perspectivesByMemoryId.get(p.memoryId) ?? [];
-    current.push(entry);
-    perspectivesByMemoryId.set(p.memoryId, current);
+  const exportPerspectives: ExportPerspective[] = memoryPerspectives.map((p) => ({
+    id: p.id,
+    memoryId: p.memoryId,
+    body: p.body,
+    mediaId: p.media?.id ?? null,
+    contributorName: p.contributorPerson?.displayName ?? p.contributor?.name ?? null,
+  }));
+
+  const perspectiveIdsByMemory = new Map<string, string[]>();
+  for (const p of exportPerspectives) {
+    const arr = perspectiveIdsByMemory.get(p.memoryId) ?? [];
+    arr.push(p.id);
+    perspectiveIdsByMemory.set(p.memoryId, arr);
   }
 
   const relationshipsByPersonId = new Map<string, typeof relationships>();
@@ -187,48 +191,70 @@ export async function buildFullTreeManifest(
 
   const mediaMap = new Map<string, ExportMedia>();
   const mediaIdSet = new Set<string>();
+  const mediaObjectKeys = new Map<string, string>();
 
   for (const person of people) {
     if (person.portraitMedia) {
-      addMediaFromRow(
-        { id: person.portraitMedia.id, objectKey: person.portraitMedia.objectKey, mimeType: person.portraitMedia.mimeType, sizeBytes: Number(person.portraitMedia.sizeBytes), checksum: person.portraitMedia.checksum ?? null },
+      addMedia(
+        person.portraitMedia.id,
+        person.portraitMedia.objectKey,
+        person.portraitMedia.mimeType,
+        Number(person.portraitMedia.sizeBytes),
+        person.portraitMedia.checksum ?? null,
         "portrait",
         mediaMap,
         mediaIdSet,
+        mediaObjectKeys,
       );
     }
   }
 
   for (const memory of memories) {
     if (memory.media) {
-      addMediaFromRow(
-        { id: memory.media.id, objectKey: memory.media.objectKey, mimeType: memory.media.mimeType, sizeBytes: Number(memory.media.sizeBytes), checksum: memory.media.checksum ?? null },
+      addMedia(
+        memory.media.id,
+        memory.media.objectKey,
+        memory.media.mimeType,
+        Number(memory.media.sizeBytes),
+        memory.media.checksum ?? null,
         "memory",
         mediaMap,
         mediaIdSet,
+        mediaObjectKeys,
       );
     }
     if (memory.mediaItems) {
       for (const item of memory.mediaItems) {
         if (item.media) {
-          addMediaFromRow(
-            { id: item.media.id, objectKey: item.media.objectKey, mimeType: item.media.mimeType, sizeBytes: Number(item.media.sizeBytes), checksum: item.media.checksum ?? null },
+          addMedia(
+            item.media.id,
+            item.media.objectKey,
+            item.media.mimeType,
+            Number(item.media.sizeBytes),
+            item.media.checksum ?? null,
             "memory",
             mediaMap,
             mediaIdSet,
+            mediaObjectKeys,
           );
         }
       }
     }
-    for (const perspective of memoryPerspectives.filter((p) => p.memoryId === memory.id)) {
-      if (perspective.media) {
-        addMediaFromRow(
-          { id: perspective.media.id, objectKey: perspective.media.objectKey, mimeType: perspective.media.mimeType, sizeBytes: Number(perspective.media.sizeBytes), checksum: perspective.media.checksum ?? null },
-          "perspective",
-          mediaMap,
-          mediaIdSet,
-        );
-      }
+  }
+
+  for (const p of memoryPerspectives) {
+    if (p.media) {
+      addMedia(
+        p.media.id,
+        p.media.objectKey,
+        p.media.mimeType,
+        Number(p.media.sizeBytes),
+        p.media.checksum ?? null,
+        "perspective",
+        mediaMap,
+        mediaIdSet,
+        mediaObjectKeys,
+      );
     }
   }
 
@@ -240,65 +266,89 @@ export async function buildFullTreeManifest(
     ? (await db.query.places.findMany({
         where: (p, { inArray }) => inArray(p.id, [...placeIds]),
       })).map((p) => ({
-        id: p.id, label: p.label, latitude: p.latitude, longitude: p.longitude,
-        countryCode: p.countryCode, adminRegion: p.adminRegion, locality: p.locality,
+        id: p.id,
+        label: p.label,
+        latitude: p.latitude ?? null,
+        longitude: p.longitude ?? null,
+        ...(p.locality ? { locality: p.locality } : {}),
+        ...(p.adminRegion ? { adminRegion: p.adminRegion } : {}),
+        ...(p.countryCode ? { countryCode: p.countryCode } : {}),
       }))
     : [];
 
+  const personCurationRows = await db.query.personMemoryCuration.findMany({
+    where: (c, { eq }) => eq(c.treeId, treeId),
+  });
+  const personCuration: ExportPersonCuration[] = personCurationRows.map((c) => ({
+    personId: c.personId,
+    memoryId: c.memoryId,
+    isFeatured: c.isFeatured,
+    sortOrder: c.sortOrder,
+  }));
+
   const exportPeople = people.map((p) => buildExportPerson(p, relationshipsByPersonId, memoriesByPersonId));
-  const exportMemories = memories.map((m) => buildExportMemory(m, perspectivesByMemoryId));
+  const exportMemories = memories.map((m) => buildExportMemory(m, perspectiveIdsByMemory));
   const exportRelationships: ExportRelationship[] = relationships.map((r) => ({
     id: r.id,
     fromPersonId: r.fromPersonId,
     toPersonId: r.toPersonId,
     type: r.type,
-    spouseStatus: r.spouseStatus ?? null,
     startDateText: r.startDateText ?? null,
     endDateText: r.endDateText ?? null,
   }));
 
-  return {
+  const manifest: ArchiveExportManifest = {
     version: 1,
     exportedAt: new Date().toISOString(),
     generatedBy: { userId: viewerUserId, displayName: user?.name ?? null },
     tree: { id: tree.id, name: tree.name },
     collection: {
-      id: null,
-      name: options.collectionName ?? tree.name,
-      description: options.collectionDescription ?? null,
+      id: collectionOptions.collectionId ?? null,
+      name: collectionOptions.collectionName ?? tree.name,
+      description: collectionOptions.collectionDescription ?? null,
       introText: null,
       dedicationText: null,
       defaultViewMode: "chapter",
-      scopeKind: options.scopeKind ?? "full_tree",
+      scopeKind: collectionOptions.scopeKind ?? "full_tree",
     },
     people: exportPeople,
     memories: exportMemories,
     relationships: exportRelationships,
+    perspectives: exportPerspectives,
     places,
-    sections: [],
+    sections: [] as ExportSection[],
     media: [...mediaMap.values()],
+    personCuration,
     permissions: {
       exportedByUserId: viewerUserId,
       exportedByRole: viewerRole,
       visibilityResolvedAt: new Date().toISOString(),
     },
   };
+
+  return { manifest, mediaObjectKeys };
+}
+
+export async function buildFullTreeManifest(
+  options: ManifestOptions,
+): Promise<ManifestResult> {
+  const { treeId, viewerUserId, viewerRole } = options;
+
+  const people = await getTreeScopedPeople(treeId);
+  const memories = await getTreeMemories(treeId, { viewerUserId });
+  const relationships = await getTreeRelationships(treeId);
+
+  return buildManifest(treeId, viewerUserId, viewerRole, people, memories, relationships, {
+    collectionName: options.collectionName,
+    collectionDescription: options.collectionDescription,
+    scopeKind: options.scopeKind ?? "full_tree",
+  });
 }
 
 export async function buildPersonManifest(
   options: ManifestOptions & { scopePersonId: string },
-): Promise<ArchiveExportManifest> {
+): Promise<ManifestResult> {
   const { treeId, viewerUserId, viewerRole, scopePersonId } = options;
-
-  const tree = await db.query.trees.findFirst({
-    where: (t, { eq }) => eq(t.id, treeId),
-  });
-  if (!tree) throw new Error(`Tree ${treeId} not found`);
-
-  const user = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, viewerUserId),
-    columns: { id: true, name: true },
-  });
 
   const allPeople = await getTreeScopedPeople(treeId);
   const targetPerson = allPeople.find((p) => p.id === scopePersonId);
@@ -335,161 +385,11 @@ export async function buildPersonManifest(
     taggedPersonIds.has(p.id) || relatedPersonIds.has(p.id),
   );
 
-  const perspectiveMemoryIds = personMemories.map((m) => m.id);
-  const memoryPerspectives =
-    perspectiveMemoryIds.length > 0
-      ? await db.query.memoryPerspectives.findMany({
-          where: (p, { inArray }) => inArray(p.memoryId, perspectiveMemoryIds),
-          with: {
-            contributor: { columns: { id: true, name: true } },
-            contributorPerson: { columns: { id: true, displayName: true } },
-            media: { columns: { id: true, objectKey: true, mimeType: true, sizeBytes: true, checksum: true } },
-          },
-        })
-      : [];
-
-  const perspectivesByMemoryId = new Map<string, { id: string; body: string | null; contributorName: string | null; mediaId: string | null; mimeType: string | null }[]>();
-  for (const p of memoryPerspectives) {
-    const entry: { id: string; body: string | null; contributorName: string | null; mediaId: string | null; mimeType: string | null } = {
-      id: p.id,
-      body: p.body,
-      contributorName: p.contributorPerson?.displayName ?? p.contributor?.name ?? null,
-      mediaId: p.media?.id ?? null,
-      mimeType: p.media?.mimeType ?? null,
-    };
-    const current = perspectivesByMemoryId.get(p.memoryId) ?? [];
-    current.push(entry);
-    perspectivesByMemoryId.set(p.memoryId, current);
-  }
-
-  const relationshipsByPersonId = new Map<string, typeof personRelationships>();
-  for (const rel of personRelationships) {
-    if (!relationshipsByPersonId.has(rel.fromPersonId)) {
-      relationshipsByPersonId.set(rel.fromPersonId, []);
-    }
-    if (!relationshipsByPersonId.has(rel.toPersonId)) {
-      relationshipsByPersonId.set(rel.toPersonId, []);
-    }
-    relationshipsByPersonId.get(rel.fromPersonId)!.push(rel);
-    relationshipsByPersonId.get(rel.toPersonId)!.push(rel);
-  }
-
-  const memoriesByPersonId = new Map<string, string[]>();
-  for (const memory of personMemories) {
-    if (!memoriesByPersonId.has(memory.primaryPersonId)) {
-      memoriesByPersonId.set(memory.primaryPersonId, []);
-    }
-    memoriesByPersonId.get(memory.primaryPersonId)!.push(memory.id);
-    if (memory.personTags) {
-      for (const tag of memory.personTags) {
-        if (!memoriesByPersonId.has(tag.personId)) {
-          memoriesByPersonId.set(tag.personId, []);
-        }
-        const arr = memoriesByPersonId.get(tag.personId)!;
-        if (!arr.includes(memory.id)) arr.push(memory.id);
-      }
-    }
-  }
-
-  const mediaMap = new Map<string, ExportMedia>();
-  const mediaIdSet = new Set<string>();
-
-  for (const person of includedPeople) {
-    if (person.portraitMedia) {
-      addMediaFromRow(
-        { id: person.portraitMedia.id, objectKey: person.portraitMedia.objectKey, mimeType: person.portraitMedia.mimeType, sizeBytes: Number(person.portraitMedia.sizeBytes), checksum: person.portraitMedia.checksum ?? null },
-        "portrait",
-        mediaMap,
-        mediaIdSet,
-      );
-    }
-  }
-
-  for (const memory of personMemories) {
-    if (memory.media) {
-      addMediaFromRow(
-        { id: memory.media.id, objectKey: memory.media.objectKey, mimeType: memory.media.mimeType, sizeBytes: Number(memory.media.sizeBytes), checksum: memory.media.checksum ?? null },
-        "memory",
-        mediaMap,
-        mediaIdSet,
-      );
-    }
-    if (memory.mediaItems) {
-      for (const item of memory.mediaItems) {
-        if (item.media) {
-          addMediaFromRow(
-            { id: item.media.id, objectKey: item.media.objectKey, mimeType: item.media.mimeType, sizeBytes: Number(item.media.sizeBytes), checksum: item.media.checksum ?? null },
-            "memory",
-            mediaMap,
-            mediaIdSet,
-          );
-        }
-      }
-    }
-    for (const perspective of memoryPerspectives.filter((p) => p.memoryId === memory.id)) {
-      if (perspective.media) {
-        addMediaFromRow(
-          { id: perspective.media.id, objectKey: perspective.media.objectKey, mimeType: perspective.media.mimeType, sizeBytes: Number(perspective.media.sizeBytes), checksum: perspective.media.checksum ?? null },
-          "perspective",
-          mediaMap,
-          mediaIdSet,
-        );
-      }
-    }
-  }
-
-  const placeIds = new Set<string>();
-  for (const memory of personMemories) {
-    if (memory.placeId) placeIds.add(memory.placeId);
-  }
-  const places: ExportPlace[] = placeIds.size > 0
-    ? (await db.query.places.findMany({
-        where: (p, { inArray }) => inArray(p.id, [...placeIds]),
-      })).map((p) => ({
-        id: p.id, label: p.label, latitude: p.latitude, longitude: p.longitude,
-        countryCode: p.countryCode, adminRegion: p.adminRegion, locality: p.locality,
-      }))
-    : [];
-
-  const personName = targetPerson.displayName;
-  const exportPeople = includedPeople.map((p) => buildExportPerson(p, relationshipsByPersonId, memoriesByPersonId));
-  const exportMemories = personMemories.map((m) => buildExportMemory(m, perspectivesByMemoryId));
-  const exportRelationships: ExportRelationship[] = personRelationships.map((r) => ({
-    id: r.id,
-    fromPersonId: r.fromPersonId,
-    toPersonId: r.toPersonId,
-    type: r.type,
-    spouseStatus: r.spouseStatus ?? null,
-    startDateText: r.startDateText ?? null,
-    endDateText: r.endDateText ?? null,
-  }));
-
-  return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    generatedBy: { userId: viewerUserId, displayName: user?.name ?? null },
-    tree: { id: tree.id, name: tree.name },
-    collection: {
-      id: null,
-      name: options.collectionName ?? personName,
-      description: options.collectionDescription ?? null,
-      introText: null,
-      dedicationText: null,
-      defaultViewMode: "chapter",
-      scopeKind: "person",
-    },
-    people: exportPeople,
-    memories: exportMemories,
-    relationships: exportRelationships,
-    places,
-    sections: [],
-    media: [...mediaMap.values()],
-    permissions: {
-      exportedByUserId: viewerUserId,
-      exportedByRole: viewerRole,
-      visibilityResolvedAt: new Date().toISOString(),
-    },
-  };
+  return buildManifest(treeId, viewerUserId, viewerRole, includedPeople, personMemories, personRelationships, {
+    collectionName: options.collectionName ?? targetPerson.displayName,
+    collectionDescription: options.collectionDescription,
+    scopeKind: "person",
+  });
 }
 
 export function buildMediaLocalPath(mediaId: string, mimeType: string): string {

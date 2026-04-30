@@ -5,7 +5,7 @@ import {
   buildFullTreeManifest,
   buildPersonManifest,
 } from "../lib/archive-export/manifest-builder.js";
-import { streamArchiveZip } from "../lib/archive-export/zip-writer.js";
+import { streamExportZip } from "../lib/archive-export/zip-writer.js";
 
 export async function exportPlugin(app: FastifyInstance): Promise<void> {
   app.get("/api/trees/:treeId/export", async (request, reply) => {
@@ -21,17 +21,13 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
     if (!membership)
       return reply.status(403).send({ error: "Not a member of this tree" });
 
-    const manifest = await buildFullTreeManifest({
+    const { manifest, mediaObjectKeys } = await buildFullTreeManifest({
       treeId,
       viewerUserId: session.user.id,
       viewerRole: membership.role,
     });
 
-    await streamArchiveZip(reply, {
-      manifest,
-      media: manifest.media,
-      treeName: manifest.tree.name,
-    });
+    streamExportZip(manifest, mediaObjectKeys, reply);
   });
 
   app.get(
@@ -52,18 +48,14 @@ export async function exportPlugin(app: FastifyInstance): Promise<void> {
       if (!membership)
         return reply.status(403).send({ error: "Not a member of this tree" });
 
-      const manifest = await buildPersonManifest({
+      const { manifest, mediaObjectKeys } = await buildPersonManifest({
         treeId,
         viewerUserId: session.user.id,
         viewerRole: membership.role,
         scopePersonId: personId,
       });
 
-      await streamArchiveZip(reply, {
-        manifest,
-        media: manifest.media,
-        treeName: manifest.collection.name,
-      });
+      streamExportZip(manifest, mediaObjectKeys, reply);
     },
   );
 }
