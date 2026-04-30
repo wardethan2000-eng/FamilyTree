@@ -19,5 +19,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "src/cast/receiver.ts"]
+  "exclude": ["node_modules", "src/cast/receiver.ts", "src/archive-viewer"]
 }
