@@ -157,6 +157,38 @@ type CrossTreeLink = {
   };
   memories: Memory[];
 };
+type PublicPageSettings = {
+  id: string;
+  slug: string;
+  status: "draft" | "published" | "disabled";
+  title: string | null;
+  subtitle: string | null;
+  obituaryText: string | null;
+  serviceDetails: string | null;
+  donationUrl: string | null;
+  contactEmail: string | null;
+  allowSearchIndexing: boolean;
+  showLifeDates: boolean;
+  showPlaces: boolean;
+  showFeaturedMemories: boolean;
+  publishedAt: string | null;
+  publicUrl: string;
+  updatedAt: string;
+};
+type PublicPageFormState = {
+  slug: string;
+  status: "draft" | "published" | "disabled";
+  title: string;
+  subtitle: string;
+  obituaryText: string;
+  serviceDetails: string;
+  donationUrl: string;
+  contactEmail: string;
+  allowSearchIndexing: boolean;
+  showLifeDates: boolean;
+  showPlaces: boolean;
+  showFeaturedMemories: boolean;
+};
 
 type EditFormState = {
   displayName: string;
@@ -284,6 +316,25 @@ export default function PersonPage({
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPerson, setDeletingPerson] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [publicPage, setPublicPage] = useState<PublicPageSettings | null>(null);
+  const [canPublishPublicPage, setCanPublishPublicPage] = useState(false);
+  const [publicPageForm, setPublicPageForm] = useState<PublicPageFormState>({
+    slug: "",
+    status: "draft",
+    title: "",
+    subtitle: "",
+    obituaryText: "",
+    serviceDetails: "",
+    donationUrl: "",
+    contactEmail: "",
+    allowSearchIndexing: false,
+    showLifeDates: true,
+    showPlaces: true,
+    showFeaturedMemories: true,
+  });
+  const [publicPagePanelOpen, setPublicPagePanelOpen] = useState(false);
+  const [savingPublicPage, setSavingPublicPage] = useState(false);
+  const [publicPageError, setPublicPageError] = useState<string | null>(null);
 
   // Portrait upload
   const [uploadingPortrait, setUploadingPortrait] = useState(false);
@@ -413,6 +464,7 @@ export default function PersonPage({
       loadCrossTreeLinks();
       loadDuplicateCandidates();
       loadPersonPrompts();
+      loadPublicPage();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, treeId, personId]);
@@ -436,6 +488,91 @@ export default function PersonPage({
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPublicPage() {
+    const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}/public-page`, {
+      credentials: "include",
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      page: PublicPageSettings | null;
+      canPublish: boolean;
+    };
+    setPublicPage(data.page);
+    setCanPublishPublicPage(data.canPublish);
+    if (data.page) {
+      setPublicPageForm({
+        slug: data.page.slug,
+        status: data.page.status,
+        title: data.page.title ?? "",
+        subtitle: data.page.subtitle ?? "",
+        obituaryText: data.page.obituaryText ?? "",
+        serviceDetails: data.page.serviceDetails ?? "",
+        donationUrl: data.page.donationUrl ?? "",
+        contactEmail: data.page.contactEmail ?? "",
+        allowSearchIndexing: data.page.allowSearchIndexing,
+        showLifeDates: data.page.showLifeDates,
+        showPlaces: data.page.showPlaces,
+        showFeaturedMemories: data.page.showFeaturedMemories,
+      });
+    }
+  }
+
+  function openPublicPagePanel() {
+    setPublicPageError(null);
+    if (!publicPage) {
+      const suggestedSlug = person?.displayName
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 96);
+      setPublicPageForm((current) => ({
+        ...current,
+        slug: suggestedSlug || "",
+        title: person?.displayName ?? "",
+        subtitle: person?.essenceLine ?? "",
+        status: "draft",
+      }));
+    }
+    setPublicPagePanelOpen(true);
+  }
+
+  async function savePublicPage(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingPublicPage(true);
+    setPublicPageError(null);
+    try {
+      const res = await fetch(`${API}/api/trees/${treeId}/people/${personId}/public-page`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...publicPageForm,
+          title: publicPageForm.title || null,
+          subtitle: publicPageForm.subtitle || null,
+          obituaryText: publicPageForm.obituaryText || null,
+          serviceDetails: publicPageForm.serviceDetails || null,
+          donationUrl: publicPageForm.donationUrl || null,
+          contactEmail: publicPageForm.contactEmail || null,
+        }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? "Could not save public page.");
+      }
+      const data = (await res.json()) as { page: PublicPageSettings };
+      setPublicPage(data.page);
+      setPublicPagePanelOpen(false);
+    } catch (error) {
+      setPublicPageError(
+        error instanceof Error ? error.message : "Could not save public page.",
+      );
+    } finally {
+      setSavingPublicPage(false);
     }
   }
 
@@ -1078,6 +1215,15 @@ export default function PersonPage({
             >
               Make a local archive
             </a>
+            {canPublishPublicPage && (
+              <button
+                type="button"
+                onClick={openPublicPagePanel}
+                style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 999, padding: "8px 14px", cursor: "pointer" }}
+              >
+                Public page
+              </button>
+            )}
             <button
               onClick={() => startEditing(person)}
               style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 999, padding: "8px 14px", cursor: "pointer" }}
@@ -1231,6 +1377,196 @@ export default function PersonPage({
         onChangeField={handleEditFormFieldChange}
       />
 
+      {publicPagePanelOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 60,
+            background: "rgba(28,25,21,0.46)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <form
+            onSubmit={savePublicPage}
+            style={{
+              width: "min(760px, 100%)",
+              maxHeight: "90vh",
+              overflow: "auto",
+              background: "var(--paper)",
+              border: "1px solid var(--rule)",
+              borderRadius: 14,
+              padding: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              boxShadow: "0 24px 70px rgba(28,25,21,0.28)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+              <div>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 8px" }}>
+                  Public memorial page
+                </p>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 400, color: "var(--ink)", margin: 0 }}>
+                  Share {person.displayName}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPublicPagePanelOpen(false)}
+                style={{ ...secondaryBtnStyle, borderRadius: 999, padding: "8px 12px" }}
+              >
+                Close
+              </button>
+            </div>
+
+            {publicPageError && (
+              <div style={{ border: "1px solid rgba(154,79,70,0.24)", background: "rgba(154,79,70,0.08)", borderRadius: 8, padding: 12, fontFamily: "var(--font-ui)", color: "#9a4f46", fontSize: 13 }}>
+                {publicPageError}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 14 }}>
+              <LabeledField label="Public URL slug">
+                <input
+                  value={publicPageForm.slug}
+                  onChange={(event) =>
+                    setPublicPageForm((current) => ({ ...current, slug: event.target.value }))
+                  }
+                  placeholder="jane-smith"
+                  style={inputStyle}
+                />
+              </LabeledField>
+              <LabeledField label="Status">
+                <select
+                  value={publicPageForm.status}
+                  onChange={(event) =>
+                    setPublicPageForm((current) => ({
+                      ...current,
+                      status: event.target.value as PublicPageFormState["status"],
+                    }))
+                  }
+                  style={inputStyle}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </LabeledField>
+            </div>
+
+            <LabeledField label="Page title">
+              <input
+                value={publicPageForm.title}
+                onChange={(event) =>
+                  setPublicPageForm((current) => ({ ...current, title: event.target.value }))
+                }
+                style={inputStyle}
+              />
+            </LabeledField>
+            <LabeledField label="Subtitle">
+              <input
+                value={publicPageForm.subtitle}
+                onChange={(event) =>
+                  setPublicPageForm((current) => ({ ...current, subtitle: event.target.value }))
+                }
+                style={inputStyle}
+              />
+            </LabeledField>
+            <LabeledField label="Obituary or remembrance">
+              <textarea
+                value={publicPageForm.obituaryText}
+                onChange={(event) =>
+                  setPublicPageForm((current) => ({ ...current, obituaryText: event.target.value }))
+                }
+                rows={7}
+                style={textareaStyle}
+              />
+            </LabeledField>
+            <LabeledField label="Service details">
+              <textarea
+                value={publicPageForm.serviceDetails}
+                onChange={(event) =>
+                  setPublicPageForm((current) => ({ ...current, serviceDetails: event.target.value }))
+                }
+                rows={4}
+                style={textareaStyle}
+              />
+            </LabeledField>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <LabeledField label="Donation URL">
+                <input
+                  value={publicPageForm.donationUrl}
+                  onChange={(event) =>
+                    setPublicPageForm((current) => ({ ...current, donationUrl: event.target.value }))
+                  }
+                  style={inputStyle}
+                />
+              </LabeledField>
+              <LabeledField label="Contact email">
+                <input
+                  value={publicPageForm.contactEmail}
+                  onChange={(event) =>
+                    setPublicPageForm((current) => ({ ...current, contactEmail: event.target.value }))
+                  }
+                  style={inputStyle}
+                />
+              </LabeledField>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+              {([
+                ["showLifeDates", "Show life dates"],
+                ["showPlaces", "Show places"],
+                ["showFeaturedMemories", "Show featured memories"],
+                ["allowSearchIndexing", "Allow search engines"],
+              ] as Array<[keyof Pick<
+                PublicPageFormState,
+                "showLifeDates" | "showPlaces" | "showFeaturedMemories" | "allowSearchIndexing"
+              >, string]>).map(([field, label]) => (
+                <label key={field} style={checkboxLabelStyle}>
+                  <input
+                    type="checkbox"
+                    checked={publicPageForm[field]}
+                    onChange={(event) =>
+                      setPublicPageForm((current) => ({
+                        ...current,
+                        [field]: event.target.checked,
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              {publicPage?.status === "published" ? (
+                <a href={publicPage.publicUrl} style={{ fontFamily: "var(--font-ui)", color: "var(--moss)", fontSize: 14 }}>
+                  View /people/{publicPage.slug}
+                </a>
+              ) : (
+                <span style={{ fontFamily: "var(--font-ui)", color: "var(--ink-faded)", fontSize: 13 }}>
+                  Featured memories are controlled from Edit chapter order.
+                </span>
+              )}
+              <button
+                type="submit"
+                disabled={savingPublicPage}
+                style={{ ...primaryBtnStyle, borderRadius: 999, padding: "10px 18px" }}
+              >
+                {savingPublicPage ? "Saving..." : "Save public page"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <div style={{ flex: 1, maxWidth: 1240, margin: "0 auto", width: "100%", padding: "56px 40px 120px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 56, alignItems: "start" }}>
           <aside style={{ position: "sticky", top: 112, display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1289,6 +1625,53 @@ export default function PersonPage({
               onOpenDocument={() => openMemoryComposer("document")}
               onOpenStudio={() => openMemoryComposer()}
             />
+
+            {canPublishPublicPage && (
+              <div
+                style={{
+                  border: "1px solid var(--rule)",
+                  borderRadius: 16,
+                  background: "var(--paper)",
+                  padding: "18px 16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    color: "var(--ink-faded)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    margin: 0,
+                  }}
+                >
+                  Public page
+                </p>
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 }}>
+                  {publicPage?.status === "published"
+                    ? "Published for family, funeral, and obituary sharing."
+                    : "Prepare a memorial or obituary page before sharing it."}
+                </p>
+                {publicPage?.status === "published" && (
+                  <a
+                    href={publicPage.publicUrl}
+                    style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--moss)" }}
+                  >
+                    View public page
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={openPublicPagePanel}
+                  style={{ ...secondaryBtnStyle, justifyContent: "center", fontSize: 13, padding: "9px 12px" }}
+                >
+                  {publicPage ? "Edit settings" : "Create page"}
+                </button>
+              </div>
+            )}
           </aside>
 
           <main style={{ display: "flex", flexDirection: "column", gap: 96 }}>
@@ -2151,6 +2534,31 @@ export default function PersonPage({
   );
 }
 
+function LabeledField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 12,
+          color: "var(--ink-faded)",
+          textTransform: "uppercase",
+          letterSpacing: "0.07em",
+        }}
+      >
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 // ── Shared styles ──────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
@@ -2164,6 +2572,26 @@ const inputStyle: React.CSSProperties = {
   background: "var(--paper)",
   outline: "none",
   boxSizing: "border-box",
+};
+
+const textareaStyle: React.CSSProperties = {
+  ...inputStyle,
+  minHeight: 110,
+  resize: "vertical",
+  lineHeight: 1.5,
+};
+
+const checkboxLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontFamily: "var(--font-ui)",
+  fontSize: 13,
+  color: "var(--ink-soft)",
+  border: "1px solid var(--rule)",
+  borderRadius: 8,
+  padding: "10px 12px",
+  background: "var(--paper-deep)",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

@@ -1113,6 +1113,50 @@ export const personMemoryCuration = pgTable(
   ],
 );
 
+export const personPublicPages = pgTable(
+  "person_public_pages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 140 }).notNull(),
+    status: personPublicPageStatusEnum("status").default("draft").notNull(),
+    title: varchar("title", { length: 200 }),
+    subtitle: varchar("subtitle", { length: 255 }),
+    obituaryText: text("obituary_text"),
+    serviceDetails: text("service_details"),
+    donationUrl: text("donation_url"),
+    contactEmail: varchar("contact_email", { length: 320 }),
+    allowSearchIndexing: boolean("allow_search_indexing").default(false).notNull(),
+    showLifeDates: boolean("show_life_dates").default(true).notNull(),
+    showPlaces: boolean("show_places").default(true).notNull(),
+    showFeaturedMemories: boolean("show_featured_memories").default(true).notNull(),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: text("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("person_public_pages_slug_unique_idx").on(table.slug),
+    uniqueIndex("person_public_pages_tree_person_unique_idx").on(
+      table.treeId,
+      table.personId,
+    ),
+    index("person_public_pages_tree_idx").on(table.treeId),
+    index("person_public_pages_person_idx").on(table.personId),
+    index("person_public_pages_status_idx").on(table.status),
+  ],
+);
+
 export const memoryTreeVisibility = pgTable(
   "memory_tree_visibility",
   {
@@ -1531,6 +1575,7 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
   memorySuppressions: many(memoryPersonSuppressions),
   memoryPerspectives: many(memoryPerspectives),
   curatedMemories: many(personMemoryCuration),
+  publicPages: many(personPublicPages),
   invitations: many(invitations),
   promptsReceived: many(prompts),
   defaultForImportBatches: many(importBatches),
@@ -1917,6 +1962,25 @@ export const personMemoryCurationRelations = relations(personMemoryCuration, ({ 
   }),
   updatedBy: one(users, {
     fields: [personMemoryCuration.updatedByUserId],
+    references: [users.id],
+  }),
+}));
+
+export const personPublicPagesRelations = relations(personPublicPages, ({ one }) => ({
+  tree: one(trees, {
+    fields: [personPublicPages.treeId],
+    references: [trees.id],
+  }),
+  person: one(people, {
+    fields: [personPublicPages.personId],
+    references: [people.id],
+  }),
+  createdBy: one(users, {
+    fields: [personPublicPages.createdByUserId],
+    references: [users.id],
+  }),
+  updatedBy: one(users, {
+    fields: [personPublicPages.updatedByUserId],
     references: [users.id],
   }),
 }));
