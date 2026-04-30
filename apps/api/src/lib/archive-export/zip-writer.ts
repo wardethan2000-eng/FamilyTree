@@ -1,6 +1,6 @@
 import archiver from "archiver";
 import type { FastifyReply } from "fastify";
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3, MEDIA_BUCKET } from "../../lib/storage.js";
 import type { ArchiveExportManifest } from "./types.js";

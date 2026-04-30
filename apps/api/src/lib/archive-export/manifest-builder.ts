@@ -120,7 +120,7 @@ async function buildManifest(
   people: ScopedPerson[],
   memories: Awaited<ReturnType<typeof getTreeMemories>>,
   relationships: Awaited<ReturnType<typeof getTreeRelationships>>,
-  collectionOptions: ManifestOptions & { collectionId?: string | null },
+  collectionOptions: Partial<ManifestOptions> & { collectionId?: string | null },
 ): Promise<ManifestResult> {
   const tree = await db.query.trees.findFirst({
     where: (t, { eq }) => eq(t.id, treeId),
