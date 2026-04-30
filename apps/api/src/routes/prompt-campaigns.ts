@@ -8,8 +8,11 @@ import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
 import { escapeHtml } from "../lib/email-templates.js";
+import { suggestFollowUps, dismissSuggestion, approveSuggestion } from "../lib/follow-up-suggestions.js";
 import { mayEmailUser } from "./me.js";
 import { sendInstallEmail as sendElderInstallEmail } from "./elder-capture.js";
+import { mediaUrl } from "../lib/storage.js";
+import { validateCastToken } from "./cast-token.js";
 
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
 
@@ -56,6 +59,18 @@ const AddQuestionsBody = z.object({
   questions: z.array(z.string().min(1).max(1000)).min(1).max(60),
 });
 
+const CreatePhotoIdentifyBody = z.object({
+  personId: z.string().uuid(), // the person this is about (required for photo_identify)
+  name: z.string().min(1).max(200),
+  cadenceDays: z.number().int().min(1).max(365).default(7),
+  recipientEmails: z.array(z.string().email().max(320)).min(1).max(50),
+  photos: z.array(z.object({
+    mediaId: z.string().uuid(),
+    questionText: z.string().min(1).max(1000).default("Who is in this photo?"),
+  })).min(1).max(20),
+  startsAt: z.string().datetime().optional(),
+});
+
 export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void> {
   /** GET /api/trees/:treeId/prompt-campaigns — list campaigns */
   app.get("/api/trees/:treeId/prompt-campaigns", async (request, reply) => {
@@ -98,6 +113,7 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
           .map((q) => ({
             id: q.id,
             questionText: q.questionText,
+            mediaId: q.mediaId,
             position: q.position,
             sentAt: q.sentAt,
           })),
@@ -316,6 +332,15 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
 
     const campaign = await db.query.promptCampaigns.findFirst({
       where: (c, { and, eq }) => and(eq(c.id, id), eq(c.treeId, treeId)),
+      with: {
+        toPerson: true,
+        fromUser: true,
+        questions: {
+          orderBy: (q, { asc }) => [asc(q.position)],
+          with: { media: true },
+        },
+        recipients: true,
+      },
     });
     if (!campaign) return reply.status(404).send({ error: "Campaign not found" });
 
@@ -522,7 +547,10 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
       with: {
         toPerson: true,
         fromUser: true,
-        questions: { orderBy: (q, { asc }) => [asc(q.position)] },
+        questions: {
+          orderBy: (q, { asc }) => [asc(q.position)],
+          with: { media: true },
+        },
         recipients: true,
       },
     });
@@ -575,6 +603,8 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
       questions: campaign.questions.map((q) => ({
         id: q.id,
         questionText: q.questionText,
+        mediaId: q.mediaId,
+        mediaUrl: q.media ? mediaUrl(q.media.objectKey) : null,
         position: q.position,
         sentAt: q.sentAt,
         sentPromptId: q.sentPromptId,
@@ -630,6 +660,12 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
       return reply.status(400).send({ error: "No sent question to remind about" });
     }
 
+    const questionsWithMedia = await db.query.promptCampaignQuestions.findMany({
+      where: (q, { eq }) => eq(q.id, lastQuestion.id),
+      with: { media: true },
+    });
+    const lastQuestionMedia = questionsWithMedia[0]?.media;
+
     const fromName = campaign.fromUser?.name ?? campaign.fromUser?.email ?? "A family member";
     const personName = campaign.toPerson?.displayName ?? "your family member";
     let sent = 0;
@@ -642,10 +678,10 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
       });
       if (!prompt || prompt.status !== "pending") continue;
 
-      const rawToken = randomBytes(32).toString("hex");
-      const tokenHash = hashToken(rawToken);
+      const rawReminderToken = randomBytes(32).toString("hex");
+      const tokenHash = hashToken(rawReminderToken);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      const replyUrl = `${WEB_URL}/prompts/reply?token=${encodeURIComponent(rawToken)}`;
+      const replyUrl = `${WEB_URL}/prompts/reply?token=${encodeURIComponent(rawReminderToken)}`;
 
       await db.insert(schema.promptReplyLinks).values({
         treeId,
@@ -656,6 +692,12 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
         createdByUserId: session.user.id,
         expiresAt,
       });
+
+      let reminderPhotoHtml = "";
+      if (lastQuestionMedia?.objectKey) {
+        const imageUrl = `${WEB_URL}/api/media?key=${encodeURIComponent(lastQuestionMedia.objectKey)}&prompt_token=${encodeURIComponent(rawReminderToken)}`;
+        reminderPhotoHtml = `<img src="${imageUrl}" alt="Photo for identification" style="max-width: 100%; border-radius: 8px; margin: 0 0 16px;" />`;
+      }
 
       try {
         await mailer.sendMail({
@@ -668,6 +710,7 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
               <p style="font-size: 15px; line-height: 1.7; color: #403A2E; margin: 0 0 12px;">
                 No rush — just a friendly nudge. ${escapeHtml(fromName)} is still gathering memories about <strong>${escapeHtml(personName)}</strong>.
               </p>
+              ${reminderPhotoHtml}
               <blockquote style="margin: 0 0 20px; padding: 14px 16px; border-left: 3px solid #B08B3E; background: #EDE6D6; color: #1C1915;">
                 ${escapeHtml(lastQuestion.questionText)}
               </blockquote>
@@ -682,7 +725,7 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
               </p>
             </div>
           `,
-          text: `A gentle reminder: "${lastQuestion.questionText}"\n\nReply: ${replyUrl}\n\nThis link expires in 7 days.`,
+          text: `A gentle reminder: "${lastQuestion.questionText}"\n\nReply: ${replyUrl}\n\nThis link expires in 7 days.${reminderPhotoHtml ? "\n\n[Photo attached]" : ""}`,
         });
         sent += 1;
       } catch (err) {
@@ -699,6 +742,117 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
     }
 
     return reply.send({ sent, totalRecipients: campaign.recipients.length });
+  });
+
+  /** POST /api/trees/:treeId/photo-identify-campaigns — create photo identification campaign */
+  app.post("/api/trees/:treeId/photo-identify-campaigns", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId } = request.params as { treeId: string };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) return reply.status(403).send({ error: "Not a member of this tree" });
+    if (!canManageCampaigns(membership.role)) {
+      return reply.status(403).send({ error: "Not allowed to create prompt campaigns" });
+    }
+
+    const parsed = CreatePhotoIdentifyBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid request body", details: parsed.error.flatten() });
+    }
+
+    // Verify person belongs to the tree
+    const person = await db.query.people.findFirst({
+      where: (p, { and, eq }) => and(eq(p.id, parsed.data.personId), eq(p.treeId, treeId)),
+    });
+    if (!person) return reply.status(404).send({ error: "Person not found in this tree" });
+
+    // Verify each mediaId belongs to the tree
+    const mediaIds = parsed.data.photos.map(photo => photo.mediaId);
+    const mediaRecords = await db.query.media.findMany({
+      where: (m, { and, eq, inArray }) => and(eq(m.treeId, treeId), inArray(m.id, mediaIds)),
+    });
+    const foundMediaIds = new Set(mediaRecords.map(m => m.id));
+    const missingMediaIds = mediaIds.filter(id => !foundMediaIds.has(id));
+    if (missingMediaIds.length > 0) {
+      return reply.status(400).send({ error: `Media not found in this tree: ${missingMediaIds.join(', ')}` });
+    }
+
+    const startsAt = parsed.data.startsAt ? new Date(parsed.data.startsAt) : new Date();
+
+    const [campaign] = await db
+      .insert(schema.promptCampaigns)
+      .values({
+        treeId,
+        fromUserId: session.user.id,
+        toPersonId: parsed.data.personId,
+        name: parsed.data.name,
+        campaignType: "photo_identify",
+        cadenceDays: parsed.data.cadenceDays,
+        nextSendAt: startsAt,
+        status: "active",
+      })
+      .returning();
+    if (!campaign) return reply.status(500).send({ error: "Failed to create campaign" });
+
+    const dedupedEmails = Array.from(
+      new Set(parsed.data.recipientEmails.map((e) => e.toLowerCase().trim())),
+    );
+
+    if (dedupedEmails.length > 0) {
+      await db.insert(schema.promptCampaignRecipients).values(
+        dedupedEmails.map((email) => ({ campaignId: campaign.id, email })),
+      );
+
+      // Auto-mint an elder capture token for any recipient that doesn't
+      // already have one for this tree, and email them the install link so
+      // every subsequent campaign question opens inside their PWA.
+      const tree = await db.query.trees.findFirst({
+        where: (t, { eq }) => eq(t.id, treeId),
+      });
+      const inviter = await db.query.users.findFirst({
+        where: (u, { eq }) => eq(u.id, session.user.id),
+      });
+      const inviterName = inviter?.name ?? inviter?.email ?? "A family member";
+      for (const email of dedupedEmails) {
+        const existing = await db.query.elderCaptureTokens.findFirst({
+          where: (t, { and, eq, isNull }) =>
+            and(eq(t.treeId, treeId), eq(t.email, email), isNull(t.revokedAt)),
+        });
+        if (!existing) {
+          const rawToken = randomBytes(32).toString("hex");
+          const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+          await db.insert(schema.elderCaptureTokens).values({
+            treeId,
+            email,
+            tokenHash,
+            associatedPersonId: parsed.data.personId,
+            createdByUserId: session.user.id,
+          });
+          if (tree) {
+            void sendElderInstallEmail({
+              email,
+              rawToken,
+              treeName: tree.name,
+              familyLabel: null,
+              inviterName,
+            });
+          }
+        }
+      }
+    }
+
+    // Insert photos as questions with mediaId
+    await db.insert(schema.promptCampaignQuestions).values(
+      parsed.data.photos.map((photo, index) => ({
+        campaignId: campaign.id,
+        questionText: photo.questionText,
+        position: index,
+        mediaId: photo.mediaId,
+      })),
+    );
+
+    return reply.status(201).send({ id: campaign.id, questionCount: parsed.data.photos.length });
   });
 
   /** POST /api/trees/:treeId/prompts/:promptId/follow-ups */
@@ -734,6 +888,61 @@ export async function promptCampaignsPlugin(app: FastifyInstance): Promise<void>
 
     return reply.status(201).send({ id: followUp?.id ?? null, questionText: body.questionText });
   });
+
+  /** GET /api/trees/:treeId/prompts/:promptId/follow-up-suggestions */
+  app.get("/api/trees/:treeId/prompts/:promptId/follow-up-suggestions", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, promptId } = request.params as { treeId: string; promptId: string };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) return reply.status(403).send({ error: "Not a member" });
+
+    const suggestions = await db.query.prompts.findMany({
+      where: (p, { and, eq }) =>
+        and(eq(p.suggestedFollowUpForId, promptId), eq(p.treeId, treeId), eq(p.suggestionStatus, "suggested")),
+      orderBy: (p, { asc }) => [asc(p.createdAt)],
+    });
+
+    return reply.send({
+      suggestions: suggestions.map((s) => ({
+        id: s.id,
+        questionText: s.questionText,
+        suggestionKind: s.suggestionKind,
+        createdAt: s.createdAt,
+      })),
+    });
+  });
+
+  /** POST /api/trees/:treeId/prompts/:promptId/follow-up-suggestions/:suggestionId/approve */
+  app.post("/api/trees/:treeId/prompts/:promptId/follow-up-suggestions/:suggestionId/approve", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, suggestionId } = request.params as { treeId: string; promptId: string; suggestionId: string };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) return reply.status(403).send({ error: "Not a member" });
+    if (!canManageCampaigns(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+
+    const result = await approveSuggestion(suggestionId, treeId, session.user.id);
+    if (!result.ok) return reply.status(400).send({ error: result.error });
+    return reply.send({ ok: true });
+  });
+
+  /** DELETE /api/trees/:treeId/prompts/:promptId/follow-up-suggestions/:suggestionId */
+  app.delete("/api/trees/:treeId/prompts/:promptId/follow-up-suggestions/:suggestionId", async (request, reply) => {
+    const session = await getSession(request.headers);
+    if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { treeId, suggestionId } = request.params as { treeId: string; promptId: string; suggestionId: string };
+    const membership = await verifyMembership(treeId, session.user.id);
+    if (!membership) return reply.status(403).send({ error: "Not a member" });
+    if (!canManageCampaigns(membership.role)) return reply.status(403).send({ error: "Not allowed" });
+
+    const ok = await dismissSuggestion(suggestionId, treeId, session.user.id);
+    if (!ok) return reply.status(404).send({ error: "Suggestion not found or already handled" });
+    return reply.send({ ok: true });
+  });
 }
 
 type CampaignRow = typeof schema.promptCampaigns.$inferSelect;
@@ -758,6 +967,9 @@ async function processCampaignOnce(
     where: (q, { and, eq, isNull }) =>
       and(eq(q.campaignId, campaign.id), isNull(q.sentAt)),
     orderBy: (q, { asc }) => [asc(q.position)],
+    with: {
+      media: true,
+    },
   });
 
   if (!nextQuestion) {
@@ -810,6 +1022,7 @@ async function processCampaignOnce(
       toPersonId: campaign.toPersonId,
       questionText: nextQuestion.questionText,
       status: "pending",
+      mediaId: nextQuestion.mediaId,
     })
     .returning();
   if (!prompt) {
@@ -836,9 +1049,10 @@ async function processCampaignOnce(
     });
 
     let createdLinkId: string | null = null;
+    let rawToken: string;
     let replyUrl: string;
     {
-      const rawToken = generateToken();
+      rawToken = generateToken();
       const tokenHash = hashToken(rawToken);
       const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
       const [link] = await db
@@ -858,6 +1072,16 @@ async function processCampaignOnce(
       replyUrl = `${WEB_URL}/prompts/reply?token=${encodeURIComponent(rawToken)}`;
     }
     const recipientHasPwa = !!elderToken;
+
+    // Generate photo HTML if this is a photo identification question.
+    // Use the reply link's raw token as a prompt_token for media access so
+    // the image is visible in email clients without requiring login.
+    let photoHtml = "";
+    const questionMedia = nextQuestion.media;
+    if (questionMedia && questionMedia.objectKey) {
+      const imageUrl = `${WEB_URL}/api/media?key=${encodeURIComponent(questionMedia.objectKey)}&prompt_token=${encodeURIComponent(rawToken)}`;
+      photoHtml = `<img src="${imageUrl}" alt="Photo for identification" style="max-width: 100%; border-radius: 8px; margin: 0 0 16px;" />`;
+    }
     try {
       const pwaTip = recipientHasPwa
         ? `<p style="font-size: 13px; color: #847A66; margin: 0 0 18px;">Tip: this opens in your installed family memory page if you've already added it to your home screen.</p>`
@@ -872,6 +1096,7 @@ async function processCampaignOnce(
               <p style="font-size: 15px; line-height: 1.7; color: #403A2E; margin: 0 0 12px;">
                 This is part of <strong>${escapeHtml(campaign.name)}</strong>, a series ${escapeHtml(fromName)} is gathering for the family archive about <strong>${escapeHtml(personName)}</strong>.
               </p>
+              ${photoHtml}
               <blockquote style="margin: 0 0 20px; padding: 14px 16px; border-left: 3px solid #B08B3E; background: #EDE6D6; color: #1C1915;">
                 ${escapeHtml(nextQuestion.questionText)}
               </blockquote>
@@ -887,7 +1112,7 @@ async function processCampaignOnce(
             </p>
           </div>
         `,
-        text: `${fromName} asked: "${nextQuestion.questionText}"\n\nReply: ${replyUrl}\n\nThis private link expires in 14 days.`,
+        text: `${fromName} asked: "${nextQuestion.questionText}"\n\nReply: ${replyUrl}\n\nThis private link expires in 14 days.${photoHtml ? "\n\n[Photo attached]" : ""}`,
       });
       sentCount += 1;
       await db

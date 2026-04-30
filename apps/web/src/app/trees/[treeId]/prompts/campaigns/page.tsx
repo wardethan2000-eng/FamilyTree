@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { getApiBase } from "@/lib/api-base";
+import { getProxiedMediaUrl } from "@/lib/media-url";
 
 const API = getApiBase();
 
@@ -76,6 +77,7 @@ export default function PromptCampaignsPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
+  const [showPhotoWizard, setShowPhotoWizard] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!treeId) return;
@@ -166,22 +168,40 @@ export default function PromptCampaignsPage() {
             are added to the archive automatically.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowWizard(true)}
-          style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: 13,
-            background: "var(--moss)",
-            color: "var(--paper)",
-            border: "none",
-            borderRadius: 6,
-            padding: "10px 18px",
-            cursor: "pointer",
-          }}
-        >
-          New campaign
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowWizard(true)}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              background: "var(--moss)",
+              color: "var(--paper)",
+              border: "none",
+              borderRadius: 6,
+              padding: "10px 18px",
+              cursor: "pointer",
+            }}
+          >
+            New campaign
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPhotoWizard(true)}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              background: "var(--moss)",
+              color: "var(--paper)",
+              border: "none",
+              borderRadius: 6,
+              padding: "10px 18px",
+              cursor: "pointer",
+            }}
+          >
+            Photo identification
+          </button>
+        </div>
       </header>
 
       {loading ? (
@@ -205,6 +225,17 @@ export default function PromptCampaignsPage() {
           onClose={() => setShowWizard(false)}
           onCreated={() => {
             setShowWizard(false);
+            void refresh();
+          }}
+        />
+      )}
+      {showPhotoWizard && (
+        <PhotoIdentificationWizard
+          treeId={treeId}
+          people={people}
+          onClose={() => setShowPhotoWizard(false)}
+          onCreated={() => {
+            setShowPhotoWizard(false);
             void refresh();
           }}
         />
@@ -552,6 +583,341 @@ function SmallBtn({
     >
       {children}
     </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Photo Identification Wizard                                     */
+/* ------------------------------------------------------------------ */
+
+interface Memory {
+  id: string;
+  kind: string;
+  title: string;
+  media: {
+    id: string;
+    url: string;
+    thumbnails: {
+      small: string;
+    };
+  } | null;
+  year?: number | null;
+  month?: number | null;
+  day?: number | null;
+  createdAt: string;
+}
+
+const PHOTO_STEPS = [
+  { label: "Subject", icon: "1" },
+  { label: "Photos", icon: "2" },
+  { label: "Recipients", icon: "3" },
+  { label: "Cadence", icon: "4" },
+  { label: "Review", icon: "5" },
+];
+
+function PhotoIdentificationWizard({
+  treeId,
+  people,
+  onClose,
+  onCreated,
+}: {
+  treeId: string;
+  people: Person[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [step, setStep] = useState(0);
+  const [toPersonId, setToPersonId] = useState(people[0]?.id ?? "");
+  const [photos, setPhotos] = useState<Memory[]>([]);
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [recipientText, setRecipientText] = useState("");
+  const [cadenceDays, setCadenceDays] = useState(7);
+  const [startsAt, setStartsAt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+
+  // Fetch photos when component mounts
+  useEffect(() => {
+    async function fetchPhotos() {
+      setLoadingPhotos(true);
+      try {
+        const res = await fetch(`${API}/api/trees/${treeId}/memories?limit=100`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          const photoMemories = Array.isArray(data) ? data : (data.memories ?? []).filter((m: any) => m.kind === "photo");
+          setPhotos(photoMemories.slice(0, 100)); // Limit to 100 as requested
+        }
+      } catch (e) {
+        console.error("Error fetching photos:", e);
+      } finally {
+        setLoadingPhotos(false);
+      }
+    }
+    
+    void fetchPhotos();
+  }, [treeId]);
+
+  useEffect(() => {
+    if (!toPersonId && people[0]) setToPersonId(people[0].id);
+  }, [people, toPersonId]);
+
+  const recipientList = useMemo(
+    () =>
+      recipientText
+        .split(/[\s,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [recipientText],
+  );
+
+  const canAdvance = useMemo(() => {
+    switch (step) {
+      case 0: return Boolean(toPersonId);
+      case 1: return selectedPhotos.size >= 1 && selectedPhotos.size <= 20;
+      case 2: return recipientList.length > 0;
+      case 3: return cadenceDays >= 1;
+      case 4: return true;
+      default: return false;
+    }
+  }, [step, toPersonId, selectedPhotos.size, recipientList.length, cadenceDays]);
+
+  async function submit() {
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const photoData = Array.from(selectedPhotos).map(mediaId => ({
+        mediaId,
+        questionText: ""
+      }));
+
+      const res = await fetch(`${API}/api/trees/${treeId}/photo-identify-campaigns`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personId: toPersonId,
+          name: `Photo identification for ${people.find(p => p.id === toPersonId)?.name || "person"}`,
+          cadenceDays,
+          recipientEmails: recipientList,
+          photos: photoData,
+          startsAt: startsAt || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+      }
+      onCreated();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to create campaign");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function goBack() {
+    if (step > 0) setStep(step - 1);
+    else onClose();
+  }
+
+  function goNext() {
+    if (step < 4) setStep(step + 1);
+    else submit();
+  }
+
+  const subjectName = people.find((p) => p.id === toPersonId)?.name ?? "this person";
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(10,8,6,0.55)",
+        zIndex: 70,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--paper)",
+          borderRadius: 12,
+          width: "min(720px, 100%)",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.25)",
+        }}
+      >
+        {/* Header with step indicator */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0,
+            padding: "20px 24px 0",
+            borderBottom: "1px solid var(--rule)",
+            paddingBottom: 16,
+          }}
+        >
+          <div style={{ flex: 1, display: "flex", gap: 4 }}>
+            {PHOTO_STEPS.map((s, i) => (
+              <div
+                key={s.label}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  opacity: i <= step ? 1 : 0.4,
+                  cursor: i < step ? "pointer" : "default",
+                }}
+                onClick={() => { if (i < step) setStep(i); }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 22,
+                    height: 22,
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontFamily: "var(--font-ui)",
+                    fontWeight: 600,
+                    background: i < step ? "var(--moss)" : i === step ? "var(--ink)" : "var(--paper-deep)",
+                    color: i <= step ? "var(--paper)" : "var(--ink-faded)",
+                  }}
+                >
+                  {i < step ? "\u2713" : s.icon}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 11,
+                    color: i <= step ? "var(--ink)" : "var(--ink-faded)",
+                    display: i === step || i < step ? "inline" : "none",
+                  }}
+                >
+                  {s.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Step content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+          {step === 0 && (
+            <StepChooseSubject
+              people={people}
+              selected={toPersonId}
+              onSelect={setToPersonId}
+            />
+          )}
+          {step === 1 && (
+            <StepChoosePhotos
+              photos={photos}
+              selected={selectedPhotos}
+              onSelect={setSelectedPhotos}
+              loading={loadingPhotos}
+            />
+          )}
+          {step === 2 && (
+            <StepChooseRecipients
+              value={recipientText}
+              onChange={setRecipientText}
+              count={recipientList.length}
+            />
+          )}
+          {step === 3 && (
+            <StepCadence
+              cadenceDays={cadenceDays}
+              setCadenceDays={setCadenceDays}
+              startsAt={startsAt}
+              setStartsAt={setStartsAt}
+            />
+          )}
+          {step === 4 && (
+            <StepReviewPhoto
+              subjectName={subjectName}
+              recipientCount={recipientList.length}
+              cadenceDays={cadenceDays}
+              startsAt={startsAt}
+              selectedPhotos={selectedPhotos}
+              photos={photos}
+            />
+          )}
+
+          {err && (
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 12,
+                color: "#a23a30",
+                marginTop: 12,
+              }}
+            >
+              {err}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom bar */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "14px 24px",
+            borderTop: "1px solid var(--rule)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={goBack}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              padding: "9px 16px",
+              border: "1px solid var(--rule)",
+              background: "var(--paper)",
+              color: "var(--ink-soft)",
+              borderRadius: 6,
+              cursor: "pointer",
+            }}
+          >
+            {step === 0 ? "Cancel" : "Back"}
+          </button>
+          <button
+            type="button"
+            onClick={goNext}
+            disabled={!canAdvance || submitting}
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              padding: "9px 18px",
+              background: canAdvance ? "var(--moss)" : "var(--ink-faded)",
+              color: "var(--paper)",
+              border: "none",
+              borderRadius: 6,
+              cursor: canAdvance ? "pointer" : "not-allowed",
+              minWidth: 130,
+            }}
+          >
+            {submitting
+              ? "Creating\u2026"
+              : step === 4
+                ? "Start campaign"
+                : "Continue"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1424,6 +1790,138 @@ function StepCustomizeQuestions({
 }
 
 /* ---- Step 6: Review ---- */
+
+function StepChoosePhotos({
+  photos,
+  selected,
+  onSelect,
+  loading,
+}: {
+  photos: Memory[];
+  selected: Set<string>;
+  onSelect: (s: Set<string>) => void;
+  loading: boolean;
+}) {
+  const gridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+    gap: 12,
+    marginTop: 16,
+  };
+
+  if (loading) {
+    return <div style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)", textAlign: "center", padding: 32 }}>Loading photos…</div>;
+  }
+
+  if (photos.length === 0) {
+    return <div style={{ fontFamily: "var(--font-ui)", fontSize: 14, color: "var(--ink-faded)", textAlign: "center", padding: 32 }}>No photos found in this tree. Upload photos as memories first.</div>;
+  }
+
+  return (
+    <div>
+      <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--ink-soft)", marginBottom: 8 }}>
+        Select 1–20 photos you want identified. Each photo will become a question in the campaign.
+      </p>
+      <div style={gridStyle}>
+        {photos.map((m) => {
+          const isSelected = selected.has(m.id);
+          const thumbUrl = m.media?.thumbnails?.small || m.media?.url;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => {
+                const next = new Set(selected);
+                if (isSelected) {
+                  next.delete(m.id);
+                } else if (next.size < 20) {
+                  next.add(m.id);
+                }
+                onSelect(next);
+              }}
+              style={{
+                position: "relative",
+                background: isSelected ? "var(--moss)" : "#fff",
+                border: isSelected ? "2px solid var(--moss)" : "2px solid var(--rule)",
+                borderRadius: 8,
+                padding: 0,
+                cursor: "pointer",
+                overflow: "hidden",
+                aspectRatio: "1",
+              }}
+            >
+              {thumbUrl ? (
+                <img
+                  src={thumbUrl}
+                  alt={m.title}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isSelected ? 0.7 : 1 }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>📷</div>
+              )}
+              {isSelected && (
+                <div style={{ position: "absolute", top: 4, right: 4, background: "var(--moss)", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600 }}>✓</div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--ink-faded)", marginTop: 12 }}>
+        {selected.size} photo{selected.size !== 1 ? "s" : ""} selected
+      </p>
+    </div>
+  );
+}
+
+function StepReviewPhoto({
+  subjectName,
+  recipientCount,
+  cadenceDays,
+  startsAt,
+  selectedPhotos,
+  photos,
+}: {
+  subjectName: string;
+  recipientCount: number;
+  cadenceDays: number;
+  startsAt: string;
+  selectedPhotos: Set<string>;
+  photos: Memory[];
+}) {
+  const selected = photos.filter((m) => selectedPhotos.has(m.id));
+  return (
+    <div>
+      <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--ink-soft)", marginBottom: 16 }}>
+        Review your photo identification campaign before starting.
+      </p>
+      <div style={{ fontFamily: "var(--font-ui)", fontSize: 14, lineHeight: 1.8 }}>
+        <div><strong>About:</strong> {subjectName}</div>
+        <div><strong>Recipients:</strong> {recipientCount} email{recipientCount !== 1 ? "s" : ""}</div>
+        <div><strong>Cadence:</strong> Every {cadenceDays} day{cadenceDays !== 1 ? "s" : ""}</div>
+        {startsAt && <div><strong>Starts:</strong> {new Date(startsAt).toLocaleDateString()}</div>}
+        <div><strong>Photos:</strong> {selected.length} question{selected.length !== 1 ? "s" : ""}</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, marginTop: 16 }}>
+        {selected.map((m) => {
+          const thumbUrl = m.media?.thumbnails?.small || m.media?.url;
+          return (
+            <div key={m.id} style={{ borderRadius: 6, overflow: "hidden", border: "1px solid var(--rule)" }}>
+              {thumbUrl ? (
+                <img src={thumbUrl} alt={m.title} style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              ) : (
+                <div style={{ width: "100%", aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--parchment-deep)" }}>📷</div>
+              )}
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 10, color: "var(--ink-faded)", padding: "2px 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {m.title}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function StepReview({
   template,

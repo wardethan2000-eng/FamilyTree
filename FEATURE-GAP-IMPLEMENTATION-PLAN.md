@@ -168,22 +168,22 @@ Add:
 
 Milestone 1:
 
-- multi-file import without ZIP,
-- import batch records,
-- basic metadata extraction,
-- curation queue integration.
+- [x] multi-file import without ZIP,
+- [x] import batch records,
+- [x] basic metadata extraction,
+- [x] curation queue integration.
 
 Milestone 2:
 
-- ZIP import,
-- duplicate grouping,
-- bulk curation actions.
+- [x] ZIP import,
+- [x] duplicate grouping,
+- [x] bulk curation actions.
 
 Milestone 3:
 
-- person/date/place suggestions,
-- collection-level progress,
-- resumable import UX.
+- [ ] person/date/place suggestions,
+- [ ] collection-level progress,
+- [ ] resumable import UX.
 
 ### Risks
 
@@ -289,21 +289,21 @@ action for stewards.
 
 Milestone 1:
 
-- generic URL model,
-- provider detection,
-- link preview,
-- Drive support migrated into generic linked media.
+- [ ] generic URL model,
+- [ ] provider detection,
+- [ ] link preview,
+- [ ] Drive support migrated into generic linked media.
 
 Milestone 2:
 
-- Dropbox, YouTube, Vimeo, iCloud shared links,
-- linked media status checks.
+- [ ] Dropbox, YouTube, Vimeo, iCloud shared links,
+- [ ] linked media status checks.
 
 Milestone 3:
 
-- Google Drive picker,
-- Google Photos shared album import,
-- preserve-copy workflow.
+- [ ] Google Drive picker,
+- [ ] Google Photos shared album import,
+- [ ] preserve-copy workflow.
 
 ### Risks
 
@@ -413,20 +413,20 @@ The lightweight reply page should remain voice-first. Improvements:
 
 Milestone 1:
 
-- prompt library tables and seed data,
-- template-based campaign creation,
-- improved campaign status dashboard.
+- [x] prompt library tables and seed data,
+- [x] template-based campaign creation,
+- [x] improved campaign status dashboard.
 
 Milestone 2:
 
-- reminders,
-- recipient-level delivery/reply status,
-- photo clarification campaigns.
+- [x] reminders,
+- [x] recipient-level delivery/reply status,
+- [x] photo clarification campaigns.
 
 Milestone 3:
 
-- rule-based follow-up suggestions,
-- AI-assisted follow-up drafts behind steward approval.
+- [x] rule-based follow-up suggestions,
+- [ ] AI-assisted follow-up drafts behind steward approval.
 
 ### Risks
 
@@ -536,21 +536,21 @@ future print-oriented formats.
 
 Milestone 1:
 
-- person mini-archive ZIP,
-- branch mini-archive ZIP,
-- manual memory selection,
-- shared export renderer.
+- [x] person mini-archive ZIP,
+- [x] branch mini-archive ZIP,
+- [x] manual memory selection,
+- [x] shared export renderer.
 
 Milestone 2:
 
-- event/place/theme collections,
-- private share links,
-- memorial package template.
+- [ ] event/place/theme collections,
+- [ ] private share links,
+- [ ] memorial package template.
 
 Milestone 3:
 
-- print-oriented HTML/PDF,
-- book or booklet pipeline.
+- [ ] print-oriented HTML/PDF,
+- [ ] book or booklet pipeline.
 
 ### Risks
 
@@ -617,21 +617,21 @@ draft endpoint only if offline sync needs server-side state:
 
 Milestone 1:
 
-- mobile capture route,
-- voice/photo/text capture,
-- save as incomplete memory,
-- curation queue integration.
+- [ ] mobile capture route,
+- [ ] voice/photo/text capture,
+- [ ] save as incomplete memory,
+- [ ] curation queue integration.
 
 Milestone 2:
 
-- PWA share target,
-- offline local queue,
-- retryable uploads.
+- [ ] PWA share target (elder-only exists; authenticated app not done),
+- [ ] offline local queue (elder-only exists; authenticated app not done),
+- [ ] retryable uploads.
 
 Milestone 3:
 
-- family-managed elder setup,
-- push notification prompt answering if native wrappers are added.
+- [ ] family-managed elder setup,
+- [ ] push notification prompt answering if native wrappers are added.
 
 ### Risks
 
@@ -716,20 +716,20 @@ Avoid requiring paid map APIs for self-host installs.
 
 Milestone 1:
 
-- place index,
-- place detail page,
-- memory/person/place associations.
+- [ ] place index (API list endpoint exists; UI page not built),
+- [ ] place detail page,
+- [ ] memory/person/place associations (person_places table not built).
 
 Milestone 2:
 
-- map view,
-- person journey timeline,
-- migration paths.
+- [ ] map view (map API exists; UI is a redirect placeholder),
+- [ ] person journey timeline,
+- [ ] migration paths.
 
 Milestone 3:
 
-- place-based drift,
-- place mini-archive export.
+- [ ] place-based drift,
+- [ ] place mini-archive export.
 
 ### Risks
 
@@ -901,16 +901,17 @@ Add or expose:
 
 Milestone 1:
 
-- read-only visibility explanations,
-- direct/contextual person labels.
+- [x] read-only visibility explanations ("Why it appears here" on memory detail page),
+- [x] direct/contextual person labels (memoryContext in API; person page shows tagged directly).
 
 Milestone 2:
 
-- hide-from-my-page and add-perspective subject actions.
+- [x] add-perspective subject action (perspectives system fully built),
+- [ ] hide-from-my-page subject action (surface suppression exists for contextual memories only; not framed as subject action; no subject-actions endpoint).
 
 Milestone 3:
 
-- correction workflow and steward review queue.
+- [ ] correction workflow and steward review queue.
 
 ### Risks
 
@@ -990,19 +991,19 @@ for long-running sessions.
 
 Milestone 1:
 
-- TV drift mode with session token,
-- steward setup screen.
+- [ ] TV drift mode with session token (drift mode exists; ambient session token system not built),
+- [ ] steward setup screen.
 
 Milestone 2:
 
-- kiosk mode,
-- QR contribution link,
-- memorial session template.
+- [ ] kiosk mode,
+- [ ] QR contribution link,
+- [ ] memorial session template.
 
 Milestone 3:
 
-- smart frame pacing and overnight dimming,
-- device management.
+- [ ] smart frame pacing and overnight dimming,
+- [ ] device management.
 
 ### Risks
 
@@ -1077,20 +1078,20 @@ Add:
 
 Milestone 1:
 
-- read-only archive ownership page,
-- storage usage and export health.
+- [ ] read-only archive ownership page,
+- [ ] storage usage and export health.
 
 Milestone 2:
 
-- BYO S3 configuration,
-- storage health test,
-- new uploads to selected backend.
+- [ ] BYO S3 configuration,
+- [ ] storage health test,
+- [ ] new uploads to selected backend.
 
 Milestone 3:
 
-- migration jobs,
-- hosted-to-BYO and BYO-to-hosted copy,
-- preservation audit.
+- [ ] migration jobs,
+- [ ] hosted-to-BYO and BYO-to-hosted copy,
+- [ ] preservation audit.
 
 ### Risks
 

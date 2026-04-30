@@ -1,7 +1,6 @@
 import { h } from "preact";
 import type { ArchiveExportManifest } from "../types.js";
 import type { Route } from "./../hooks/useHashRouter.js";
-import { searchManifest } from "../utils.js";
 
 type Props = {
   manifest: ArchiveExportManifest;
@@ -15,6 +14,8 @@ export function Home({ manifest, onNavigate }: Props) {
     .filter((m) => m.dateOfEventText)
     .sort((a, b) => (b.dateOfEventText ?? "").localeCompare(a.dateOfEventText ?? ""))
     .slice(0, 5);
+
+  const sections = manifest.sections ?? [];
 
   return (
     <div class="welcome fade-in">
@@ -30,6 +31,24 @@ export function Home({ manifest, onNavigate }: Props) {
         <p style="margin-top:8px; font-style:italic; color:var(--ink-faded);">Dedicated to {manifest.collection.dedicationText}</p>
       )}
       <p style="margin-top:24px;">Select a person from the sidebar to explore their memories and connections.</p>
+
+      {sections.length > 0 && (
+        <div style="margin-top:32px;">
+          <div class="section-heading">Sections</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            {sections.map((s) => (
+              <button
+                key={s.id}
+                class="chip"
+                style="text-align:left; font-size:14px; padding:10px 14px;"
+                onClick={() => onNavigate({ view: "section", sectionId: s.id })}
+              >
+                {s.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {recentMemories.length > 0 && (
         <div style="margin-top:40px;">

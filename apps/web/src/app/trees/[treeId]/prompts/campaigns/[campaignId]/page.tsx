@@ -14,6 +14,15 @@ interface ActivityQuestion {
   position: number;
   sentAt: string | null;
   sentPromptId: string | null;
+  mediaId: string | null;
+  mediaUrl: string | null;
+}
+
+interface SuggestedFollowUp {
+  id: string;
+  questionText: string;
+  suggestionKind: string | null;
+  createdAt: string;
 }
 
 interface ActivityRecipient {
@@ -144,7 +153,7 @@ export default function CampaignDetailPage() {
           <CampaignHeader activity={activity} treeId={treeId} onChanged={refresh} />
           <TabBar tab={tab} onChange={setTab} />
           {tab === "overview" && <OverviewTab activity={activity} treeId={treeId} onChanged={refresh} />}
-          {tab === "questions" && <QuestionsTab activity={activity} treeId={treeId} />}
+          {tab === "questions" && <QuestionsTab activity={activity} treeId={treeId} onChanged={refresh} />}
           {tab === "recipients" && (
             <RecipientsTab activity={activity} treeId={treeId} campaignId={campaignId} onChanged={refresh} />
           )}
@@ -519,13 +528,65 @@ function StatCard({
 function QuestionsTab({
   activity,
   treeId,
+  onChanged,
 }: {
   activity: CampaignActivity;
   treeId: string;
+  onChanged: () => void;
 }) {
   const [followUpQuestion, setFollowUpQuestion] = useState("");
   const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
   const [followUpTarget, setFollowUpTarget] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Record<string, SuggestedFollowUp[]>>({});
+  const [suggestionsLoaded, setSuggestionsLoaded] = useState<string | null>(null);
+  const [actioningId, setActioningId] = useState<string | null>(null);
+
+  async function loadSuggestions(promptId: string) {
+    if (suggestionsLoaded === promptId) return;
+    const res = await fetch(
+      `${API}/api/trees/${treeId}/prompts/${promptId}/follow-up-suggestions`,
+      { credentials: "include" },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { suggestions: SuggestedFollowUp[] };
+      setSuggestions((prev) => ({ ...prev, [promptId]: data.suggestions }));
+      setSuggestionsLoaded(promptId);
+    }
+  }
+
+  async function approveSuggestion(suggestionId: string, promptId: string) {
+    setActioningId(suggestionId);
+    const res = await fetch(
+      `${API}/api/trees/${treeId}/prompts/${promptId}/follow-up-suggestions/${suggestionId}/approve`,
+      { method: "POST", credentials: "include" },
+    );
+    setActioningId(null);
+    if (res.ok) {
+      setSuggestionsLoaded(null);
+      onChanged();
+    } else {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(data.error ?? "Could not approve suggestion");
+    }
+  }
+
+  async function dismissSuggestion(suggestionId: string, promptId: string) {
+    setActioningId(suggestionId);
+    const res = await fetch(
+      `${API}/api/trees/${treeId}/prompts/${promptId}/follow-up-suggestions/${suggestionId}`,
+      { method: "DELETE", credentials: "include" },
+    );
+    setActioningId(null);
+    if (res.ok) {
+      setSuggestions((prev) => ({
+        ...prev,
+        [promptId]: (prev[promptId] ?? []).filter((s) => s.id !== suggestionId),
+      }));
+    } else {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(data.error ?? "Could not dismiss suggestion");
+    }
+  }
 
   async function submitFollowUp(promptId: string) {
     if (!followUpQuestion.trim()) return;
@@ -587,6 +648,21 @@ function QuestionsTab({
             >
               {q.position + 1}.
             </span>
+            {q.mediaUrl && activity.campaignType === "photo_identify" && (
+              <img
+                src={q.mediaUrl}
+                alt=""
+                style={{
+                  width: 48,
+                  height: 48,
+                  objectFit: "cover",
+                  borderRadius: 4,
+                  border: "1px solid var(--rule)",
+                  flexShrink: 0,
+                }}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
             <div style={{ flex: 1 }}>
               <div
                 style={{
@@ -635,6 +711,24 @@ function QuestionsTab({
                     Follow up
                   </button>
                 )}
+                {q.sentPromptId && (
+                  <button
+                    type="button"
+                    onClick={() => { if (q.sentPromptId) loadSuggestions(q.sentPromptId); }}
+                    style={{
+                      background: "none",
+                      border: "1px solid var(--rule)",
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      fontSize: 10,
+                      color: "var(--ink-soft)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-ui)",
+                    }}
+                  >
+                    {suggestions[q.sentPromptId!] ? `${(suggestions[q.sentPromptId!] ?? []).length} suggestions` : "Suggestions"}
+                  </button>
+                )}
               </div>
               {followUpTarget === q.sentPromptId && (
                 <div
@@ -680,6 +774,67 @@ function QuestionsTab({
                   >
                     {followUpSubmitting ? "Adding\u2026" : "Add"}
                   </button>
+                </div>
+              )}
+              {q.sentPromptId && (suggestions[q.sentPromptId] ?? []).length > 0 && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--ink-faded)" }}>
+                    Suggested follow-ups
+                  </div>
+                  {(suggestions[q.sentPromptId!] ?? []).map((s) => (
+                    <div
+                      key={s.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 10px",
+                        background: "var(--paper-deep)",
+                        borderRadius: 4,
+                        border: "1px dashed var(--rule)",
+                      }}
+                    >
+                      <span style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: 13, color: "var(--ink)" }}>
+                        {s.questionText}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => approveSuggestion(s.id, q.sentPromptId!)}
+                        disabled={actioningId === s.id}
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          background: "var(--moss)",
+                          color: "var(--paper)",
+                          border: "none",
+                          borderRadius: 4,
+                          cursor: actioningId === s.id ? "not-allowed" : "pointer",
+                          opacity: actioningId === s.id ? 0.5 : 1,
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dismissSuggestion(s.id, q.sentPromptId!)}
+                        disabled={actioningId === s.id}
+                        style={{
+                          fontFamily: "var(--font-ui)",
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          background: "none",
+                          border: "1px solid var(--rule)",
+                          borderRadius: 4,
+                          color: "var(--ink-faded)",
+                          cursor: actioningId === s.id ? "not-allowed" : "pointer",
+                          opacity: actioningId === s.id ? 0.5 : 1,
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

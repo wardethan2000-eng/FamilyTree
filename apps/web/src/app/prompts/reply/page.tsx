@@ -29,6 +29,8 @@ interface PromptReplyDetails {
   fromUserName: string;
   email: string;
   expiresAt: string;
+  photoMediaUrl: string | null;
+  photoMimeType: string | null;
 }
 
 interface SubmittedReplyMemory {
@@ -377,6 +379,17 @@ function PromptReplyContent() {
         <h1 style={questionStyle}>{details.questionText}</h1>
         {details.toPersonName && (
           <p style={subjectStyle}>About {details.toPersonName}</p>
+        )}
+
+        {details.photoMediaUrl && (
+          <div style={{ margin: "0 0 20px" }}>
+            <img
+              src={getProxiedMediaUrl(details.photoMediaUrl) ?? ""}
+              alt="Photo for identification"
+              style={{ maxWidth: "100%", borderRadius: 8, display: "block" }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          </div>
         )}
 
         <div style={modeRowStyle} role="tablist" aria-label="How would you like to reply">

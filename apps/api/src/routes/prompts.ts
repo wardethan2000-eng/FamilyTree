@@ -18,6 +18,7 @@ import {
   extForMimeType,
   mediaUrl,
 } from "../lib/storage.js";
+import { suggestFollowUps } from "../lib/follow-up-suggestions.js";
 import { checkTreeCanAdd } from "../lib/tree-usage-service.js";
 import { enqueueMemoryTranscription } from "../lib/transcription.js";
 import { mailer, MAIL_FROM } from "../lib/mailer.js";
@@ -426,6 +427,10 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       .set({ status: "answered", updatedAt: new Date() })
       .where(and(eq(schema.prompts.id, promptId), eq(schema.prompts.treeId, treeId)));
 
+    suggestFollowUps(promptId, treeId, request.log).catch((err) =>
+      request.log.error({ err, promptId }, "Follow-up suggestion generation failed"),
+    );
+
     if (kind === "voice") {
       await enqueueMemoryTranscription(memory.id, treeId);
     }
@@ -572,6 +577,20 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
     const resolved = await resolveReplyLink(token);
     if (!resolved.ok) return reply.status(resolved.status).send({ error: resolved.error });
 
+    let photoMediaUrl: string | null = null;
+    let photoMimeType: string | null = null;
+    if (resolved.link.prompt.mediaId) {
+      const mediaRecord = await db.query.media.findFirst({
+        where: (m, { eq }) => eq(m.id, resolved.link.prompt.mediaId!),
+      });
+      if (mediaRecord) {
+        const key = encodeURIComponent(mediaRecord.objectKey);
+        const promptToken = encodeURIComponent(token);
+        photoMediaUrl = `/api/media?key=${key}&prompt_token=${promptToken}`;
+        photoMimeType = mediaRecord.mimeType;
+      }
+    }
+
     return reply.send({
       promptId: resolved.link.promptId,
       treeId: resolved.link.treeId,
@@ -583,6 +602,8 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
         "A family member",
       email: resolved.link.email,
       expiresAt: resolved.link.expiresAt,
+      photoMediaUrl,
+      photoMimeType,
     });
   });
 
@@ -762,6 +783,10 @@ export async function promptsPlugin(app: FastifyInstance): Promise<void> {
       if (kind === "voice") {
         await enqueueMemoryTranscription(result.id, resolved.link.treeId);
       }
+
+      suggestFollowUps(resolved.link.promptId, resolved.link.treeId, request.log).catch((err) =>
+        request.log.error({ err, promptId: resolved.link.promptId }, "Follow-up suggestion generation failed"),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to submit reply";
       if (
@@ -920,6 +945,7 @@ type ResolvedReplyLink = {
     id: string;
     toPersonId: string;
     questionText: string;
+    mediaId: string | null;
     status: "pending" | "answered" | "dismissed";
     toPerson: { displayName: string } | null;
     fromUser: { name: string; email: string } | null;

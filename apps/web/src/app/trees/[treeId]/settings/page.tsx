@@ -490,6 +490,33 @@ export default function TreeSettingsPage() {
           </div>
         </section>
 
+        {/* Local archives */}
+        <section style={{ ...sectionStyle, marginTop: 32 }}>
+          <h2 style={sectionHeadingStyle}>Local archives</h2>
+          <p style={sectionDescStyle}>
+            Create curated collections for a person, event, or gathering. Each archive is a self-contained offline package you can share.
+          </p>
+          <div style={{ marginTop: 20 }}>
+            <a
+              href={`/trees/${treeId}/collections`}
+              style={{
+                display: "inline-block",
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                padding: "10px 20px",
+                background: "var(--moss)",
+                color: "var(--paper)",
+                border: "none",
+                borderRadius: 6,
+                textDecoration: "none",
+                cursor: "pointer",
+              }}
+            >
+              View collections
+            </a>
+          </div>
+        </section>
+
         {/* Collection import */}
         {canImportCollections && (
           <section style={{ ...sectionStyle, marginTop: 32 }}>

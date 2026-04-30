@@ -7,6 +7,7 @@ import { PersonPage } from "./components/PersonPage.js";
 import { MemoryDetail } from "./components/MemoryDetail.js";
 import { DriftMode } from "./components/DriftMode.js";
 import { SearchPage } from "./components/SearchPage.js";
+import { SectionView } from "./components/SectionView.js";
 import { Sidebar } from "./components/Sidebar.js";
 
 declare global {
@@ -30,7 +31,9 @@ export function App() {
       ? route.personId
       : route.view === "memory"
         ? getPrimaryPersonIdForMemory(manifest, route.memoryId)
-        : null;
+        : route.view === "section"
+          ? null
+          : null;
   const showSidebar = route.view !== "drift";
 
   return (
@@ -65,6 +68,9 @@ export function App() {
             {route.view === "home" && <Home manifest={manifest} onNavigate={navigate} />}
             {route.view === "person" && (
               <PersonPage manifest={manifest} personId={route.personId} onNavigate={navigate} />
+            )}
+            {route.view === "section" && (
+              <SectionView manifest={manifest} sectionId={route.sectionId} onNavigate={navigate} />
             )}
             {route.view === "search" && (
               <SearchPage manifest={manifest} query={route.query} onNavigate={navigate} />

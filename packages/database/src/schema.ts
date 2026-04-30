@@ -175,10 +175,76 @@ export const promptCampaignTypeEnum = pgEnum("prompt_campaign_type", [
   "theme_based",
 ]);
 
+export const promptSuggestionKindEnum = pgEnum("prompt_suggestion_kind", [
+  "rule_based",
+  "manual",
+]);
+
+export const promptSuggestionStatusEnum = pgEnum("prompt_suggestion_status", [
+  "suggested",
+  "approved",
+  "dismissed",
+]);
+
 export const recipientStatusEnum = pgEnum("recipient_status", [
   "active",
   "bounced",
   "opted_out",
+]);
+
+export const collectionScopeKindEnum = pgEnum("collection_scope_kind", [
+  "person",
+  "couple",
+  "branch",
+  "event",
+  "place",
+  "theme",
+  "manual",
+]);
+
+export const collectionItemKindEnum = pgEnum("collection_item_kind", [
+  "person",
+  "memory",
+  "place",
+  "relationship",
+]);
+
+export const sectionKindEnum = pgEnum("section_kind", [
+  "intro",
+  "chapter",
+  "gallery",
+  "timeline",
+  "drift",
+  "people",
+  "custom",
+]);
+
+export const exportOutputKindEnum = pgEnum("export_output_kind", [
+  "full_zip",
+  "mini_zip",
+  "static_html",
+  "share_link",
+  "kiosk_package",
+]);
+
+export const collectionViewModeEnum = pgEnum("collection_view_mode", [
+  "chapter",
+  "drift",
+  "gallery",
+  "storybook",
+  "kiosk",
+]);
+
+export const collectionVisibilityEnum = pgEnum("collection_visibility", [
+  "private",
+  "tree_members",
+  "stewards",
+]);
+
+export const personPublicPageStatusEnum = pgEnum("person_public_page_status", [
+  "draft",
+  "published",
+  "disabled",
 ]);
 
 // ── Better Auth core tables ────────────────────────────────────────────────────
@@ -503,6 +569,10 @@ export const prompts = pgTable(
       .notNull()
       .references(() => people.id, { onDelete: "cascade" }),
     questionText: text("question_text").notNull(),
+    mediaId: uuid("media_id").references(() => media.id, { onDelete: "set null" }),
+    suggestionKind: promptSuggestionKindEnum("suggestion_kind"),
+    suggestionStatus: promptSuggestionStatusEnum("suggestion_status"),
+    suggestedFollowUpForId: uuid("suggested_follow_up_for_id"),
     status: promptStatusEnum("status").default("pending").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -587,6 +657,7 @@ export const promptCampaignQuestions = pgTable(
       .notNull()
       .references(() => promptCampaigns.id, { onDelete: "cascade" }),
     questionText: text("question_text").notNull(),
+    mediaId: uuid("media_id").references(() => media.id, { onDelete: "set null" }),
     position: integer("position").notNull(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     sentPromptId: uuid("sent_prompt_id").references(() => prompts.id, {
@@ -1200,17 +1271,91 @@ export const archiveExports = pgTable(
     treeId: uuid("tree_id")
       .notNull()
       .references(() => trees.id, { onDelete: "cascade" }),
+    collectionId: uuid("collection_id").references(() => archiveCollections.id, { onDelete: "set null" }),
     requestedByUserId: text("requested_by_user_id")
       .references(() => users.id, { onDelete: "set null" }),
     status: exportStatusEnum("status").default("queued").notNull(),
+    outputKind: exportOutputKindEnum("output_kind").default("full_zip"),
     storagePath: text("storage_path"),
     fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
+    manifestVersion: integer("manifest_version").default(1),
+    manifestJson: text("manifest_json"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    errorMessage: text("error_message"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
     index("archive_exports_tree_idx").on(table.treeId),
     index("archive_exports_requested_by_idx").on(table.requestedByUserId),
+    index("archive_exports_collection_idx").on(table.collectionId),
+  ],
+);
+
+export const archiveCollections = pgTable(
+  "archive_collections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treeId: uuid("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 200 }).notNull(),
+    description: text("description"),
+    scopeKind: collectionScopeKindEnum("scope_kind").notNull(),
+    scopeJson: text("scope_json"),
+    introText: text("intro_text"),
+    dedicationText: text("dedication_text"),
+    defaultViewMode: collectionViewModeEnum("default_view_mode").default("chapter").notNull(),
+    visibility: collectionVisibilityEnum("visibility").default("private").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("archive_collections_tree_idx").on(table.treeId),
+    index("archive_collections_created_by_idx").on(table.createdByUserId),
+  ],
+);
+
+export const archiveCollectionSections = pgTable(
+  "archive_collection_sections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => archiveCollections.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 200 }).notNull(),
+    body: text("body"),
+    sectionKind: sectionKindEnum("section_kind").default("chapter").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    settingsJson: text("settings_json"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("archive_collection_sections_collection_idx").on(table.collectionId),
+  ],
+);
+
+export const archiveCollectionItems = pgTable(
+  "archive_collection_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => archiveCollections.id, { onDelete: "cascade" }),
+    sectionId: uuid("section_id").references(() => archiveCollectionSections.id, { onDelete: "set null" }),
+    itemKind: collectionItemKindEnum("item_kind").notNull(),
+    itemId: uuid("item_id").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    captionOverride: text("caption_override"),
+    includeContext: boolean("include_context").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("archive_collection_items_collection_idx").on(table.collectionId),
+    index("archive_collection_items_section_idx").on(table.sectionId),
   ],
 );
 
@@ -1250,6 +1395,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   memories: many(memories),
   invitationsSent: many(invitations),
   archiveExportsRequested: many(archiveExports),
+  archiveCollectionsCreated: many(archiveCollections),
   promptsSent: many(prompts),
   promptReplyLinksCreated: many(promptReplyLinks),
   personScopesAdded: many(treePersonScope),
@@ -1290,6 +1436,7 @@ export const treesRelations = relations(trees, ({ one, many }) => ({
   memoryPersonSuppressions: many(memoryPersonSuppressions),
   invitations: many(invitations),
   archiveExports: many(archiveExports),
+  archiveCollections: many(archiveCollections),
   prompts: many(prompts),
   promptReplyLinks: many(promptReplyLinks),
   importBatches: many(importBatches),
@@ -1454,6 +1601,9 @@ export const promptsRelations = relations(prompts, ({ one, many }) => ({
   tree: one(trees, { fields: [prompts.treeId], references: [trees.id] }),
   fromUser: one(users, { fields: [prompts.fromUserId], references: [users.id] }),
   toPerson: one(people, { fields: [prompts.toPersonId], references: [people.id] }),
+  media: one(media, { fields: [prompts.mediaId], references: [media.id] }),
+  suggestedFollowUpFor: one(prompts, { fields: [prompts.suggestedFollowUpForId], references: [prompts.id], relationName: "suggestedFollowUp" }),
+  suggestedFollowUps: many(prompts, { relationName: "suggestedFollowUp" }),
   replies: many(memories),
   replyLinks: many(promptReplyLinks),
 }));
@@ -1494,6 +1644,10 @@ export const promptCampaignQuestionsRelations = relations(
     sentPrompt: one(prompts, {
       fields: [promptCampaignQuestions.sentPromptId],
       references: [prompts.id],
+    }),
+    media: one(media, {
+      fields: [promptCampaignQuestions.mediaId],
+      references: [media.id],
     }),
   }),
 );
@@ -1591,10 +1745,29 @@ export const memoryBranchesRelations = relations(memoryBranches, ({ one }) => ({
 
 export const archiveExportsRelations = relations(archiveExports, ({ one }) => ({
   tree: one(trees, { fields: [archiveExports.treeId], references: [trees.id] }),
+  collection: one(archiveCollections, { fields: [archiveExports.collectionId], references: [archiveCollections.id] }),
   requestedBy: one(users, {
     fields: [archiveExports.requestedByUserId],
     references: [users.id],
   }),
+}));
+
+export const archiveCollectionsRelations = relations(archiveCollections, ({ one, many }) => ({
+  tree: one(trees, { fields: [archiveCollections.treeId], references: [trees.id] }),
+  createdBy: one(users, { fields: [archiveCollections.createdByUserId], references: [users.id] }),
+  sections: many(archiveCollectionSections),
+  items: many(archiveCollectionItems),
+  exports: many(archiveExports),
+}));
+
+export const archiveCollectionSectionsRelations = relations(archiveCollectionSections, ({ one, many }) => ({
+  collection: one(archiveCollections, { fields: [archiveCollectionSections.collectionId], references: [archiveCollections.id] }),
+  items: many(archiveCollectionItems),
+}));
+
+export const archiveCollectionItemsRelations = relations(archiveCollectionItems, ({ one }) => ({
+  collection: one(archiveCollections, { fields: [archiveCollectionItems.collectionId], references: [archiveCollections.id] }),
+  section: one(archiveCollectionSections, { fields: [archiveCollectionItems.sectionId], references: [archiveCollectionSections.id] }),
 }));
 
 export const transcriptionJobsRelations = relations(

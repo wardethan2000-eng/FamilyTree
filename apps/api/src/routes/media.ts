@@ -1,13 +1,14 @@
 import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import * as schema from "@tessera/database";
 import { db } from "../lib/db.js";
 import { getSession } from "../lib/session.js";
 import { validateCastToken } from "./cast-token.js";
+import { mediaUrl } from "../lib/storage.js";
 import {
   contentDisposition,
   extForMimeType,
@@ -40,10 +41,13 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
     });
     if (!mediaRecord) return reply.status(404).send({ error: "Media not found" });
 
-    let userId: string;
+    let userId: string | null = null;
+    let authorizedByPromptToken = false;
 
     const castTokenValue = (request.headers as Record<string, string | undefined>)["x-cast-token"]
       ?? (request.query as Record<string, string | undefined>).cast_token;
+
+    const promptTokenValue = (request.query as Record<string, string | undefined>).prompt_token;
 
     if (castTokenValue) {
       const validatedUserId = await validateCastToken(castTokenValue, mediaRecord.treeId);
@@ -51,27 +55,44 @@ export async function mediaPlugin(app: FastifyInstance): Promise<void> {
         return reply.status(401).send({ error: "Invalid or expired cast token" });
       }
       userId = validatedUserId;
+    } else if (promptTokenValue) {
+      const linkHash = createHash("sha256").update(promptTokenValue).digest("hex");
+      const link = await db.query.promptReplyLinks.findFirst({
+        where: (l, { and, eq }) => and(
+          eq(l.tokenHash, linkHash),
+          eq(l.treeId, mediaRecord.treeId),
+        ),
+        with: { prompt: true },
+      });
+      if (!link || link.status === "revoked" || link.status === "expired") {
+        return reply.status(401).send({ error: "Invalid or expired prompt token" });
+      }
+      if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+        return reply.status(401).send({ error: "Prompt link has expired" });
+      }
+      if (!link.prompt?.mediaId || link.prompt.mediaId !== mediaRecord.id) {
+        return reply.status(403).send({ error: "This token does not grant access to this media" });
+      }
+      authorizedByPromptToken = true;
     } else {
       const session = await getSession(request.headers);
       if (!session) return reply.status(401).send({ error: "Unauthorized" });
       userId = session.user.id;
     }
 
-    // ── Access check ────────────────────────────────────────────────────────────
-    // Path 1: user is a direct member of the tree that owns the media.
-    const directMembership = await db.query.treeMemberships.findFirst({
-      where: (m) =>
-        and(eq(m.treeId, mediaRecord.treeId), eq(m.userId, userId)),
-    });
+    if (userId && !authorizedByPromptToken) {
+      const directMembership = await db.query.treeMemberships.findFirst({
+        where: (m) =>
+          and(eq(m.treeId, mediaRecord.treeId), eq(m.userId, userId)),
+      });
 
-    if (!directMembership) {
-      // Path 2: cross-tree access.
-      const allowed = await checkCrossTreeAccess(mediaRecord, userId);
-      if (!allowed) {
-        return reply.status(403).send({ error: "Access denied" });
+      if (!directMembership) {
+        const allowed = await checkCrossTreeAccess(mediaRecord, userId);
+        if (!allowed) {
+          return reply.status(403).send({ error: "Access denied" });
+        }
       }
     }
-    // ────────────────────────────────────────────────────────────────────────────
 
     const rangeHeader = (request.headers as Record<string, string | undefined>).range;
 

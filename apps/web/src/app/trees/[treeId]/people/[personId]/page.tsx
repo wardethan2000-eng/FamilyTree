@@ -1072,6 +1072,12 @@ export default function PersonPage({
             >
               Lifeline
             </a>
+            <a
+              href={`/trees/${treeId}/collections/new?personId=${personId}`}
+              style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", textDecoration: "none", border: "1px solid var(--rule)", borderRadius: 999, padding: "8px 14px" }}
+            >
+              Make a local archive
+            </a>
             <button
               onClick={() => startEditing(person)}
               style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--ink-faded)", background: "none", border: "1px solid var(--rule)", borderRadius: 999, padding: "8px 14px", cursor: "pointer" }}
